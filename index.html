@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>النبع للخدمات الجامعية</title>
-  <!-- مكتبة تليجرام لبيئة Web App -->
+  <!-- مكتبة تليجرام الرسمية لتطبيقات الويب -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
     :root {
@@ -63,12 +63,9 @@
       font-weight: 600;
       margin-bottom: 14px;
       color: #e2e8f0;
-      display: flex;
-      align-items: center;
-      gap: 8px;
     }
 
-    /* أزرار اختيار الخدمات */
+    /* شبكة أزرار اختيار الخدمات */
     .services-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -99,7 +96,7 @@
       background-color: rgba(2, 132, 199, 0.15);
     }
 
-    /* نماذج الإدخال */
+    /* الحقول والإدخالات */
     .form-group {
       margin-bottom: 14px;
       text-align: right;
@@ -134,7 +131,7 @@
       border-color: var(--accent-color);
     }
 
-    /* رفع الملفات والصور */
+    /* منطقة رفع الملفات */
     .file-upload-box {
       border: 2px dashed var(--border-color);
       border-radius: 10px;
@@ -158,7 +155,7 @@
       word-break: break-all;
     }
 
-    /* أزرار الإجراءات */
+    /* أزرار التشغيل والإرسال */
     .btn-submit {
       width: 100%;
       background-color: var(--accent-color);
@@ -179,7 +176,7 @@
 
     .hidden { display: none; }
 
-    /* شاشة التأكيد والنجاح */
+    /* شاشة تأكيد النجاح */
     .success-box {
       text-align: center;
       padding: 20px 10px;
@@ -213,7 +210,6 @@
     </div>
 
     <div class="card">
-      <!-- شاشة إدخال البيانات -->
       <div id="formContainer">
         <div class="step-title">1. اختر الخدمة المطلوبة:</div>
         
@@ -236,11 +232,9 @@
           </div>
         </div>
 
-        <!-- الحقول الديناميكية -->
         <div id="dynamicFields" class="hidden">
           <hr style="border-color: var(--border-color); margin: 15px 0;">
 
-          <!-- الحقول المشتركة -->
           <div class="form-group">
             <label>التخصص / الكلية *</label>
             <input type="text" id="department" placeholder="مثال: هندسة مدني / كلية العلوم">
@@ -251,7 +245,6 @@
             <input type="text" id="title" placeholder="أدخل العنوان التفصيلي للطلب">
           </div>
 
-          <!-- حقول خاصة بالتقارير والبحوث والتنسيق -->
           <div id="pageCountGroup" class="form-group hidden">
             <label>عدد الصفحات / السلايدات *</label>
             <input type="number" id="pageCount" min="1" placeholder="مثال: 10">
@@ -266,7 +259,6 @@
             </select>
           </div>
 
-          <!-- حقول خاصة بالأوتوكاد -->
           <div id="autocadGroup" class="form-group hidden">
             <label>نوع الرسم الهندسي المطلوب *</label>
             <select id="autocadType">
@@ -277,7 +269,6 @@
             </select>
           </div>
 
-          <!-- الموعد والملفات -->
           <div class="form-group">
             <label>الموعد النهائي للتسليم (Deadline) *</label>
             <input type="datetime-local" id="deadline">
@@ -302,11 +293,10 @@
         </div>
       </div>
 
-      <!-- شاشة تأكيد النجاح بعد الإرسال -->
       <div id="successContainer" class="success-box hidden">
         <div class="success-icon">✅</div>
         <h3 style="margin: 0; color: #f8fafc;">تم إرسال طلبك بنجاح!</h3>
-        <p style="font-size: 13px; color: var(--text-muted); margin-top: 6px;">يرجى حفظ رقم الطلب المرجعي للتواصل:</p>
+        <p style="font-size: 13px; color: var(--text-muted); margin-top: 6px;">رقم الطلب المرجعي الخاص بك:</p>
         <div id="orderBadge" class="order-id-badge">NB-2026-000000</div>
         <p style="font-size: 12px; color: #94a3b8; margin-top: 15px;">
           سيقوم المشرف بمراجعة المتطلبات وإرسال السعر المحدد ورابط دفع العربون عبر محادثة البوت مباشرةً.
@@ -326,18 +316,14 @@
     let selectedServiceName = "";
     let base64Attachment = "";
 
-    // اختيار الخدمة وتنسيق الشاشة
     function selectService(type, element) {
       selectedServiceType = type;
       
-      // تحديث مظهر الأزرار
       document.querySelectorAll('.service-btn').forEach(btn => btn.classList.remove('selected'));
       element.classList.add('selected');
 
-      // إظهار النموذج
       document.getElementById('dynamicFields').classList.remove('hidden');
 
-      // إظهار/إخفاء الحقول المخصصة
       const pageGroup = document.getElementById('pageCountGroup');
       const langGroup = document.getElementById('languageGroup');
       const autocadGroup = document.getElementById('autocadGroup');
@@ -361,15 +347,13 @@
       }
     }
 
-    // ضغط الصور وتحويلها إلى Base64
     function handleFileSelect(input) {
       const file = input.files[0];
       const statusDiv = document.getElementById('fileStatus');
       
       if (file) {
-        statusDiv.innerText = "جاري تحضير الملف: " + file.name;
+        statusDiv.innerText = "جاري تجهيز: " + file.name;
 
-        // إذا كان الملف صورة، يتم ضغطه تقليلاً للحجم
         if (file.type.startsWith('image/')) {
           const reader = new FileReader();
           reader.onload = (e) => {
@@ -390,13 +374,12 @@
               const ctx = canvas.getContext('2d');
               ctx.drawImage(img, 0, 0, w, h);
               base64Attachment = canvas.toDataURL('image/jpeg', 0.5);
-              statusDiv.innerText = "✓ تم تجهيز الصورة بنجاح (" + file.name + ")";
+              statusDiv.innerText = "✓ تم ضغط وتجهيز الصورة (" + file.name + ")";
             };
             img.src = e.target.result;
           };
           reader.readAsDataURL(file);
         } else {
-          // للملفات العادية (Word / PDF)
           const reader = new FileReader();
           reader.onload = (e) => {
             base64Attachment = e.target.result;
@@ -407,29 +390,24 @@
       }
     }
 
-    // إرسال الطلب
     function submitOrder() {
       const department = document.getElementById('department').value.trim();
       const title = document.getElementById('title').value.trim();
       const deadline = document.getElementById('deadline').value;
       const notes = document.getElementById('notes').value.trim();
 
-      // التحقق من الحقول الإلزامية
       if (!department || !title || !deadline) {
         alert("يرجى تعبئة الحقول الأساسية المطلوبة (التخصص، العنوان، والموعد النهائي).");
         return;
       }
 
-      // التحقق من تاريخ الموعد
       if (new Date(deadline) < new Date()) {
         alert("لا يمكن اختيار موعد نهائي في الماضي!");
         return;
       }
 
-      // توليد رقم طلب مرجعي مؤقت للعرض
       const randomID = "NB-2026-" + Math.floor(100000 + Math.random() * 900000);
 
-      // تجميع الكائن الإجمالي للطلب
       const payload = {
         order_id: randomID,
         service_type: selectedServiceType,
@@ -437,17 +415,15 @@
         department: department,
         title: title,
         page_count: document.getElementById('pageCount').value || "غير محدد",
-        language: document.getElementById('language').value,
-        autocad_type: document.getElementById('autocadType').value,
+        language: document.getElementById('language').value || "غير محدد",
+        autocad_type: document.getElementById('autocadType').value || "غير محدد",
         deadline: deadline,
         notes: notes,
         attachment: base64Attachment
       };
 
-      // إرسال البيانات فوراً إلى تليجرام البوت
       tg.sendData(JSON.stringify(payload));
 
-      // عرض واجهة النجاح للمستخدم
       document.getElementById('formContainer').classList.add('hidden');
       document.getElementById('orderBadge').innerText = randomID;
       document.getElementById('successContainer').classList.remove('hidden');
