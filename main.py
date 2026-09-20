@@ -3,11 +3,13 @@ import datetime
 import io
 import json
 import logging
+import os
 import random
 import sqlite3
 import string
 from typing import Optional
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -23,18 +25,27 @@ from telegram.ext import (
 )
 
 # ==========================================
-# 1. إعدادات النظام والمتغيرات الأساسية
+# 1. تحميل المتغيرات السرية والحماية
 # ==========================================
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("AlNabaaBot")
 
-TOKEN = "8824895521:AAE4Q5ZJsrjVnQ3riMHJkr9Feiqmaffc2LU"
-CHANNEL_ID = "@1003981054797"
+# قراءة البيانات من ملف .env السري
+load_dotenv()
 
-# استبدل هذا بالرابط الذي حصلت عليه من GitHub Pages للـ Web App
-WEB_APP_URL = "https://3588a.github.io/NABA/"
+TOKEN = os.getenv("BOT_TOKEN")
+CHANNEL_ID = os.getenv("CHANNEL_ID")
+WEB_APP_URL = os.getenv("WEB_APP_URL")
 
-# إنشاء تطبيق FastAPI
+# التحقق من وجود التوكين لمنع المشاكل عند التشغيل
+if not TOKEN:
+  raise ValueError(
+      "❌ لم يتم العثور على BOT_TOKEN! تأكد من إنشاء ملف .env وإضافة التوكين فيه."
+  )
+
+# ==========================================
+# 2. تهيئة السيرفر وقاعدة البيانات (SQLite)
+# ==========================================
 app = FastAPI(title="النبع للخدمات الجامعية API")
 
 app.add_middleware(
@@ -45,16 +56,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ==========================================
-# 2. تهيئة قاعدة البيانات (SQLite)
-# ==========================================
 DB_FILE = "alnabaa_orders.db"
 
 
 def init_db():
   conn = sqlite3.connect(DB_FILE)
   cursor = conn.cursor()
-  # جدول الطلبات الرئيسية
+
+  # جدول الطلبات الرئيسي
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS orders (
             order_id TEXT PRIMARY KEY,
@@ -77,6 +86,7 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+
   # جدول سجل العمليات Audit Log
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS audit_logs (
@@ -87,6 +97,7 @@ def init_db():
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+
   conn.commit()
   conn.close()
 
@@ -109,9 +120,10 @@ def log_action(order_id: str, action: str, performed_by: str = "System"):
 
 
 # ==========================================
-# 3. معالجة وتخزين الطلبات من التليجرام
+# 3. أحداث وأوامر تليجرام بوت
 # ==========================================
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+  """أمر /start مع زر فتح التطبيق الشفاف"""
   keyboard = InlineKeyboardMarkup([[
       InlineKeyboardButton(
           "🚀 فتح تطبيق النبع للخدمات", web_app={"url": WEB_APP_URL}
@@ -130,6 +142,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def web_app_data_handler(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ):
+  """استلام الطلبات المرسلة من الـ Telegram Web App"""
   try:
     user = update.message.from_user
     data = json.loads(update.message.web_app_data.data)
@@ -174,9 +187,10 @@ async def web_app_data_handler(
     conn.commit()
     conn.close()
 
+    # تسجل العملية في سجل الأمان
     log_action(order_id, "ORDER_CREATED", f"User_{user.id}")
 
-    # إرسال إشعار للآدمن/القناة
+    # تحضير رسالة الإشعار الخاصة بالقناة أو الأدمن
     admin_msg = (
         f"📥 **طلب جديد تم استلامه!**\n\n"
         f"🆔 **رقم الطلب:** `{order_id}`\n"
@@ -188,7 +202,13 @@ async def web_app_data_handler(
         f"📝 **الملاحظات:** {notes}\n"
     )
 
-    # إذا توفرت صورة مرفقة تُرسل للقناة
+    # تحويل وإرسال الصورة المرفقة إذا توفرت
+    target_chat_id = (
+        int(CHANNEL_ID)
+        if CHANNEL_ID.replace("-", "").isdigit()
+        else CHANNEL_ID
+    )
+
     if attachment_b64 and "," in attachment_b64:
       _, encoded = attachment_b64.split(",", 1)
       img_bytes = base64.b64decode(encoded)
@@ -196,30 +216,30 @@ async def web_app_data_handler(
       photo_io.name = f"{order_id}_attachment.jpg"
 
       await context.bot.send_photo(
-          chat_id=CHANNEL_ID, photo=photo_io, caption=admin_msg
+          chat_id=target_chat_id, photo=photo_io, caption=admin_msg
       )
     else:
       await context.bot.send_message(
-          chat_id=CHANNEL_ID, text=admin_msg, parse_mode="Markdown"
+          chat_id=target_chat_id, text=admin_msg, parse_mode="Markdown"
       )
 
-    # رد أكيد للزبون
+    # إرسال رسالة تأكيد للطالب
     await update.message.reply_text(
         f"✅ **تم استلام طلبك بنجاح!**\n\n"
         f"🆔 **رقم الطلب المرجعي:** `{order_id}`\n\n"
-        f"سيقوم المشرف بمراجعة الطلب وإرسال التكلفة والعربون ورابط التأكيد لك فوراً عبر هذه المحادثة.",
+        f"سيقوم المشرف بمراجعة المتطلبات وإرسال التكلفة والعربون ورابط الدفع لك فوراً عبر هذه المحادثة.",
         parse_mode="Markdown",
     )
 
   except Exception as e:
-    logger.error(f"Error handling order: {e}")
+    logger.error(f"حدث خطأ أثناء معالجة الطلب: {e}")
     await update.message.reply_text(
         "❌ حدث خطأ أثناء معالجة البيانات، يرجى المحاولة مرة أخرى."
     )
 
 
 # ==========================================
-# 4. مسارات FastAPI واختبار النظام
+# 4. مسارات واجهة FastAPI (APIs)
 # ==========================================
 @app.get("/")
 def read_root():
@@ -235,7 +255,7 @@ def get_order_status(order_id: str):
   conn.close()
 
   if not row:
-    raise HTTPException(status_code=404, detail="Order not found")
+    raise HTTPException(status_code=404, detail="الطلب غير موجود")
 
   return {
       "order_id": row[0],
@@ -272,4 +292,4 @@ async def shutdown_event():
   await telegram_app.stop()
 
 
-# لتشغيل السيرفر محلياً: uvicorn main:app --reload
+# للتوافق والتشغيل المباشر: uvicorn main:app --reload
