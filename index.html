@@ -312,9 +312,11 @@
     tg.ready();
     tg.expand();
 
+    const API_BASE = window.NABA_API_BASE || "";
     let selectedServiceType = "";
     let selectedServiceName = "";
-    let base64Attachment = "";
+    let selectedFile = null;
+    let attachmentToken = "";
 
     function selectService(type, element) {
       selectedServiceType = type;
@@ -350,83 +352,63 @@
     function handleFileSelect(input) {
       const file = input.files[0];
       const statusDiv = document.getElementById('fileStatus');
-      
-      if (file) {
-        statusDiv.innerText = "جاري تجهيز: " + file.name;
-
-        if (file.type.startsWith('image/')) {
-          const reader = new FileReader();
-          reader.onload = (e) => {
-            const img = new Image();
-            img.onload = () => {
-              const canvas = document.createElement('canvas');
-              const maxDim = 600;
-              let w = img.width, h = img.height;
-
-              if (w > h) {
-                if (w > maxDim) { h = Math.round(h * (maxDim / w)); w = maxDim; }
-              } else {
-                if (h > maxDim) { w = Math.round(w * (maxDim / h)); h = maxDim; }
-              }
-
-              canvas.width = w;
-              canvas.height = h;
-              const ctx = canvas.getContext('2d');
-              ctx.drawImage(img, 0, 0, w, h);
-              base64Attachment = canvas.toDataURL('image/jpeg', 0.5);
-              statusDiv.innerText = "✓ تم ضغط وتجهيز الصورة (" + file.name + ")";
-            };
-            img.src = e.target.result;
-          };
-          reader.readAsDataURL(file);
-        } else {
-          const reader = new FileReader();
-          reader.onload = (e) => {
-            base64Attachment = e.target.result;
-            statusDiv.innerText = "✓ تم تجهيز الملف: " + file.name;
-          };
-          reader.readAsDataURL(file);
-        }
-      }
+      selectedFile = file || null;
+      attachmentToken = "";
+      if (file) statusDiv.innerText = "✓ تم اختيار الملف: " + file.name;
     }
 
-    function submitOrder() {
+    async function uploadAttachment() {
+      if (!selectedFile) return "";
+      if (!API_BASE) throw new Error("لم يتم ضبط رابط Backend في الواجهة");
+      const form = new FormData();
+      form.append("file", selectedFile, selectedFile.name);
+      const response = await fetch(API_BASE.replace(/\/$/, "") + "/api/upload", {
+        method: "POST",
+        headers: { "X-Telegram-Init-Data": tg.initData },
+        body: form
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || "تعذر رفع المرفق");
+      return data.token;
+    }
+
+    async function submitOrder() {
       const department = document.getElementById('department').value.trim();
       const title = document.getElementById('title').value.trim();
       const deadline = document.getElementById('deadline').value;
       const notes = document.getElementById('notes').value.trim();
 
+      if (!selectedServiceType) { alert("اختر الخدمة المطلوبة أولًا."); return; }
       if (!department || !title || !deadline) {
         alert("يرجى تعبئة الحقول الأساسية المطلوبة (التخصص، العنوان، والموعد النهائي).");
         return;
       }
+      if (new Date(deadline) < new Date()) { alert("لا يمكن اختيار موعد نهائي في الماضي!"); return; }
 
-      if (new Date(deadline) < new Date()) {
-        alert("لا يمكن اختيار موعد نهائي في الماضي!");
-        return;
+      const button = document.querySelector('.btn-submit');
+      button.disabled = true;
+      button.innerText = "جاري إرسال الطلب...";
+      try {
+        attachmentToken = await uploadAttachment();
+        const payload = {
+          service_type: selectedServiceType,
+          service_name: selectedServiceName,
+          department, title,
+          page_count: document.getElementById('pageCount').value || "غير محدد",
+          language: document.getElementById('language').value || "غير محدد",
+          autocad_type: document.getElementById('autocadType').value || "غير محدد",
+          deadline, notes,
+          attachment_token: attachmentToken
+        };
+        tg.sendData(JSON.stringify(payload));
+        document.getElementById('formContainer').classList.add('hidden');
+        document.getElementById('orderBadge').innerText = "تم الإرسال";
+        document.getElementById('successContainer').classList.remove('hidden');
+      } catch (error) {
+        alert(error.message || "تعذر إرسال الطلب");
+        button.disabled = false;
+        button.innerText = "إرسال الطلب وحساب التكلفة 🚀";
       }
-
-      const randomID = "NB-2026-" + Math.floor(100000 + Math.random() * 900000);
-
-      const payload = {
-        order_id: randomID,
-        service_type: selectedServiceType,
-        service_name: selectedServiceName,
-        department: department,
-        title: title,
-        page_count: document.getElementById('pageCount').value || "غير محدد",
-        language: document.getElementById('language').value || "غير محدد",
-        autocad_type: document.getElementById('autocadType').value || "غير محدد",
-        deadline: deadline,
-        notes: notes,
-        attachment: base64Attachment
-      };
-
-      tg.sendData(JSON.stringify(payload));
-
-      document.getElementById('formContainer').classList.add('hidden');
-      document.getElementById('orderBadge').innerText = randomID;
-      document.getElementById('successContainer').classList.remove('hidden');
     }
 
     function closeApp() {
