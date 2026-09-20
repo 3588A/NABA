@@ -31,9 +31,10 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 CHANNEL_ID = os.getenv("CHANNEL_ID", "").strip()
 WEB_APP_URL = os.getenv("WEB_APP_URL", "").strip()
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+WEBHOOK_URL = os.getenv("WEBHOOK_URL", "").strip()
 ADMIN_USER_ID = int(os.getenv("ADMIN_USER_ID", "6931187332"))
 MAX_ATTACHMENT_BYTES = int(os.getenv("MAX_ATTACHMENT_MB", "5")) * 1024 * 1024
-RUN_POLLING = os.getenv("RUN_TELEGRAM_POLLING", "1").lower() in {"1", "true", "yes"}
+RUN_POLLING = os.getenv("RUN_TELEGRAM_POLLING", "0").lower() in {"1", "true", "yes"}
 
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN is not configured")
@@ -225,6 +226,19 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+@app.post("/webhook")
+async def telegram_webhook(request: Request):
+    """استقبال تحديثات Telegram عبر Webhook بدل getUpdates/Polling."""
+    try:
+        payload = await request.json()
+        update = Update.de_json(payload, telegram_app.bot)
+        await telegram_app.process_update(update)
+        return {"ok": True}
+    except Exception:
+        logger.exception("Telegram webhook processing failed")
+        raise HTTPException(400, "بيانات Telegram غير صالحة")
+
+
 async def web_app_data_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.effective_message
     user = update.effective_user
@@ -322,19 +336,22 @@ async def startup_event():
     telegram_app.add_handler(CommandHandler("start", start_command))
     telegram_app.add_handler(CommandHandler("help", help_command))
     telegram_app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, web_app_data_handler))
+    await telegram_app.initialize()
+    await telegram_app.start()
     if RUN_POLLING:
-        await telegram_app.initialize()
-        await telegram_app.start()
         await telegram_app.updater.start_polling(drop_pending_updates=False)
         logger.info("Telegram polling started")
+    elif WEBHOOK_URL:
+        await telegram_app.bot.set_webhook(WEBHOOK_URL, allowed_updates=Update.ALL_TYPES)
+        logger.info("Telegram webhook configured: %s", WEBHOOK_URL)
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
     if RUN_POLLING:
         await telegram_app.updater.stop()
-        await telegram_app.stop()
-        await telegram_app.shutdown()
+    await telegram_app.stop()
+    await telegram_app.shutdown()
 
 
 if __name__ == "__main__":
