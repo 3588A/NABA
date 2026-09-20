@@ -174,6 +174,11 @@
       background-color: var(--accent-hover);
     }
 
+    .btn-submit:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
     .hidden { display: none; }
 
     /* شاشة تأكيد النجاح */
@@ -212,7 +217,7 @@
     <div class="card">
       <div id="formContainer">
         <div class="step-title">1. اختر الخدمة المطلوبة:</div>
-        
+
         <div class="services-grid">
           <div class="service-btn" onclick="selectService('research', this)">
             <span class="icon">📝</span>
@@ -237,12 +242,12 @@
 
           <div class="form-group">
             <label>التخصص / الكلية *</label>
-            <input type="text" id="department" placeholder="مثال: هندسة مدني / كلية العلوم">
+            <input type="text" id="department" maxlength="200" placeholder="مثال: هندسة مدني / كلية العلوم">
           </div>
 
           <div class="form-group">
             <label>عنوان العمل / اسم المادة *</label>
-            <input type="text" id="title" placeholder="أدخل العنوان التفصيلي للطلب">
+            <input type="text" id="title" maxlength="300" placeholder="أدخل العنوان التفصيلي للطلب">
           </div>
 
           <div id="pageCountGroup" class="form-group hidden">
@@ -276,11 +281,11 @@
 
           <div class="form-group">
             <label>تعليمات إضافية من الدكتور / تفاصيل الشغل</label>
-            <textarea id="notes" rows="3" placeholder="أكتب أية شروط خاصة أو ملاحظات مهمة..."></textarea>
+            <textarea id="notes" rows="3" maxlength="2000" placeholder="أكتب أية شروط خاصة أو ملاحظات مهمة..."></textarea>
           </div>
 
           <div class="form-group">
-            <label>إرفاق مخطط / ملف التعليمات / صور الملازم (اختياري)</label>
+            <label>إرفاق مخطط / ملف التعليمات / صور الملازم (اختياري - حد أقصى 5MB)</label>
             <div class="file-upload-box" onclick="document.getElementById('fileInput').click()">
               <span style="font-size: 20px;">📁</span>
               <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">اضغط لاختيار صورة أو ملف</div>
@@ -289,7 +294,7 @@
             <input type="file" id="fileInput" accept="image/*,.pdf,.doc,.docx" onchange="handleFileSelect(this)">
           </div>
 
-          <button class="btn-submit" onclick="submitOrder()">إرسال الطلب وحساب التكلفة 🚀</button>
+          <button id="submitBtn" class="btn-submit" onclick="submitOrder()">إرسال الطلب وحساب التكلفة 🚀</button>
         </div>
       </div>
 
@@ -312,15 +317,22 @@
     tg.ready();
     tg.expand();
 
-    const API_BASE = window.NABA_API_BASE || "";
+    // إذا الواجهة تُخدَّم من نفس الـ Backend (FastAPI) يبقى هذا كما هو.
+    // وإذا مستضافة بمكان ثاني، غيّر السطر إلى: "https://your-app.fastapicloud.dev"
+    const API_BASE = (window.NABA_API_BASE || window.location.origin).replace(/\/$/, "");
+    const MAX_FILE_BYTES = 5 * 1024 * 1024;
+    const SUBMIT_LABEL = "إرسال الطلب وحساب التكلفة 🚀";
+
     let selectedServiceType = "";
-    let selectedServiceName = "";
     let selectedFile = null;
-    let attachmentToken = "";
+
+    function isVisible(id) {
+      return !document.getElementById(id).classList.contains('hidden');
+    }
 
     function selectService(type, element) {
       selectedServiceType = type;
-      
+
       document.querySelectorAll('.service-btn').forEach(btn => btn.classList.remove('selected'));
       element.classList.add('selected');
 
@@ -335,16 +347,11 @@
       autocadGroup.classList.add('hidden');
 
       if (type === 'research') {
-        selectedServiceName = "مشاريع • تقارير • بحوث";
         pageGroup.classList.remove('hidden');
         langGroup.classList.remove('hidden');
       } else if (type === 'autocad') {
-        selectedServiceName = "رسم وتصميم AutoCAD";
         autocadGroup.classList.remove('hidden');
-      } else if (type === 'minitab') {
-        selectedServiceName = "تحليل البيانات Minitab";
       } else if (type === 'formatting') {
-        selectedServiceName = "تنسيق PowerPoint / Word / PDF";
         pageGroup.classList.remove('hidden');
       }
     }
@@ -352,23 +359,39 @@
     function handleFileSelect(input) {
       const file = input.files[0];
       const statusDiv = document.getElementById('fileStatus');
-      selectedFile = file || null;
-      attachmentToken = "";
-      if (file) statusDiv.innerText = "✓ تم اختيار الملف: " + file.name;
+      selectedFile = null;
+      statusDiv.innerText = "";
+      if (!file) return;
+      if (file.size > MAX_FILE_BYTES) {
+        alert("حجم الملف كبير، الحد الأقصى 5 MB.");
+        input.value = "";
+        return;
+      }
+      selectedFile = file;
+      statusDiv.innerText = "✓ تم اختيار الملف: " + file.name;
+    }
+
+    // دالة موحدة للتواصل مع الـ Backend (تضيف التحقق من جلسة تيليجرام تلقائيًا)
+    async function api(path, options = {}) {
+      const response = await fetch(API_BASE + path, {
+        ...options,
+        headers: { "X-Telegram-Init-Data": tg.initData, ...(options.headers || {}) }
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message = typeof data.detail === "string"
+          ? data.detail
+          : "تعذر تنفيذ الطلب، تأكد من صحة البيانات وحاول مرة أخرى";
+        throw new Error(message);
+      }
+      return data;
     }
 
     async function uploadAttachment() {
       if (!selectedFile) return "";
-      if (!API_BASE) throw new Error("لم يتم ضبط رابط Backend في الواجهة");
       const form = new FormData();
       form.append("file", selectedFile, selectedFile.name);
-      const response = await fetch(API_BASE.replace(/\/$/, "") + "/api/upload", {
-        method: "POST",
-        headers: { "X-Telegram-Init-Data": tg.initData },
-        body: form
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.detail || "تعذر رفع المرفق");
+      const data = await api("/api/upload", { method: "POST", body: form });
       return data.token;
     }
 
@@ -377,37 +400,43 @@
       const title = document.getElementById('title').value.trim();
       const deadline = document.getElementById('deadline').value;
       const notes = document.getElementById('notes').value.trim();
+      const pageCount = document.getElementById('pageCount').value;
 
+      if (!tg.initData) { alert("افتح التطبيق من داخل البوت في تيليجرام."); return; }
       if (!selectedServiceType) { alert("اختر الخدمة المطلوبة أولًا."); return; }
       if (!department || !title || !deadline) {
         alert("يرجى تعبئة الحقول الأساسية المطلوبة (التخصص، العنوان، والموعد النهائي).");
         return;
       }
+      if (isVisible('pageCountGroup') && !pageCount) { alert("يرجى إدخال عدد الصفحات / السلايدات."); return; }
       if (new Date(deadline) < new Date()) { alert("لا يمكن اختيار موعد نهائي في الماضي!"); return; }
 
-      const button = document.querySelector('.btn-submit');
+      const button = document.getElementById('submitBtn');
       button.disabled = true;
       button.innerText = "جاري إرسال الطلب...";
       try {
-        attachmentToken = await uploadAttachment();
         const payload = {
           service_type: selectedServiceType,
-          service_name: selectedServiceName,
-          department, title,
-          page_count: document.getElementById('pageCount').value || "غير محدد",
-          language: document.getElementById('language').value || "غير محدد",
-          autocad_type: document.getElementById('autocadType').value || "غير محدد",
-          deadline, notes,
-          attachment_token: attachmentToken
+          department, title, deadline, notes,
+          attachment_token: await uploadAttachment()
         };
-        tg.sendData(JSON.stringify(payload));
+        if (isVisible('pageCountGroup')) payload.page_count = pageCount;
+        if (isVisible('languageGroup')) payload.language = document.getElementById('language').value;
+        if (isVisible('autocadGroup')) payload.autocad_type = document.getElementById('autocadType').value;
+
+        const result = await api("/api/orders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
         document.getElementById('formContainer').classList.add('hidden');
-        document.getElementById('orderBadge').innerText = "تم الإرسال";
+        document.getElementById('orderBadge').innerText = result.order_id;
         document.getElementById('successContainer').classList.remove('hidden');
       } catch (error) {
         alert(error.message || "تعذر إرسال الطلب");
         button.disabled = false;
-        button.innerText = "إرسال الطلب وحساب التكلفة 🚀";
+        button.innerText = SUBMIT_LABEL;
       }
     }
 
