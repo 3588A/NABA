@@ -5,3 +5,4 @@ pillow
 python-telegram-bot
 jinja2
 python-dotenv
+psycopg[binary]
