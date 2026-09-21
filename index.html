@@ -407,7 +407,7 @@
         };
         tg.sendData(JSON.stringify(payload));
         document.getElementById('formContainer').classList.add('hidden');
-        document.getElementById('orderBadge').innerText = "تم الإرسال";
+        document.getElementById('orderBadge').innerText = "جاري المعالجة عبر البوت";
         document.getElementById('successContainer').classList.remove('hidden');
       } catch (error) {
         alert(error.message || "تعذر إرسال الطلب");
