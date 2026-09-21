@@ -1779,7 +1779,7 @@ async def submit_order(
                 "✅ <b>تم استلام طلبك</b>\n\n"
                 f"رقم الطلب: "
                 f"<code>{html.escape(order['order_id'])}</code>\n"
-                "سيتم التواصل معك عبر محادثة البوت."
+                "سيتم التواصل معك من قبل الكادر."
             ),
             parse_mode="HTML",
         )
