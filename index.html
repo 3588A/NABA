@@ -2399,85 +2399,350 @@
 
   }
 
+// =====================================================
+// Submit order
+// =====================================================
 
-  // =====================================================
-  // Submit order
-  // =====================================================
+async function submitOrder(){
 
-  async function submitOrder(){
-
-    hideError();
-
-
-    if(!tg.initData){
-
-      showError(
-        "افتح تطبيق النبع من داخل Telegram، وليس من متصفح عادي."
-      );
-
-      return;
-
-    }
+  hideError();
 
 
-    // =================================================
-    // IMPORTANT:
-    // الخدمات الجديدة لا ترسل إلى Backend القديم.
-    // ننتظر إضافة دعمها في main.py.
-    // =================================================
+  if(!tg.initData){
 
-    if(
-      selectedServiceType === "cv"
-      || selectedServiceType === "logo"
-      || selectedServiceType === "identity"
-    ){
+    showError(
+      "افتح تطبيق النبع من داخل Telegram، وليس من متصفح عادي."
+    );
 
-      showError(
-        "تم تجهيز هذه الخدمة في الواجهة. سيتم تفعيل الإرسال بعد إضافة دعمها في النظام."
-      );
+    return;
 
-      return;
-
-    }
+  }
 
 
-    const department =
-      document
-        .getElementById("department")
+  if(!selectedServiceType){
+
+    showError(
+      "اختر الخدمة المطلوبة أولًا."
+    );
+
+    return;
+
+  }
+
+
+  const deadline =
+    document
+      .getElementById("deadline")
+      .value;
+
+
+  if(!deadline){
+
+    showError(
+      "اختر الموعد النهائي."
+    );
+
+    return;
+
+  }
+
+
+  const deadlineDate =
+    new Date(deadline);
+
+
+  if(
+    Number.isNaN(
+      deadlineDate.getTime()
+    )
+  ){
+
+    showError(
+      "الموعد النهائي غير صالح."
+    );
+
+    return;
+
+  }
+
+
+  if(
+    deadlineDate.getTime()
+    < Date.now()
+  ){
+
+    showError(
+      "لا يمكن اختيار موعد في الماضي."
+    );
+
+    return;
+
+  }
+
+
+  // =================================================
+  // Standard fields
+  // =================================================
+
+  let department = "";
+
+  let title = "";
+
+  let notes = "";
+
+
+  const departmentElement =
+    document.getElementById("department");
+
+  const titleElement =
+    document.getElementById("title");
+
+  const notesElement =
+    document.getElementById("notes");
+
+
+  if(departmentElement){
+
+    department =
+      departmentElement
         .value
         .trim();
 
+  }
 
-    const title =
-      document
-        .getElementById("title")
+
+  if(titleElement){
+
+    title =
+      titleElement
         .value
         .trim();
 
-
-    const deadline =
-      document
-        .getElementById("deadline")
-        .value;
+  }
 
 
-    const notes =
-      document
-        .getElementById("notes")
+  if(notesElement){
+
+    notes =
+      notesElement
         .value
         .trim();
 
+  }
 
-    if(!selectedServiceType){
 
-      showError(
-        "اختر الخدمة المطلوبة أولًا."
-      );
+  // =================================================
+  // Service details
+  // =================================================
 
-      return;
+  let serviceDetails = {};
 
-    }
 
+  // =================================================
+  // CV
+  // =================================================
+
+  if(
+    selectedServiceType === "cv"
+  ){
+
+    const cvType =
+      document
+        .getElementById("cvType")
+        ?.value
+        ?.trim()
+        || "";
+
+    const cvPhoto =
+      document
+        .getElementById("cvPhoto")
+        ?.value
+        ?.trim()
+        || "";
+
+    const cvLanguage =
+      document
+        .getElementById("cvLanguage")
+        ?.value
+        ?.trim()
+        || "";
+
+    const cvTarget =
+      document
+        .getElementById("cvTarget")
+        ?.value
+        ?.trim()
+        || "";
+
+    const cvExperience =
+      document
+        .getElementById("cvExperience")
+        ?.value
+        ?.trim()
+        || "";
+
+    const cvNotes =
+      document
+        .getElementById("cvNotes")
+        ?.value
+        ?.trim()
+        || "";
+
+
+    department =
+      cvTarget
+      || "CV";
+
+
+    title =
+      cvType
+      || "سيرة ذاتية";
+
+
+    notes =
+      cvNotes
+      || notes
+      || "";
+
+
+    serviceDetails = {
+
+      cv_type:
+        cvType,
+
+      photo:
+        cvPhoto,
+
+      language:
+        cvLanguage,
+
+      target_job:
+        cvTarget,
+
+      experience:
+        cvExperience,
+
+      extra_notes:
+        cvNotes
+
+    };
+
+  }
+
+
+  // =================================================
+  // Logo / Identity
+  // =================================================
+
+  if(
+    selectedServiceType === "logo"
+    ||
+    selectedServiceType === "identity"
+  ){
+
+    const designProject =
+      document
+        .getElementById("designProject")
+        ?.value
+        ?.trim()
+        || "";
+
+    const designBusiness =
+      document
+        .getElementById("designBusiness")
+        ?.value
+        ?.trim()
+        || "";
+
+    const designType =
+      document
+        .getElementById("designType")
+        ?.value
+        ?.trim()
+        || "";
+
+    const designIdea =
+      document
+        .getElementById("designIdea")
+        ?.value
+        ?.trim()
+        || "";
+
+    const designColors =
+      document
+        .getElementById("designColors")
+        ?.value
+        ?.trim()
+        || "";
+
+    const designUsage =
+      document
+        .getElementById("designUsage")
+        ?.value
+        ?.trim()
+        || "";
+
+    const designNotes =
+      document
+        .getElementById("designNotes")
+        ?.value
+        ?.trim()
+        || "";
+
+
+    department =
+      designBusiness;
+
+
+    title =
+      designProject;
+
+
+    notes =
+      designNotes
+      || notes
+      || "";
+
+
+    serviceDetails = {
+
+      design_type:
+        designType,
+
+      brand_name:
+        designProject,
+
+      business_field:
+        designBusiness,
+
+      design_idea:
+        designIdea,
+
+      preferred_colors:
+        designColors,
+
+      usage:
+        designUsage,
+
+      extra_notes:
+        designNotes
+
+    };
+
+  }
+
+
+  // =================================================
+  // Standard services validation
+  // =================================================
+
+  if(
+    selectedServiceType !== "cv"
+    &&
+    selectedServiceType !== "logo"
+    &&
+    selectedServiceType !== "identity"
+  ){
 
     if(!department){
 
@@ -2500,206 +2765,227 @@
 
     }
 
+  }
 
-    if(!deadline){
+
+  // =================================================
+  // CV validation
+  // =================================================
+
+  if(
+    selectedServiceType === "cv"
+  ){
+
+    if(!department){
 
       showError(
-        "اختر الموعد النهائي."
+        "أدخل الوظيفة أو المجال المستهدف."
       );
 
       return;
-
-    }
-
-
-    const deadlineDate =
-      new Date(deadline);
-
-
-    if(
-      Number.isNaN(
-        deadlineDate.getTime()
-      )
-    ){
-
-      showError(
-        "الموعد النهائي غير صالح."
-      );
-
-      return;
-
-    }
-
-
-    if(
-      deadlineDate.getTime()
-      < Date.now()
-    ){
-
-      showError(
-        "لا يمكن اختيار موعد في الماضي."
-      );
-
-      return;
-
-    }
-
-
-    const button =
-      document.getElementById(
-        "submitButton"
-      );
-
-
-    button.disabled = true;
-
-    button.innerText =
-      "جاري رفع المرفق...";
-
-
-    try{
-
-      // ---------------------------------------------
-      // 1. Upload attachment
-      // ---------------------------------------------
-
-      attachmentToken =
-        await uploadAttachment();
-
-
-      // ---------------------------------------------
-      // 2. Prepare order
-      // ---------------------------------------------
-
-      const payload = {
-
-        service_type:
-          selectedServiceType,
-
-        department:
-          department,
-
-        title:
-          title,
-
-        page_count:
-          document
-            .getElementById("pageCount")
-            .value
-            || "",
-
-        language:
-          document
-            .getElementById("language")
-            .value
-            || "",
-
-        autocad_type:
-          document
-            .getElementById("autocadType")
-            .value
-            || "",
-
-        deadline:
-          deadline,
-
-        notes:
-          notes,
-
-        attachment_token:
-          attachmentToken
-
-      };
-
-
-      // ---------------------------------------------
-      // 3. Send directly to FastAPI
-      //
-      // IMPORTANT:
-      // لا tg.sendData()
-      // ---------------------------------------------
-
-      button.innerText =
-        "جاري إرسال الطلب...";
-
-
-      const data =
-        await apiRequest(
-          "/api/orders",
-          {
-            method:"POST",
-
-            headers:{
-              "Content-Type":
-                "application/json",
-
-              "X-Telegram-Init-Data":
-                tg.initData
-            },
-
-            body:
-              JSON.stringify(payload)
-          }
-        );
-
-
-      // ---------------------------------------------
-      // 4. Only now show success
-      // ---------------------------------------------
-
-      if(
-        !data.ok
-        || !data.order_id
-      ){
-
-        throw new Error(
-          "لم يؤكد الخادم استلام الطلب."
-        );
-
-      }
-
-
-      document
-        .getElementById("formContainer")
-        .classList.add("hidden");
-
-
-      document
-        .getElementById("orderBadge")
-        .innerText =
-          data.order_id;
-
-
-      document
-        .getElementById("successContainer")
-        .classList.remove("hidden");
-
-    }
-
-    catch(error){
-
-      console.error(
-        "NABA order error:",
-        error
-      );
-
-
-      showError(
-        error.message
-        || "تعذر إرسال الطلب."
-      );
-
-
-      button.disabled = false;
-
-      button.innerText =
-        "إرسال الطلب 🚀";
 
     }
 
   }
 
 
+  // =================================================
+  // Logo / Identity validation
+  // =================================================
+
+  if(
+    selectedServiceType === "logo"
+    ||
+    selectedServiceType === "identity"
+  ){
+
+    if(!department){
+
+      showError(
+        "أدخل اسم النشاط أو المجال."
+      );
+
+      return;
+
+    }
+
+
+    if(!title){
+
+      showError(
+        "أدخل اسم المشروع أو العلامة التجارية."
+      );
+
+      return;
+
+    }
+
+  }
+
+
+  const button =
+    document.getElementById(
+      "submitButton"
+    );
+
+
+  button.disabled = true;
+
+  button.innerText =
+    "جاري رفع المرفق...";
+
+
+  try{
+
+    // ---------------------------------------------
+    // 1. Upload attachment
+    // ---------------------------------------------
+
+    attachmentToken =
+      await uploadAttachment();
+
+
+    // ---------------------------------------------
+    // 2. Prepare payload
+    // ---------------------------------------------
+
+    const payload = {
+
+      service_type:
+        selectedServiceType,
+
+      department:
+        department,
+
+      title:
+        title,
+
+      page_count:
+        document
+          .getElementById("pageCount")
+          ?.value
+          || "",
+
+      language:
+        document
+          .getElementById("language")
+          ?.value
+          || "",
+
+      autocad_type:
+        document
+          .getElementById("autocadType")
+          ?.value
+          || "",
+
+      deadline:
+        deadline,
+
+      notes:
+        notes,
+
+      attachment_token:
+        attachmentToken
+        || "",
+
+      service_details:
+        serviceDetails
+
+    };
+
+
+    // ---------------------------------------------
+    // 3. Send directly to FastAPI
+    // ---------------------------------------------
+
+    button.innerText =
+      "جاري إرسال الطلب...";
+
+
+    const data =
+      await apiRequest(
+        "/api/orders",
+        {
+
+          method:"POST",
+
+          headers:{
+
+            "Content-Type":
+              "application/json",
+
+            "X-Telegram-Init-Data":
+              tg.initData
+
+          },
+
+          body:
+            JSON.stringify(
+              payload
+            )
+
+        }
+      );
+
+
+    // ---------------------------------------------
+    // 4. Confirm
+    // ---------------------------------------------
+
+    if(
+      !data.ok
+      ||
+      !data.order_id
+    ){
+
+      throw new Error(
+        "لم يؤكد الخادم استلام الطلب."
+      );
+
+    }
+
+
+    document
+      .getElementById("formContainer")
+      .classList.add("hidden");
+
+
+    document
+      .getElementById("orderBadge")
+      .innerText =
+        data.order_id;
+
+
+    document
+      .getElementById("successContainer")
+      .classList.remove("hidden");
+
+  }
+
+
+  catch(error){
+
+    console.error(
+      "NABA order error:",
+      error
+    );
+
+
+    showError(
+      error.message
+      ||
+      "تعذر إرسال الطلب."
+    );
+
+
+    button.disabled = false;
+
+    button.innerText =
+      "إرسال الطلب 🚀";
+
+  }
+
+}
   // =====================================================
   // Close Mini App
   // =====================================================
