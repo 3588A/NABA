@@ -580,6 +580,13 @@
         0 14px 30px rgba(8,91,132,.18)
     }
 
+    .admin-header-top{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:12px
+    }
+
     .admin-header h3{
       margin:0;
       font-size:18px
@@ -589,6 +596,26 @@
       margin:7px 0 0;
       color:rgba(255,255,255,.75);
       font-size:11px
+    }
+
+    .admin-refresh{
+      flex:0 0 auto;
+      min-width:42px;
+      height:42px;
+      padding:0 11px;
+      color:#fff;
+      border:1px solid rgba(255,255,255,.22);
+      border-radius:11px;
+      background:rgba(255,255,255,.12);
+      font:inherit;
+      font-size:16px;
+      font-weight:800;
+      cursor:pointer
+    }
+
+    .admin-refresh:disabled{
+      cursor:wait;
+      opacity:.6
     }
 
     .admin-close{
@@ -603,6 +630,38 @@
       font-size:12px;
       font-weight:800;
       cursor:pointer
+    }
+
+    .admin-loading{
+      display:none;
+      margin-top:12px;
+      padding:11px 13px;
+      color:#456278;
+      text-align:center;
+      font-size:11px;
+      border:1px solid var(--line);
+      border-radius:12px;
+      background:#f8fcff
+    }
+
+    .admin-loading.visible{
+      display:block
+    }
+
+    .admin-error{
+      display:none;
+      margin-top:12px;
+      padding:12px 14px;
+      color:#9f2439;
+      font-size:11px;
+      line-height:1.8;
+      border:1px solid #f1b8c2;
+      border-radius:12px;
+      background:#fff3f5
+    }
+
+    .admin-error.visible{
+      display:block
     }
 
     .stats-grid{
@@ -636,6 +695,44 @@
       margin-top:4px;
       color:var(--muted);
       font-size:10px;
+      font-weight:700
+    }
+
+    .financial-grid{
+      display:grid;
+      grid-template-columns:repeat(3,1fr);
+      gap:10px;
+      margin-top:12px
+    }
+
+    .financial-card{
+      min-width:0;
+      padding:14px 8px;
+      text-align:center;
+      border:1px solid var(--line);
+      border-radius:15px;
+      background:#fff;
+      box-shadow:0 7px 18px rgba(31,111,149,.07)
+    }
+
+    .financial-icon{
+      font-size:19px
+    }
+
+    .financial-value{
+      margin-top:6px;
+      color:var(--ink);
+      font-size:15px;
+      font-weight:900;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap
+    }
+
+    .financial-label{
+      margin-top:4px;
+      color:var(--muted);
+      font-size:9px;
       font-weight:700
     }
 
@@ -685,6 +782,161 @@
       background:var(--sky-pale)
     }
 
+    .payment-grid{
+      display:grid;
+      grid-template-columns:repeat(3,1fr);
+      gap:8px
+    }
+
+    .payment-card{
+      padding:11px 7px;
+      text-align:center;
+      border:1px solid var(--line);
+      border-radius:12px;
+      background:#fafdff
+    }
+
+    .payment-value{
+      color:var(--sky-dark);
+      font-size:18px;
+      font-weight:900
+    }
+
+    .payment-label{
+      margin-top:4px;
+      color:var(--muted);
+      font-size:9px;
+      font-weight:700;
+      line-height:1.5
+    }
+
+    .orders-list{
+      display:flex;
+      flex-direction:column;
+      gap:9px
+    }
+
+    .order-row{
+      padding:12px;
+      border:1px solid #e6f1f6;
+      border-radius:13px;
+      background:#fbfeff
+    }
+
+    .order-row-top{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:8px
+    }
+
+    .order-id{
+      color:var(--sky-dark);
+      font-size:11px;
+      font-weight:900
+    }
+
+    .order-date{
+      color:var(--muted);
+      font-size:9px;
+      white-space:nowrap
+    }
+
+    .order-service{
+      margin-top:7px;
+      color:var(--ink);
+      font-size:11px;
+      font-weight:800
+    }
+
+    .order-user{
+      margin-top:5px;
+      color:#567087;
+      font-size:10px;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap
+    }
+
+    .order-meta{
+      display:flex;
+      flex-wrap:wrap;
+      gap:5px;
+      margin-top:9px
+    }
+
+    .order-badge{
+      display:inline-flex;
+      align-items:center;
+      min-height:23px;
+      padding:4px 7px;
+      color:#456278;
+      font-size:9px;
+      font-weight:800;
+      border:1px solid #dcecf5;
+      border-radius:999px;
+      background:#fff
+    }
+
+    .order-badge.success{
+      color:#087b54;
+      border-color:#b9ead7;
+      background:#effcf6
+    }
+
+    .order-badge.warning{
+      color:#8a641f;
+      border-color:#f0d9a5;
+      background:#fff9eb
+    }
+
+    .order-badge.danger{
+      color:#a1283d;
+      border-color:#f1b8c2;
+      background:#fff3f5
+    }
+
+    .order-money{
+      display:grid;
+      grid-template-columns:repeat(3,1fr);
+      gap:5px;
+      margin-top:9px
+    }
+
+    .money-item{
+      padding:7px 4px;
+      text-align:center;
+      border-radius:9px;
+      background:#f3f9fc
+    }
+
+    .money-label{
+      display:block;
+      color:var(--muted);
+      font-size:8px
+    }
+
+    .money-value{
+      display:block;
+      margin-top:3px;
+      color:var(--ink);
+      font-size:9px;
+      font-weight:900;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap
+    }
+
+    .empty-state{
+      padding:18px 10px;
+      color:var(--muted);
+      text-align:center;
+      font-size:11px;
+      border:1px dashed #cfe4ee;
+      border-radius:12px;
+      background:#fafdff
+    }
+
     .admin-notice{
       padding:12px;
       color:#7c5a20;
@@ -712,6 +964,14 @@
 
       .service-btn{
         min-height:96px
+      }
+
+      .financial-grid{
+        grid-template-columns:1fr;
+      }
+
+      .payment-grid{
+        grid-template-columns:1fr;
       }
 
     }
@@ -765,13 +1025,30 @@
 
     <div class="admin-header">
 
-      <h3>
-        📊 لوحة تحكم النبع
-      </h3>
+      <div class="admin-header-top">
 
-      <p>
-        لوحة الإدارة والإحصائيات — خاصة بالأدمن
-      </p>
+        <div>
+
+          <h3>
+            📊 لوحة تحكم النبع
+          </h3>
+
+          <p>
+            لوحة الإدارة والإحصائيات — خاصة بالأدمن
+          </p>
+
+        </div>
+
+        <button
+          id="adminRefreshButton"
+          class="admin-refresh"
+          onclick="loadAdminDashboard()"
+          title="تحديث البيانات"
+        >
+          🔄
+        </button>
+
+      </div>
 
       <button
         class="admin-close"
@@ -782,6 +1059,24 @@
 
     </div>
 
+
+    <div
+      id="adminLoading"
+      class="admin-loading"
+    >
+      ⏳ جاري تحميل بيانات لوحة التحكم...
+    </div>
+
+
+    <div
+      id="adminError"
+      class="admin-error"
+    ></div>
+
+
+    <!-- =====================================================
+         ORDER STATISTICS
+         ===================================================== -->
 
     <div class="stats-grid">
 
@@ -868,6 +1163,26 @@
       <div class="stat-card">
 
         <div class="stat-icon">
+          ❌
+        </div>
+
+        <div
+          id="statCancelled"
+          class="stat-value"
+        >
+          —
+        </div>
+
+        <div class="stat-label">
+          ملغاة
+        </div>
+
+      </div>
+
+
+      <div class="stat-card">
+
+        <div class="stat-icon">
           📅
         </div>
 
@@ -906,6 +1221,78 @@
 
     </div>
 
+
+    <!-- =====================================================
+         FINANCIAL STATISTICS
+         ===================================================== -->
+
+    <div class="financial-grid">
+
+      <div class="financial-card">
+
+        <div class="financial-icon">
+          💰
+        </div>
+
+        <div
+          id="statTotalPrice"
+          class="financial-value"
+        >
+          —
+        </div>
+
+        <div class="financial-label">
+          إجمالي الأسعار
+        </div>
+
+      </div>
+
+
+      <div class="financial-card">
+
+        <div class="financial-icon">
+          💵
+        </div>
+
+        <div
+          id="statTotalDeposit"
+          class="financial-value"
+        >
+          —
+        </div>
+
+        <div class="financial-label">
+          إجمالي العربون
+        </div>
+
+      </div>
+
+
+      <div class="financial-card">
+
+        <div class="financial-icon">
+          🧾
+        </div>
+
+        <div
+          id="statTotalRemaining"
+          class="financial-value"
+        >
+          —
+        </div>
+
+        <div class="financial-label">
+          إجمالي المتبقي
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- =====================================================
+         SERVICE STATISTICS
+         ===================================================== -->
 
     <div class="admin-section">
 
@@ -1011,6 +1398,98 @@
     </div>
 
 
+    <!-- =====================================================
+         PAYMENT STATISTICS
+         ===================================================== -->
+
+    <div class="admin-section">
+
+      <h4 class="admin-section-title">
+        💳 حالات الدفع
+      </h4>
+
+      <div class="payment-grid">
+
+        <div class="payment-card">
+
+          <div
+            id="paymentUnpaid"
+            class="payment-value"
+          >
+            —
+          </div>
+
+          <div class="payment-label">
+            غير مدفوع
+          </div>
+
+        </div>
+
+
+        <div class="payment-card">
+
+          <div
+            id="paymentPartial"
+            class="payment-value"
+          >
+            —
+          </div>
+
+          <div class="payment-label">
+            دفع جزئي
+          </div>
+
+        </div>
+
+
+        <div class="payment-card">
+
+          <div
+            id="paymentPaid"
+            class="payment-value"
+          >
+            —
+          </div>
+
+          <div class="payment-label">
+            مدفوع بالكامل
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- =====================================================
+         RECENT ORDERS
+         ===================================================== -->
+
+    <div class="admin-section">
+
+      <h4 class="admin-section-title">
+        🕘 آخر الطلبات
+      </h4>
+
+      <div
+        id="recentOrders"
+        class="orders-list"
+      >
+
+        <div class="empty-state">
+          لا توجد بيانات بعد.
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- =====================================================
+         ADMIN SECURITY
+         ===================================================== -->
+
     <div class="admin-section">
 
       <h4 class="admin-section-title">
@@ -1019,8 +1498,8 @@
 
       <div class="admin-notice">
         تم التعرف على الحساب كأدمن من خلال Telegram User ID.
-        الحماية النهائية للـAPI سيتم تنفيذها في FastAPI، لذلك
-        هذه الواجهة وحدها لا تعتبر طبقة أمان.
+        الحماية النهائية للـAPI تتم في FastAPI، لذلك
+        إظهار هذه الواجهة وحده لا يعتبر طبقة أمان.
       </div>
 
     </div>
@@ -1783,7 +2262,8 @@
 
       const user =
         tg.initDataUnsafe
-        && tg.initDataUnsafe.user;
+        &&
+        tg.initDataUnsafe.user;
 
       if(!user){
 
@@ -1849,9 +2329,18 @@
         "visible"
       );
 
-      document
-        .getElementById("adminPanel")
-        .classList.remove("visible");
+      const panel =
+        document.getElementById(
+          "adminPanel"
+        );
+
+      if(panel){
+
+        panel.classList.remove(
+          "visible"
+        );
+
+      }
 
     }
 
@@ -1871,6 +2360,13 @@
       document.getElementById(
         "adminPanel"
       );
+
+
+    if(!panel){
+
+      return;
+
+    }
 
 
     panel.classList.toggle(
@@ -1893,10 +2389,6 @@
 
   // =====================================================
   // Admin Dashboard
-  //
-  // IMPORTANT:
-  // هذه الواجهة جاهزة فقط.
-  // لا يوجد API إحصائيات في Backend الحالي.
   // =====================================================
 
   async function loadAdminDashboard(){
@@ -1908,77 +2400,1248 @@
     }
 
 
-    /*
-      لا نستدعي Endpoint غير موجود حاليًا،
-      حتى لا نؤثر على النظام الحالي.
+    const loading =
+      document.getElementById(
+        "adminLoading"
+      );
 
-      بعد تعديل main.py سنربط هنا:
-        /api/admin/dashboard
+    const errorBox =
+      document.getElementById(
+        "adminError"
+      );
 
-      وستصل الإحصائيات الحقيقية من قاعدة البيانات.
-    */
+    const refreshButton =
+      document.getElementById(
+        "adminRefreshButton"
+      );
+
+
+    if(loading){
+
+      loading.classList.add(
+        "visible"
+      );
+
+    }
+
+
+    if(errorBox){
+
+      errorBox.classList.remove(
+        "visible"
+      );
+
+      errorBox.innerText =
+        "";
+
+    }
+
+
+    if(refreshButton){
+
+      refreshButton.disabled =
+        true;
+
+    }
+
+
+    try{
+
+      if(!tg.initData){
+
+        throw new Error(
+          "بيانات Telegram غير موجودة."
+        );
+
+      }
+
+
+      const data =
+        await apiRequest(
+          "/api/admin/dashboard",
+          {
+
+            method:"GET",
+
+            headers:{
+              "X-Telegram-Init-Data":
+                tg.initData
+            }
+
+          }
+        );
+
+
+      if(
+        !data
+        ||
+        data.ok !== true
+      ){
+
+        throw new Error(
+          "لم يتم استلام بيانات لوحة التحكم."
+        );
+
+      }
+
+
+      renderAdminDashboard(
+        data
+      );
+
+    }
+
+    catch(error){
+
+      console.error(
+        "NABA admin dashboard error:",
+        error
+      );
+
+
+      if(errorBox){
+
+        errorBox.innerText =
+          error.message
+          ||
+          "تعذر تحميل بيانات لوحة التحكم.";
+
+        errorBox.classList.add(
+          "visible"
+        );
+
+      }
+
+    }
+
+    finally{
+
+      if(loading){
+
+        loading.classList.remove(
+          "visible"
+        );
+
+      }
+
+
+      if(refreshButton){
+
+        refreshButton.disabled =
+          false;
+
+      }
+
+    }
+
+  }
+
+
+  // =====================================================
+  // Render Admin Dashboard
+  // =====================================================
+
+  function renderAdminDashboard(
+    data
+  ){
+
+    const summary =
+      data.summary
+      ||
+      {};
 
 
     setAdminStat(
       "statTotal",
-      "—"
+      formatNumber(
+        summary.total_orders
+      )
     );
+
 
     setAdminStat(
       "statNew",
-      "—"
+      formatNumber(
+        summary.new_orders
+      )
     );
+
 
     setAdminStat(
       "statProcessing",
-      "—"
+      formatNumber(
+        summary.processing_orders
+      )
     );
+
 
     setAdminStat(
       "statCompleted",
-      "—"
+      formatNumber(
+        summary.completed_orders
+      )
     );
+
+
+    setAdminStat(
+      "statCancelled",
+      formatNumber(
+        summary.cancelled_orders
+      )
+    );
+
 
     setAdminStat(
       "statToday",
-      "—"
+      formatNumber(
+        summary.today_orders
+      )
     );
+
 
     setAdminStat(
       "statMonth",
-      "—"
+      formatNumber(
+        summary.month_orders
+      )
     );
 
 
     setAdminStat(
-      "statResearch",
-      "—"
+      "statTotalPrice",
+      formatMoney(
+        summary.total_price
+      )
     );
 
-    setAdminStat(
-      "statAutocad",
-      "—"
-    );
 
     setAdminStat(
-      "statMinitab",
-      "—"
+      "statTotalDeposit",
+      formatMoney(
+        summary.total_deposit
+      )
     );
 
-    setAdminStat(
-      "statFormatting",
-      "—"
-    );
 
     setAdminStat(
-      "statCV",
-      "—"
+      "statTotalRemaining",
+      formatMoney(
+        summary.total_remaining
+      )
     );
+
+
+    renderServiceStats(
+      data.service_counts
+      ||
+      []
+    );
+
+
+    renderPaymentStats(
+      data.payment_counts
+      ||
+      {}
+    );
+
+
+    renderRecentOrders(
+      data.recent_orders
+      ||
+      []
+    );
+
+  }
+
+
+  // =====================================================
+  // Service Statistics
+  // =====================================================
+
+  function renderServiceStats(
+    serviceCounts
+  ){
+
+    const map = {
+
+      research:
+        "statResearch",
+
+      autocad:
+        "statAutocad",
+
+      minitab:
+        "statMinitab",
+
+      formatting:
+        "statFormatting",
+
+      cv:
+        "statCV",
+
+      cv_ats:
+        "statCV",
+
+      logo:
+        "statDesign",
+
+      identity:
+        "statDesign"
+
+    };
+
+
+    const totals = {};
+
+
+    serviceCounts.forEach(
+      item => {
+
+        if(!item){
+
+          return;
+
+        }
+
+
+        const type =
+          String(
+            item.service_type
+            ||
+            ""
+          );
+
+
+        const count =
+          Number(
+            item.count
+            ||
+            0
+          );
+
+
+        totals[type] =
+          (totals[type] || 0)
+          +
+          count;
+
+      }
+    );
+
+
+    Object.keys(map)
+      .forEach(
+        type => {
+
+          const elementId =
+            map[type];
+
+          if(!elementId){
+
+            return;
+
+          }
+
+
+          if(
+            type === "cv_ats"
+          ){
+
+            return;
+
+          }
+
+
+          setAdminStat(
+            elementId,
+            formatNumber(
+              totals[type]
+              ||
+              0
+            )
+          );
+
+        }
+      );
+
+
+    const designTotal =
+      (
+        totals.logo
+        ||
+        0
+      )
+      +
+      (
+        totals.identity
+        ||
+        0
+      );
+
 
     setAdminStat(
       "statDesign",
-      "—"
+      formatNumber(
+        designTotal
+      )
     );
+
+
+    const cvTotal =
+      (
+        totals.cv
+        ||
+        0
+      )
+      +
+      (
+        totals.cv_ats
+        ||
+        0
+      );
+
+
+    setAdminStat(
+      "statCV",
+      formatNumber(
+        cvTotal
+      )
+    );
+
+  }
+
+
+  // =====================================================
+  // Payment Statistics
+  // =====================================================
+
+  function renderPaymentStats(
+    paymentCounts
+  ){
+
+    const normalized = {};
+
+
+    Object.keys(
+      paymentCounts || {}
+    )
+      .forEach(
+        key => {
+
+          normalized[
+            normalizePaymentStatus(key)
+          ] =
+            Number(
+              paymentCounts[key]
+              ||
+              0
+            );
+
+        }
+      );
+
+
+    const unpaid =
+      getPaymentCount(
+        normalized,
+        [
+          "unpaid",
+          "غير مدفوع",
+          "pending"
+        ]
+      );
+
+
+    const partial =
+      getPaymentCount(
+        normalized,
+        [
+          "partial",
+          "دفع جزئي",
+          "partially_paid"
+        ]
+      );
+
+
+    const paid =
+      getPaymentCount(
+        normalized,
+        [
+          "paid",
+          "مدفوع",
+          "مدفوع بالكامل"
+        ]
+      );
+
+
+    setAdminStat(
+      "paymentUnpaid",
+      formatNumber(
+        unpaid
+      )
+    );
+
+
+    setAdminStat(
+      "paymentPartial",
+      formatNumber(
+        partial
+      )
+    );
+
+
+    setAdminStat(
+      "paymentPaid",
+      formatNumber(
+        paid
+      )
+    );
+
+  }
+
+
+  function normalizePaymentStatus(
+    value
+  ){
+
+    return String(
+      value
+      ||
+      ""
+    )
+      .trim()
+      .toLowerCase();
+
+  }
+
+
+  function getPaymentCount(
+    normalized,
+    keys
+  ){
+
+    let total = 0;
+
+
+    keys.forEach(
+      key => {
+
+        const normalizedKey =
+          normalizePaymentStatus(
+            key
+          );
+
+
+        total +=
+          Number(
+            normalized[
+              normalizedKey
+            ]
+            ||
+            0
+          );
+
+      }
+    );
+
+
+    return total;
+
+  }
+
+
+  // =====================================================
+  // Recent Orders
+  // =====================================================
+
+  function renderRecentOrders(
+    orders
+  ){
+
+    const container =
+      document.getElementById(
+        "recentOrders"
+      );
+
+
+    if(!container){
+
+      return;
+
+    }
+
+
+    container.innerHTML =
+      "";
+
+
+    if(
+      !Array.isArray(orders)
+      ||
+      orders.length === 0
+    ){
+
+      const empty =
+        document.createElement(
+          "div"
+        );
+
+      empty.className =
+        "empty-state";
+
+      empty.innerText =
+        "لا توجد طلبات حديثة.";
+
+      container.appendChild(
+        empty
+      );
+
+      return;
+
+    }
+
+
+    orders.forEach(
+      order => {
+
+        container.appendChild(
+          createRecentOrderElement(
+            order
+          )
+        );
+
+      }
+    );
+
+  }
+
+
+  function createRecentOrderElement(
+    order
+  ){
+
+    const row =
+      document.createElement(
+        "div"
+      );
+
+    row.className =
+      "order-row";
+
+
+    const top =
+      document.createElement(
+        "div"
+      );
+
+    top.className =
+      "order-row-top";
+
+
+    const orderId =
+      document.createElement(
+        "span"
+      );
+
+    orderId.className =
+      "order-id";
+
+    orderId.innerText =
+      String(
+        order.order_id
+        ||
+        "—"
+      );
+
+
+    const date =
+      document.createElement(
+        "span"
+      );
+
+    date.className =
+      "order-date";
+
+    date.innerText =
+      formatDateTime(
+        order.created_at
+      );
+
+
+    top.appendChild(
+      orderId
+    );
+
+    top.appendChild(
+      date
+    );
+
+
+    row.appendChild(
+      top
+    );
+
+
+    const service =
+      document.createElement(
+        "div"
+      );
+
+    service.className =
+      "order-service";
+
+    service.innerText =
+      String(
+        order.service_name
+        ||
+        order.service_type
+        ||
+        "خدمة غير محددة"
+      );
+
+
+    row.appendChild(
+      service
+    );
+
+
+    const user =
+      document.createElement(
+        "div"
+      );
+
+    user.className =
+      "order-user";
+
+    const username =
+      order.username
+        ? "@" + String(
+            order.username
+          )
+        : "";
+
+
+    const userId =
+      order.user_id
+        ? "ID: " + String(
+            order.user_id
+          )
+        : "";
+
+
+    user.innerText =
+      [
+        username,
+        userId
+      ]
+        .filter(Boolean)
+        .join(" • ")
+      ||
+      "مستخدم غير معروف";
+
+
+    row.appendChild(
+      user
+    );
+
+
+    const meta =
+      document.createElement(
+        "div"
+      );
+
+    meta.className =
+      "order-meta";
+
+
+    meta.appendChild(
+      createOrderBadge(
+        "الحالة: "
+        +
+        formatStatus(
+          order.order_status
+        ),
+        getStatusClass(
+          order.order_status
+        )
+      )
+    );
+
+
+    meta.appendChild(
+      createOrderBadge(
+        "الدفع: "
+        +
+        formatPaymentStatus(
+          order.payment_status
+        ),
+        getPaymentClass(
+          order.payment_status
+        )
+      )
+    );
+
+
+    if(order.department){
+
+      meta.appendChild(
+        createOrderBadge(
+          String(
+            order.department
+          )
+        )
+      );
+
+    }
+
+
+    row.appendChild(
+      meta
+    );
+
+
+    const money =
+      document.createElement(
+        "div"
+      );
+
+    money.className =
+      "order-money";
+
+
+    money.appendChild(
+      createMoneyItem(
+        "السعر",
+        order.price
+      )
+    );
+
+
+    money.appendChild(
+      createMoneyItem(
+        "العربون",
+        order.deposit
+      )
+    );
+
+
+    money.appendChild(
+      createMoneyItem(
+        "المتبقي",
+        order.remaining_balance
+      )
+    );
+
+
+    row.appendChild(
+      money
+    );
+
+
+    return row;
+
+  }
+
+
+  function createOrderBadge(
+    text,
+    className
+  ){
+
+    const badge =
+      document.createElement(
+        "span"
+      );
+
+    badge.className =
+      "order-badge"
+      +
+      (
+        className
+          ? " " + className
+          : ""
+      );
+
+    badge.innerText =
+      text;
+
+    return badge;
+
+  }
+
+
+  function createMoneyItem(
+    label,
+    value
+  ){
+
+    const item =
+      document.createElement(
+        "div"
+      );
+
+    item.className =
+      "money-item";
+
+
+    const labelElement =
+      document.createElement(
+        "span"
+      );
+
+    labelElement.className =
+      "money-label";
+
+    labelElement.innerText =
+      label;
+
+
+    const valueElement =
+      document.createElement(
+        "span"
+      );
+
+    valueElement.className =
+      "money-value";
+
+    valueElement.innerText =
+      formatMoney(
+        value
+      );
+
+
+    item.appendChild(
+      labelElement
+    );
+
+    item.appendChild(
+      valueElement
+    );
+
+
+    return item;
+
+  }
+
+
+  // =====================================================
+  // Admin Formatting Helpers
+  // =====================================================
+
+  function formatNumber(
+    value
+  ){
+
+    const number =
+      Number(
+        value
+        ||
+        0
+      );
+
+
+    if(
+      Number.isNaN(
+        number
+      )
+    ){
+
+      return "0";
+
+    }
+
+
+    return new Intl.NumberFormat(
+      "ar-IQ"
+    ).format(
+      number
+    );
+
+  }
+
+
+  function formatMoney(
+    value
+  ){
+
+    if(
+      value === null
+      ||
+      value === undefined
+      ||
+      value === ""
+    ){
+
+      return "0";
+
+    }
+
+
+    const number =
+      Number(
+        value
+      );
+
+
+    if(
+      Number.isNaN(
+        number
+      )
+    ){
+
+      return String(
+        value
+      );
+
+    }
+
+
+    return new Intl.NumberFormat(
+      "ar-IQ",
+      {
+        maximumFractionDigits:2
+      }
+    ).format(
+      number
+    );
+
+  }
+
+
+  function formatDateTime(
+    value
+  ){
+
+    if(!value){
+
+      return "—";
+
+    }
+
+
+    const date =
+      new Date(
+        value
+      );
+
+
+    if(
+      Number.isNaN(
+        date.getTime()
+      )
+    ){
+
+      return String(
+        value
+      );
+
+    }
+
+
+    return new Intl.DateTimeFormat(
+      "ar-IQ",
+      {
+        year:"numeric",
+        month:"2-digit",
+        day:"2-digit",
+        hour:"2-digit",
+        minute:"2-digit"
+      }
+    ).format(
+      date
+    );
+
+  }
+
+
+  function formatStatus(
+    value
+  ){
+
+    const status =
+      String(
+        value
+        ||
+        ""
+      )
+        .trim()
+        .toUpperCase();
+
+
+    const map = {
+
+      NEW:
+        "جديد",
+
+      PROCESSING:
+        "قيد المعالجة",
+
+      COMPLETED:
+        "مكتمل",
+
+      CANCELLED:
+        "ملغى",
+
+      CANCELED:
+        "ملغى"
+
+    };
+
+
+    return (
+      map[status]
+      ||
+      String(
+        value
+        ||
+        "غير محدد"
+      )
+    );
+
+  }
+
+
+  function getStatusClass(
+    value
+  ){
+
+    const status =
+      String(
+        value
+        ||
+        ""
+      )
+        .trim()
+        .toUpperCase();
+
+
+    if(
+      status === "COMPLETED"
+    ){
+
+      return "success";
+
+    }
+
+
+    if(
+      status === "CANCELLED"
+      ||
+      status === "CANCELED"
+    ){
+
+      return "danger";
+
+    }
+
+
+    if(
+      status === "PROCESSING"
+    ){
+
+      return "warning";
+
+    }
+
+
+    return "";
+
+  }
+
+
+  function formatPaymentStatus(
+    value
+  ){
+
+    const status =
+      String(
+        value
+        ||
+        ""
+      )
+        .trim()
+        .toLowerCase();
+
+
+    const map = {
+
+      unpaid:
+        "غير مدفوع",
+
+      pending:
+        "غير مدفوع",
+
+      partial:
+        "دفع جزئي",
+
+      partially_paid:
+        "دفع جزئي",
+
+      paid:
+        "مدفوع بالكامل"
+
+    };
+
+
+    return (
+      map[status]
+      ||
+      String(
+        value
+        ||
+        "غير محدد"
+      )
+    );
+
+  }
+
+
+  function getPaymentClass(
+    value
+  ){
+
+    const status =
+      String(
+        value
+        ||
+        ""
+      )
+        .trim()
+        .toLowerCase();
+
+
+    if(
+      status === "paid"
+    ){
+
+      return "success";
+
+    }
+
+
+    if(
+      status === "partial"
+      ||
+      status === "partially_paid"
+    ){
+
+      return "warning";
+
+    }
+
+
+    if(
+      status === "unpaid"
+      ||
+      status === "pending"
+    ){
+
+      return "danger";
+
+    }
+
+
+    return "";
 
   }
 
@@ -2173,7 +3836,8 @@
 
     else if(
       type === "logo"
-      || type === "identity"
+      ||
+      type === "identity"
     ){
 
       standardFields.classList.add(
@@ -2268,7 +3932,8 @@
 
     status.innerText =
       "✓ تم اختيار الملف: "
-      + file.name;
+      +
+      file.name;
 
     hideError();
 
@@ -2319,7 +3984,8 @@
     const response =
       await fetch(
         API_BASE.replace(/\/$/, "")
-        + url,
+        +
+        url,
         options
       );
 
@@ -2336,7 +4002,8 @@
 
       throw new Error(
         data.detail
-        || "حدث خطأ في الخادم"
+        ||
+        "حدث خطأ في الخادم"
       );
 
     }
@@ -2399,355 +4066,20 @@
 
   }
 
-// =====================================================
-// Submit order
-// =====================================================
 
-async function submitOrder(){
+  // =====================================================
+  // Submit order
+  // =====================================================
 
-  hideError();
+  async function submitOrder(){
 
+    hideError();
 
-  if(!tg.initData){
 
-    showError(
-      "افتح تطبيق النبع من داخل Telegram، وليس من متصفح عادي."
-    );
-
-    return;
-
-  }
-
-
-  if(!selectedServiceType){
-
-    showError(
-      "اختر الخدمة المطلوبة أولًا."
-    );
-
-    return;
-
-  }
-
-
-  const deadline =
-    document
-      .getElementById("deadline")
-      .value;
-
-
-  if(!deadline){
-
-    showError(
-      "اختر الموعد النهائي."
-    );
-
-    return;
-
-  }
-
-
-  const deadlineDate =
-    new Date(deadline);
-
-
-  if(
-    Number.isNaN(
-      deadlineDate.getTime()
-    )
-  ){
-
-    showError(
-      "الموعد النهائي غير صالح."
-    );
-
-    return;
-
-  }
-
-
-  if(
-    deadlineDate.getTime()
-    < Date.now()
-  ){
-
-    showError(
-      "لا يمكن اختيار موعد في الماضي."
-    );
-
-    return;
-
-  }
-
-
-  // =================================================
-  // Standard fields
-  // =================================================
-
-  let department = "";
-
-  let title = "";
-
-  let notes = "";
-
-
-  const departmentElement =
-    document.getElementById("department");
-
-  const titleElement =
-    document.getElementById("title");
-
-  const notesElement =
-    document.getElementById("notes");
-
-
-  if(departmentElement){
-
-    department =
-      departmentElement
-        .value
-        .trim();
-
-  }
-
-
-  if(titleElement){
-
-    title =
-      titleElement
-        .value
-        .trim();
-
-  }
-
-
-  if(notesElement){
-
-    notes =
-      notesElement
-        .value
-        .trim();
-
-  }
-
-
-  // =================================================
-  // Service details
-  // =================================================
-
-  let serviceDetails = {};
-
-
-  // =================================================
-  // CV
-  // =================================================
-
-  if(
-    selectedServiceType === "cv"
-  ){
-
-    const cvType =
-      document
-        .getElementById("cvType")
-        ?.value
-        ?.trim()
-        || "";
-
-    const cvPhoto =
-      document
-        .getElementById("cvPhoto")
-        ?.value
-        ?.trim()
-        || "";
-
-    const cvLanguage =
-      document
-        .getElementById("cvLanguage")
-        ?.value
-        ?.trim()
-        || "";
-
-    const cvTarget =
-      document
-        .getElementById("cvTarget")
-        ?.value
-        ?.trim()
-        || "";
-
-    const cvExperience =
-      document
-        .getElementById("cvExperience")
-        ?.value
-        ?.trim()
-        || "";
-
-    const cvNotes =
-      document
-        .getElementById("cvNotes")
-        ?.value
-        ?.trim()
-        || "";
-
-
-    department =
-      cvTarget
-      || "CV";
-
-
-    title =
-      cvType
-      || "سيرة ذاتية";
-
-
-    notes =
-      cvNotes
-      || notes
-      || "";
-
-
-    serviceDetails = {
-
-      cv_type:
-        cvType,
-
-      photo:
-        cvPhoto,
-
-      language:
-        cvLanguage,
-
-      target_job:
-        cvTarget,
-
-      experience:
-        cvExperience,
-
-      extra_notes:
-        cvNotes
-
-    };
-
-  }
-
-
-  // =================================================
-  // Logo / Identity
-  // =================================================
-
-  if(
-    selectedServiceType === "logo"
-    ||
-    selectedServiceType === "identity"
-  ){
-
-    const designProject =
-      document
-        .getElementById("designProject")
-        ?.value
-        ?.trim()
-        || "";
-
-    const designBusiness =
-      document
-        .getElementById("designBusiness")
-        ?.value
-        ?.trim()
-        || "";
-
-    const designType =
-      document
-        .getElementById("designType")
-        ?.value
-        ?.trim()
-        || "";
-
-    const designIdea =
-      document
-        .getElementById("designIdea")
-        ?.value
-        ?.trim()
-        || "";
-
-    const designColors =
-      document
-        .getElementById("designColors")
-        ?.value
-        ?.trim()
-        || "";
-
-    const designUsage =
-      document
-        .getElementById("designUsage")
-        ?.value
-        ?.trim()
-        || "";
-
-    const designNotes =
-      document
-        .getElementById("designNotes")
-        ?.value
-        ?.trim()
-        || "";
-
-
-    department =
-      designBusiness;
-
-
-    title =
-      designProject;
-
-
-    notes =
-      designNotes
-      || notes
-      || "";
-
-
-    serviceDetails = {
-
-      design_type:
-        designType,
-
-      brand_name:
-        designProject,
-
-      business_field:
-        designBusiness,
-
-      design_idea:
-        designIdea,
-
-      preferred_colors:
-        designColors,
-
-      usage:
-        designUsage,
-
-      extra_notes:
-        designNotes
-
-    };
-
-  }
-
-
-  // =================================================
-  // Standard services validation
-  // =================================================
-
-  if(
-    selectedServiceType !== "cv"
-    &&
-    selectedServiceType !== "logo"
-    &&
-    selectedServiceType !== "identity"
-  ){
-
-    if(!department){
+    if(!tg.initData){
 
       showError(
-        "أدخل التخصص أو الكلية."
+        "افتح تطبيق النبع من داخل Telegram، وليس من متصفح عادي."
       );
 
       return;
@@ -2755,54 +4087,10 @@ async function submitOrder(){
     }
 
 
-    if(!title){
+    if(!selectedServiceType){
 
       showError(
-        "أدخل عنوان العمل."
-      );
-
-      return;
-
-    }
-
-  }
-
-
-  // =================================================
-  // CV validation
-  // =================================================
-
-  if(
-    selectedServiceType === "cv"
-  ){
-
-    if(!department){
-
-      showError(
-        "أدخل الوظيفة أو المجال المستهدف."
-      );
-
-      return;
-
-    }
-
-  }
-
-
-  // =================================================
-  // Logo / Identity validation
-  // =================================================
-
-  if(
-    selectedServiceType === "logo"
-    ||
-    selectedServiceType === "identity"
-  ){
-
-    if(!department){
-
-      showError(
-        "أدخل اسم النشاط أو المجال."
+        "اختر الخدمة المطلوبة أولًا."
       );
 
       return;
@@ -2810,182 +4098,588 @@ async function submitOrder(){
     }
 
 
-    if(!title){
+    const deadline =
+      document
+        .getElementById("deadline")
+        .value;
+
+
+    if(!deadline){
 
       showError(
-        "أدخل اسم المشروع أو العلامة التجارية."
+        "اختر الموعد النهائي."
       );
 
       return;
 
     }
 
-  }
 
+    const deadlineDate =
+      new Date(deadline);
 
-  const button =
-    document.getElementById(
-      "submitButton"
-    );
-
-
-  button.disabled = true;
-
-  button.innerText =
-    "جاري رفع المرفق...";
-
-
-  try{
-
-    // ---------------------------------------------
-    // 1. Upload attachment
-    // ---------------------------------------------
-
-    attachmentToken =
-      await uploadAttachment();
-
-
-    // ---------------------------------------------
-    // 2. Prepare payload
-    // ---------------------------------------------
-
-    const payload = {
-
-      service_type:
-        selectedServiceType,
-
-      department:
-        department,
-
-      title:
-        title,
-
-      page_count:
-        document
-          .getElementById("pageCount")
-          ?.value
-          || "",
-
-      language:
-        document
-          .getElementById("language")
-          ?.value
-          || "",
-
-      autocad_type:
-        document
-          .getElementById("autocadType")
-          ?.value
-          || "",
-
-      deadline:
-        deadline,
-
-      notes:
-        notes,
-
-      attachment_token:
-        attachmentToken
-        || "",
-
-      service_details:
-        serviceDetails
-
-    };
-
-
-    // ---------------------------------------------
-    // 3. Send directly to FastAPI
-    // ---------------------------------------------
-
-    button.innerText =
-      "جاري إرسال الطلب...";
-
-
-    const data =
-      await apiRequest(
-        "/api/orders",
-        {
-
-          method:"POST",
-
-          headers:{
-
-            "Content-Type":
-              "application/json",
-
-            "X-Telegram-Init-Data":
-              tg.initData
-
-          },
-
-          body:
-            JSON.stringify(
-              payload
-            )
-
-        }
-      );
-
-
-    // ---------------------------------------------
-    // 4. Confirm
-    // ---------------------------------------------
 
     if(
-      !data.ok
-      ||
-      !data.order_id
+      Number.isNaN(
+        deadlineDate.getTime()
+      )
     ){
 
-      throw new Error(
-        "لم يؤكد الخادم استلام الطلب."
+      showError(
+        "الموعد النهائي غير صالح."
       );
+
+      return;
 
     }
 
 
-    document
-      .getElementById("formContainer")
-      .classList.add("hidden");
+    if(
+      deadlineDate.getTime()
+      <
+      Date.now()
+    ){
+
+      showError(
+        "لا يمكن اختيار موعد في الماضي."
+      );
+
+      return;
+
+    }
 
 
-    document
-      .getElementById("orderBadge")
-      .innerText =
-        data.order_id;
+    // =================================================
+    // Standard fields
+    // =================================================
+
+    let department = "";
+
+    let title = "";
+
+    let notes = "";
 
 
-    document
-      .getElementById("successContainer")
-      .classList.remove("hidden");
+    const departmentElement =
+      document.getElementById("department");
 
-  }
+    const titleElement =
+      document.getElementById("title");
 
-
-  catch(error){
-
-    console.error(
-      "NABA order error:",
-      error
-    );
+    const notesElement =
+      document.getElementById("notes");
 
 
-    showError(
-      error.message
+    if(departmentElement){
+
+      department =
+        departmentElement
+          .value
+          .trim();
+
+    }
+
+
+    if(titleElement){
+
+      title =
+        titleElement
+          .value
+          .trim();
+
+    }
+
+
+    if(notesElement){
+
+      notes =
+        notesElement
+          .value
+          .trim();
+
+    }
+
+
+    // =================================================
+    // Service details
+    // =================================================
+
+    let serviceDetails = {};
+
+
+    // =================================================
+    // CV
+    // =================================================
+
+    if(
+      selectedServiceType === "cv"
+    ){
+
+      const cvType =
+        document
+          .getElementById("cvType")
+          ?.value
+          ?.trim()
+          ||
+          "";
+
+      const cvPhoto =
+        document
+          .getElementById("cvPhoto")
+          ?.value
+          ?.trim()
+          ||
+          "";
+
+      const cvLanguage =
+        document
+          .getElementById("cvLanguage")
+          ?.value
+          ?.trim()
+          ||
+          "";
+
+      const cvTarget =
+        document
+          .getElementById("cvTarget")
+          ?.value
+          ?.trim()
+          ||
+          "";
+
+      const cvExperience =
+        document
+          .getElementById("cvExperience")
+          ?.value
+          ?.trim()
+          ||
+          "";
+
+      const cvNotes =
+        document
+          .getElementById("cvNotes")
+          ?.value
+          ?.trim()
+          ||
+          "";
+
+
+      department =
+        cvTarget
+        ||
+        "CV";
+
+
+      title =
+        cvType
+        ||
+        "سيرة ذاتية";
+
+
+      notes =
+        cvNotes
+        ||
+        notes
+        ||
+        "";
+
+
+      serviceDetails = {
+
+        cv_type:
+          cvType,
+
+        photo:
+          cvPhoto,
+
+        language:
+          cvLanguage,
+
+        target_job:
+          cvTarget,
+
+        experience:
+          cvExperience,
+
+        extra_notes:
+          cvNotes
+
+      };
+
+    }
+
+
+    // =================================================
+    // Logo / Identity
+    // =================================================
+
+    if(
+      selectedServiceType === "logo"
       ||
-      "تعذر إرسال الطلب."
-    );
+      selectedServiceType === "identity"
+    ){
+
+      const designProject =
+        document
+          .getElementById("designProject")
+          ?.value
+          ?.trim()
+          ||
+          "";
+
+      const designBusiness =
+        document
+          .getElementById("designBusiness")
+          ?.value
+          ?.trim()
+          ||
+          "";
+
+      const designType =
+        document
+          .getElementById("designType")
+          ?.value
+          ?.trim()
+          ||
+          "";
+
+      const designIdea =
+        document
+          .getElementById("designIdea")
+          ?.value
+          ?.trim()
+          ||
+          "";
+
+      const designColors =
+        document
+          .getElementById("designColors")
+          ?.value
+          ?.trim()
+          ||
+          "";
+
+      const designUsage =
+        document
+          .getElementById("designUsage")
+          ?.value
+          ?.trim()
+          ||
+          "";
+
+      const designNotes =
+        document
+          .getElementById("designNotes")
+          ?.value
+          ?.trim()
+          ||
+          "";
 
 
-    button.disabled = false;
+      department =
+        designBusiness;
+
+
+      title =
+        designProject;
+
+
+      notes =
+        designNotes
+        ||
+        notes
+        ||
+        "";
+
+
+      serviceDetails = {
+
+        design_type:
+          designType,
+
+        brand_name:
+          designProject,
+
+        business_field:
+          designBusiness,
+
+        design_idea:
+          designIdea,
+
+        preferred_colors:
+          designColors,
+
+        usage:
+          designUsage,
+
+        extra_notes:
+          designNotes
+
+      };
+
+    }
+
+
+    // =================================================
+    // Standard services validation
+    // =================================================
+
+    if(
+      selectedServiceType !== "cv"
+      &&
+      selectedServiceType !== "logo"
+      &&
+      selectedServiceType !== "identity"
+    ){
+
+      if(!department){
+
+        showError(
+          "أدخل التخصص أو الكلية."
+        );
+
+        return;
+
+      }
+
+
+      if(!title){
+
+        showError(
+          "أدخل عنوان العمل."
+        );
+
+        return;
+
+      }
+
+    }
+
+
+    // =================================================
+    // CV validation
+    // =================================================
+
+    if(
+      selectedServiceType === "cv"
+    ){
+
+      if(!department){
+
+        showError(
+          "أدخل الوظيفة أو المجال المستهدف."
+        );
+
+        return;
+
+      }
+
+    }
+
+
+    // =================================================
+    // Logo / Identity validation
+    // =================================================
+
+    if(
+      selectedServiceType === "logo"
+      ||
+      selectedServiceType === "identity"
+    ){
+
+      if(!department){
+
+        showError(
+          "أدخل اسم النشاط أو المجال."
+        );
+
+        return;
+
+      }
+
+
+      if(!title){
+
+        showError(
+          "أدخل اسم المشروع أو العلامة التجارية."
+        );
+
+        return;
+
+      }
+
+    }
+
+
+    const button =
+      document.getElementById(
+        "submitButton"
+      );
+
+
+    button.disabled = true;
 
     button.innerText =
-      "إرسال الطلب 🚀";
+      "جاري رفع المرفق...";
+
+
+    try{
+
+      // ---------------------------------------------
+      // 1. Upload attachment
+      // ---------------------------------------------
+
+      attachmentToken =
+        await uploadAttachment();
+
+
+      // ---------------------------------------------
+      // 2. Prepare payload
+      // ---------------------------------------------
+
+      const payload = {
+
+        service_type:
+          selectedServiceType,
+
+        department:
+          department,
+
+        title:
+          title,
+
+        page_count:
+          document
+            .getElementById("pageCount")
+            ?.value
+            ||
+            "",
+
+        language:
+          document
+            .getElementById("language")
+            ?.value
+            ||
+            "",
+
+        autocad_type:
+          document
+            .getElementById("autocadType")
+            ?.value
+            ||
+            "",
+
+        deadline:
+          deadline,
+
+        notes:
+          notes,
+
+        attachment_token:
+          attachmentToken
+          ||
+          "",
+
+        service_details:
+          serviceDetails
+
+      };
+
+
+      // ---------------------------------------------
+      // 3. Send directly to FastAPI
+      // ---------------------------------------------
+
+      button.innerText =
+        "جاري إرسال الطلب...";
+
+
+      const data =
+        await apiRequest(
+          "/api/orders",
+          {
+
+            method:"POST",
+
+            headers:{
+
+              "Content-Type":
+                "application/json",
+
+              "X-Telegram-Init-Data":
+                tg.initData
+
+            },
+
+            body:
+              JSON.stringify(
+                payload
+              )
+
+          }
+        );
+
+
+      // ---------------------------------------------
+      // 4. Confirm
+      // ---------------------------------------------
+
+      if(
+        !data.ok
+        ||
+        !data.order_id
+      ){
+
+        throw new Error(
+          "لم يؤكد الخادم استلام الطلب."
+        );
+
+      }
+
+
+      document
+        .getElementById("formContainer")
+        .classList.add("hidden");
+
+
+      document
+        .getElementById("orderBadge")
+        .innerText =
+          data.order_id;
+
+
+      document
+        .getElementById("successContainer")
+        .classList.remove("hidden");
+
+    }
+
+
+    catch(error){
+
+      console.error(
+        "NABA order error:",
+        error
+      );
+
+
+      showError(
+        error.message
+        ||
+        "تعذر إرسال الطلب."
+      );
+
+
+      button.disabled = false;
+
+      button.innerText =
+        "إرسال الطلب 🚀";
+
+    }
 
   }
 
-}
+
   // =====================================================
   // Close Mini App
   // =====================================================
