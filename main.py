@@ -978,6 +978,7 @@ async def start_command(
             "أهلًا بك في "
             "<b>النبع للخدمات الجامعية</b> 🎓\n\n"
             "اختر الخدمة وأرسل طلبك من التطبيق."
+            📢 <a href="https://t.me/ALNABASURVICE" target="_blank">قناة النبع للخدمات الجامعية</a>
         ),
         reply_markup=keyboard,
         parse_mode="HTML",
