@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 
@@ -138,6 +139,46 @@
       color:rgba(255,255,255,.82);
       font-size:13px;
       line-height:1.8
+    }
+
+    .channel-btn{
+      display:flex;
+      width:100%;
+      min-height:48px;
+      margin-top:16px;
+      padding:12px 16px;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+      color:#fff;
+      text-decoration:none;
+      text-align:center;
+      font-size:13px;
+      font-weight:800;
+      border:1px solid rgba(255,255,255,.18);
+      border-radius:13px;
+      background:
+        linear-gradient(
+          135deg,
+          #087fc1,
+          #19a9e8
+        );
+      box-shadow:
+        0 8px 18px rgba(8,127,193,.22);
+      transition:
+        transform .2s,
+        box-shadow .2s,
+        opacity .2s
+    }
+
+    .channel-btn:hover{
+      transform:translateY(-1px);
+      box-shadow:
+        0 11px 22px rgba(8,127,193,.28)
+    }
+
+    .channel-btn:active{
+      transform:translateY(0)
     }
 
     .card{
@@ -467,6 +508,7 @@
       .service-btn{
         min-height:96px
       }
+
     }
 
   </style>
@@ -486,6 +528,15 @@
     <p>
       استمارة تقديم الطلبات والأعمال الأكاديمية والهندسية
     </p>
+
+    <a
+      href="https://t.me/ALNABASURVICE"
+      target="_blank"
+      rel="noopener noreferrer"
+      class="channel-btn"
+    >
+      📢 قناة النبع للخدمات الجامعية
+    </a>
 
   </div>
 
@@ -1399,3 +1450,7 @@
 </body>
 
 </html>
+```
+
+**التعديل الفعلي الوحيد:** إضافة زر القناة داخل الـ`header` + تنسيق CSS الخاص به.
+لم أغيّر `JavaScript` أو `API_BASE` أو آلية إرسال الطلبات أو رفع الملفات.
