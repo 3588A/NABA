@@ -1,231 +1,1401 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
+
 <head>
+
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, user-scalable=no"
+  >
+
   <title>النبع للخدمات الجامعية</title>
-  <!-- مكتبة تليجرام الرسمية لتطبيقات الويب -->
+
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
   <style>
-    :root{--sky:#19a9e8;--sky-dark:#087fc1;--sky-pale:#eaf8ff;--ink:#17324d;--muted:#70859a;--line:#dcecf5;--canvas:#f5fbfe;--white:#fff;--success:#16a673;--shadow:0 18px 50px rgba(31,111,149,.12)}
-    *{box-sizing:border-box}html{background:var(--canvas)}body{min-height:100vh;margin:0;padding:20px 14px 36px;direction:rtl;color:var(--ink);font-family:"Tajawal","Noto Sans Arabic",system-ui,-apple-system,"Segoe UI",sans-serif;background:radial-gradient(circle at 8% 0%,rgba(25,169,232,.15),transparent 27%),linear-gradient(180deg,#fbfeff 0%,#f2faff 56%,#e9f6fc 100%)}.container{width:min(100%,680px);margin:0 auto}.header{position:relative;overflow:hidden;margin-bottom:18px;padding:25px 24px;color:#fff;text-align:right;border-radius:26px;background:linear-gradient(135deg,#073b5c 0%,#0b79ad 54%,#26bce9 100%);box-shadow:0 18px 35px rgba(8,91,132,.2)}.header:after{content:"";position:absolute;width:210px;height:210px;left:-84px;top:-105px;border:1px solid rgba(255,255,255,.22);border-radius:50%;box-shadow:0 0 0 24px rgba(255,255,255,.05),0 0 0 49px rgba(255,255,255,.03)}.header:before{content:"ن";position:absolute;z-index:1;left:22px;top:20px;display:grid;width:48px;height:48px;place-items:center;color:#07547a;font-size:24px;font-weight:800;border-radius:15px;background:#fff;box-shadow:0 8px 18px rgba(0,0,0,.12)}.header h2{position:relative;z-index:1;margin:0;color:#fff;font-size:clamp(20px,5vw,28px);font-weight:800}.header p{position:relative;z-index:1;margin:12px 0 0;color:rgba(255,255,255,.82);font-size:13px;line-height:1.8}.card{padding:clamp(20px,4vw,32px);background:rgba(255,255,255,.97);border:1px solid rgba(220,236,245,.95);border-radius:22px;box-shadow:var(--shadow)}.step-title{display:flex;align-items:center;gap:10px;margin-bottom:16px;color:var(--ink);font-size:15px;font-weight:800}.step-title:before{content:"01";display:grid;width:31px;height:31px;place-items:center;flex:0 0 31px;color:var(--sky-dark);font-size:11px;border-radius:10px;background:var(--sky-pale)}hr{margin:23px 0;border:0;border-top:1px solid var(--line)}.services-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:15px}.service-btn{position:relative;display:flex;min-height:106px;padding:16px 12px;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--ink);text-align:center;cursor:pointer;border:1px solid var(--line);border-radius:17px;background:#fff;transition:transform .2s,border-color .2s,box-shadow .2s}.service-btn:hover{transform:translateY(-2px);border-color:#8bd4f3;box-shadow:0 10px 22px rgba(25,169,232,.13)}.service-btn.selected{border-color:var(--sky);background:linear-gradient(145deg,#f8fdff,#e8f7ff);box-shadow:0 10px 25px rgba(25,169,232,.16)}.service-btn.selected:after{content:"✓";position:absolute;top:9px;left:10px;display:grid;width:20px;height:20px;place-items:center;color:#fff;font-size:12px;font-weight:800;border-radius:50%;background:var(--sky)}.service-btn span.icon{display:grid;width:43px;height:43px;place-items:center;font-size:22px;border-radius:14px;background:var(--sky-pale)}.service-btn span.title{color:var(--ink);font-size:12px;font-weight:800}.form-group{margin-bottom:16px;text-align:right}label{display:block;margin-bottom:8px;color:#456278;font-size:12px;font-weight:800}input[type=text],input[type=number],input[type=datetime-local],select,textarea{width:100%;padding:13px 14px;color:var(--ink);font:inherit;font-size:13px;outline:0;border:1px solid var(--line);border-radius:12px;background:#fbfeff;transition:border-color .2s,box-shadow .2s}input::placeholder,textarea::placeholder{color:#9aabba}input:focus,select:focus,textarea:focus{border-color:#62c5ed;background:#fff;box-shadow:0 0 0 4px rgba(25,169,232,.11)}textarea{min-height:100px;resize:vertical;line-height:1.7}.file-upload-box{display:flex;min-height:108px;padding:16px;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;text-align:center;border:1.5px dashed #abd8ea;border-radius:15px;background:#f7fcff;transition:border-color .2s,background .2s}.file-upload-box:hover{border-color:var(--sky);background:var(--sky-pale)}.file-upload-box span{display:grid;width:40px;height:40px;place-items:center;font-size:20px!important;border-radius:13px;background:#e2f5fd}.file-upload-box div{color:var(--muted)!important;font-size:12px!important}.file-status{max-width:100%;margin-top:8px;color:var(--sky-dark)!important;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}input[type=file]{display:none}.btn-submit{width:100%;margin-top:7px;padding:14px 18px;color:#fff;border:0;border-radius:13px;background:linear-gradient(135deg,var(--sky-dark),var(--sky));box-shadow:0 10px 20px rgba(25,169,232,.23);font:inherit;font-size:14px;font-weight:800;cursor:pointer;transition:transform .2s,box-shadow .2s,opacity .2s}.btn-submit:hover{transform:translateY(-1px);box-shadow:0 14px 25px rgba(25,169,232,.28)}.btn-submit:disabled{cursor:wait;opacity:.65;transform:none}.hidden{display:none}.success-box{padding:30px 10px 14px;text-align:center}.success-icon{display:grid;width:72px;height:72px;margin:0 auto 16px;place-items:center;color:var(--success);font-size:38px;border-radius:22px;background:#e9fbf3}.success-box h3{color:var(--ink)!important}.success-box p{color:var(--muted)!important;line-height:1.8}.order-id-badge{display:inline-flex;margin:9px 0;padding:9px 16px;color:var(--success);font-size:14px;font-weight:800;border:1px solid #a9e8cd;border-radius:999px;background:#effcf6}@media(max-width:420px){body{padding:12px 10px 28px}.header{padding:20px 18px;border-radius:22px}.card{padding:18px 14px}.service-btn{min-height:96px}}
+
+    :root{
+      --sky:#19a9e8;
+      --sky-dark:#087fc1;
+      --sky-pale:#eaf8ff;
+      --ink:#17324d;
+      --muted:#70859a;
+      --line:#dcecf5;
+      --canvas:#f5fbfe;
+      --white:#fff;
+      --success:#16a673;
+      --danger:#d9485f;
+      --shadow:0 18px 50px rgba(31,111,149,.12)
+    }
+
+    *{
+      box-sizing:border-box
+    }
+
+    html{
+      background:var(--canvas)
+    }
+
+    body{
+      min-height:100vh;
+      margin:0;
+      padding:20px 14px 36px;
+      direction:rtl;
+      color:var(--ink);
+      font-family:
+        "Tajawal",
+        "Noto Sans Arabic",
+        system-ui,
+        -apple-system,
+        "Segoe UI",
+        sans-serif;
+
+      background:
+        radial-gradient(
+          circle at 8% 0%,
+          rgba(25,169,232,.15),
+          transparent 27%
+        ),
+        linear-gradient(
+          180deg,
+          #fbfeff 0%,
+          #f2faff 56%,
+          #e9f6fc 100%
+        )
+    }
+
+    .container{
+      width:min(100%,680px);
+      margin:0 auto
+    }
+
+    .header{
+      position:relative;
+      overflow:hidden;
+      margin-bottom:18px;
+      padding:25px 24px;
+      color:#fff;
+      text-align:right;
+      border-radius:26px;
+      background:
+        linear-gradient(
+          135deg,
+          #073b5c 0%,
+          #0b79ad 54%,
+          #26bce9 100%
+        );
+      box-shadow:
+        0 18px 35px rgba(8,91,132,.2)
+    }
+
+    .header:after{
+      content:"";
+      position:absolute;
+      width:210px;
+      height:210px;
+      left:-84px;
+      top:-105px;
+      border:1px solid rgba(255,255,255,.22);
+      border-radius:50%;
+      box-shadow:
+        0 0 0 24px rgba(255,255,255,.05),
+        0 0 0 49px rgba(255,255,255,.03)
+    }
+
+    .header:before{
+      content:"ن";
+      position:absolute;
+      z-index:1;
+      left:22px;
+      top:20px;
+      display:grid;
+      width:48px;
+      height:48px;
+      place-items:center;
+      color:#07547a;
+      font-size:24px;
+      font-weight:800;
+      border-radius:15px;
+      background:#fff;
+      box-shadow:0 8px 18px rgba(0,0,0,.12)
+    }
+
+    .header h2{
+      position:relative;
+      z-index:1;
+      margin:0;
+      color:#fff;
+      font-size:clamp(20px,5vw,28px);
+      font-weight:800
+    }
+
+    .header p{
+      position:relative;
+      z-index:1;
+      margin:12px 0 0;
+      color:rgba(255,255,255,.82);
+      font-size:13px;
+      line-height:1.8
+    }
+
+    .card{
+      padding:clamp(20px,4vw,32px);
+      background:rgba(255,255,255,.97);
+      border:1px solid rgba(220,236,245,.95);
+      border-radius:22px;
+      box-shadow:var(--shadow)
+    }
+
+    .step-title{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      margin-bottom:16px;
+      color:var(--ink);
+      font-size:15px;
+      font-weight:800
+    }
+
+    .step-title:before{
+      content:"01";
+      display:grid;
+      width:31px;
+      height:31px;
+      place-items:center;
+      flex:0 0 31px;
+      color:var(--sky-dark);
+      font-size:11px;
+      border-radius:10px;
+      background:var(--sky-pale)
+    }
+
+    hr{
+      margin:23px 0;
+      border:0;
+      border-top:1px solid var(--line)
+    }
+
+    .services-grid{
+      display:grid;
+      grid-template-columns:repeat(2,1fr);
+      gap:12px;
+      margin-bottom:15px
+    }
+
+    .service-btn{
+      position:relative;
+      display:flex;
+      min-height:106px;
+      padding:16px 12px;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+      color:var(--ink);
+      text-align:center;
+      cursor:pointer;
+      border:1px solid var(--line);
+      border-radius:17px;
+      background:#fff;
+      transition:
+        transform .2s,
+        border-color .2s,
+        box-shadow .2s
+    }
+
+    .service-btn:hover{
+      transform:translateY(-2px);
+      border-color:#8bd4f3;
+      box-shadow:
+        0 10px 22px rgba(25,169,232,.13)
+    }
+
+    .service-btn.selected{
+      border-color:var(--sky);
+      background:
+        linear-gradient(
+          145deg,
+          #f8fdff,
+          #e8f7ff
+        );
+      box-shadow:
+        0 10px 25px rgba(25,169,232,.16)
+    }
+
+    .service-btn.selected:after{
+      content:"✓";
+      position:absolute;
+      top:9px;
+      left:10px;
+      display:grid;
+      width:20px;
+      height:20px;
+      place-items:center;
+      color:#fff;
+      font-size:12px;
+      font-weight:800;
+      border-radius:50%;
+      background:var(--sky)
+    }
+
+    .service-btn span.icon{
+      display:grid;
+      width:43px;
+      height:43px;
+      place-items:center;
+      font-size:22px;
+      border-radius:14px;
+      background:var(--sky-pale)
+    }
+
+    .service-btn span.title{
+      color:var(--ink);
+      font-size:12px;
+      font-weight:800
+    }
+
+    .form-group{
+      margin-bottom:16px;
+      text-align:right
+    }
+
+    label{
+      display:block;
+      margin-bottom:8px;
+      color:#456278;
+      font-size:12px;
+      font-weight:800
+    }
+
+    input[type=text],
+    input[type=number],
+    input[type=datetime-local],
+    select,
+    textarea{
+      width:100%;
+      padding:13px 14px;
+      color:var(--ink);
+      font:inherit;
+      font-size:13px;
+      outline:0;
+      border:1px solid var(--line);
+      border-radius:12px;
+      background:#fbfeff;
+      transition:
+        border-color .2s,
+        box-shadow .2s
+    }
+
+    input::placeholder,
+    textarea::placeholder{
+      color:#9aabba
+    }
+
+    input:focus,
+    select:focus,
+    textarea:focus{
+      border-color:#62c5ed;
+      background:#fff;
+      box-shadow:
+        0 0 0 4px rgba(25,169,232,.11)
+    }
+
+    textarea{
+      min-height:100px;
+      resize:vertical;
+      line-height:1.7
+    }
+
+    .file-upload-box{
+      display:flex;
+      min-height:108px;
+      padding:16px;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      cursor:pointer;
+      text-align:center;
+      border:1.5px dashed #abd8ea;
+      border-radius:15px;
+      background:#f7fcff;
+      transition:
+        border-color .2s,
+        background .2s
+    }
+
+    .file-upload-box:hover{
+      border-color:var(--sky);
+      background:var(--sky-pale)
+    }
+
+    .file-upload-box span{
+      display:grid;
+      width:40px;
+      height:40px;
+      place-items:center;
+      font-size:20px;
+      border-radius:13px;
+      background:#e2f5fd
+    }
+
+    .file-upload-box div{
+      color:var(--muted);
+      font-size:12px
+    }
+
+    .file-status{
+      max-width:100%;
+      margin-top:8px;
+      color:var(--sky-dark)!important;
+      font-weight:800;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap
+    }
+
+    input[type=file]{
+      display:none
+    }
+
+    .btn-submit{
+      width:100%;
+      margin-top:7px;
+      padding:14px 18px;
+      color:#fff;
+      border:0;
+      border-radius:13px;
+      background:
+        linear-gradient(
+          135deg,
+          var(--sky-dark),
+          var(--sky)
+        );
+      box-shadow:
+        0 10px 20px rgba(25,169,232,.23);
+      font:inherit;
+      font-size:14px;
+      font-weight:800;
+      cursor:pointer;
+      transition:
+        transform .2s,
+        box-shadow .2s,
+        opacity .2s
+    }
+
+    .btn-submit:hover{
+      transform:translateY(-1px);
+      box-shadow:
+        0 14px 25px rgba(25,169,232,.28)
+    }
+
+    .btn-submit:disabled{
+      cursor:wait;
+      opacity:.65;
+      transform:none
+    }
+
+    .hidden{
+      display:none!important
+    }
+
+    .success-box{
+      padding:30px 10px 14px;
+      text-align:center
+    }
+
+    .success-icon{
+      display:grid;
+      width:72px;
+      height:72px;
+      margin:0 auto 16px;
+      place-items:center;
+      color:var(--success);
+      font-size:38px;
+      border-radius:22px;
+      background:#e9fbf3
+    }
+
+    .success-box h3{
+      color:var(--ink)
+    }
+
+    .success-box p{
+      color:var(--muted);
+      line-height:1.8
+    }
+
+    .order-id-badge{
+      display:inline-flex;
+      margin:9px 0;
+      padding:9px 16px;
+      color:var(--success);
+      font-size:14px;
+      font-weight:800;
+      border:1px solid #a9e8cd;
+      border-radius:999px;
+      background:#effcf6
+    }
+
+    .error-box{
+      margin-top:14px;
+      padding:12px 14px;
+      color:#9f2439;
+      font-size:12px;
+      line-height:1.8;
+      border:1px solid #f1b8c2;
+      border-radius:12px;
+      background:#fff3f5
+    }
+
+    @media(max-width:420px){
+
+      body{
+        padding:12px 10px 28px
+      }
+
+      .header{
+        padding:20px 18px;
+        border-radius:22px
+      }
+
+      .card{
+        padding:18px 14px
+      }
+
+      .service-btn{
+        min-height:96px
+      }
+    }
+
   </style>
 
-
 </head>
+
 <body>
 
-  <div class="container">
-    <div class="header">
-      <h2>النبع للخدمات الجامعية 🎓</h2>
-      <p>استمارة تقديم الطلبات والأعمال الأكاديمية والهندسية</p>
-    </div>
+<div class="container">
 
-    <div class="card">
-      <div id="formContainer">
-        <div class="step-title">1. اختر الخدمة المطلوبة:</div>
-        
-        <div class="services-grid">
-          <div class="service-btn" onclick="selectService('research', this)">
-            <span class="icon">📝</span>
-            <span class="title">تقارير وبحوث</span>
-          </div>
-          <div class="service-btn" onclick="selectService('autocad', this)">
-            <span class="icon">📐</span>
-            <span class="title">تصميم AutoCAD</span>
-          </div>
-          <div class="service-btn" onclick="selectService('minitab', this)">
-            <span class="icon">📊</span>
-            <span class="title">تحليل Minitab</span>
-          </div>
-          <div class="service-btn" onclick="selectService('formatting', this)">
-            <span class="icon">💻</span>
-            <span class="title">تنسيق وتصميم</span>
-          </div>
-        </div>
+  <div class="header">
 
-        <div id="dynamicFields" class="hidden">
-          <hr style="border-color: var(--border-color); margin: 15px 0;">
+    <h2>
+      النبع للخدمات الجامعية 🎓
+    </h2>
 
-          <div class="form-group">
-            <label>التخصص / الكلية *</label>
-            <input type="text" id="department" placeholder="مثال: هندسة مدني / كلية العلوم">
-          </div>
+    <p>
+      استمارة تقديم الطلبات والأعمال الأكاديمية والهندسية
+    </p>
 
-          <div class="form-group">
-            <label>عنوان العمل / اسم المادة *</label>
-            <input type="text" id="title" placeholder="أدخل العنوان التفصيلي للطلب">
-          </div>
-
-          <div id="pageCountGroup" class="form-group hidden">
-            <label>عدد الصفحات / السلايدات *</label>
-            <input type="number" id="pageCount" min="1" placeholder="مثال: 10">
-          </div>
-
-          <div id="languageGroup" class="form-group hidden">
-            <label>لغة التقرير / العمل *</label>
-            <select id="language">
-              <option value="العربية">اللغة العربية</option>
-              <option value="الإنكليزية">اللغة الإنكليزية</option>
-              <option value="مزدوج (عربي + إنكليزي)">مزدوج (عربي + إنكليزي)</option>
-            </select>
-          </div>
-
-          <div id="autocadGroup" class="form-group hidden">
-            <label>نوع الرسم الهندسي المطلوب *</label>
-            <select id="autocadType">
-              <option value="Plan">مخطط افقي (Plan)</option>
-              <option value="Elevation/Section">واجهة / مقطع (Elevation/Section)</option>
-              <option value="3D Model">مجسم ثلاثي الأبعاد (3D)</option>
-              <option value="رسم مشروع كامل">مشروع متكامل</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label>الموعد النهائي للتسليم (Deadline) *</label>
-            <input type="datetime-local" id="deadline">
-          </div>
-
-          <div class="form-group">
-            <label>تعليمات إضافية من الدكتور / تفاصيل الشغل</label>
-            <textarea id="notes" rows="3" placeholder="أكتب أية شروط خاصة أو ملاحظات مهمة..."></textarea>
-          </div>
-
-          <div class="form-group">
-            <label>إرفاق مخطط / ملف التعليمات / صور الملازم (اختياري)</label>
-            <div class="file-upload-box" onclick="document.getElementById('fileInput').click()">
-              <span style="font-size: 20px;">📁</span>
-              <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">اضغط لاختيار صورة أو ملف</div>
-              <div id="fileStatus" class="file-status"></div>
-            </div>
-            <input type="file" id="fileInput" accept="image/*,.pdf,.doc,.docx" onchange="handleFileSelect(this)">
-          </div>
-
-          <button class="btn-submit" onclick="submitOrder()">إرسال الطلب وحساب التكلفة 🚀</button>
-        </div>
-      </div>
-
-      <div id="successContainer" class="success-box hidden">
-        <div class="success-icon">✅</div>
-        <h3 style="margin: 0; color: #f8fafc;">تم إرسال طلبك بنجاح!</h3>
-        <p style="font-size: 13px; color: var(--text-muted); margin-top: 6px;">رقم الطلب المرجعي الخاص بك:</p>
-        <div id="orderBadge" class="order-id-badge">NB-2026-000000</div>
-        <p style="font-size: 12px; color: #94a3b8; margin-top: 15px;">
-          سيقوم المشرف بمراجعة المتطلبات وإرسال السعر المحدد ورابط دفع العربون عبر محادثة البوت مباشرةً.
-        </p>
-        <button class="btn-submit" style="background-color: #334155;" onclick="closeApp()">إغلاق النافذة</button>
-      </div>
-
-    </div>
   </div>
 
-  <script>
-    const tg = window.Telegram.WebApp;
-    tg.ready();
-    tg.expand();
 
-    const API_BASE = "https://naba-88f2c996.fastapicloud.dev";
-    let selectedServiceType = "";
-    let selectedServiceName = "";
-    let selectedFile = null;
-    let attachmentToken = "";
+  <div class="card">
 
-    function selectService(type, element) {
-      selectedServiceType = type;
-      
-      document.querySelectorAll('.service-btn').forEach(btn => btn.classList.remove('selected'));
-      element.classList.add('selected');
+    <!-- ================= FORM ================= -->
 
-      document.getElementById('dynamicFields').classList.remove('hidden');
+    <div id="formContainer">
 
-      const pageGroup = document.getElementById('pageCountGroup');
-      const langGroup = document.getElementById('languageGroup');
-      const autocadGroup = document.getElementById('autocadGroup');
+      <div class="step-title">
+        1. اختر الخدمة المطلوبة:
+      </div>
 
-      pageGroup.classList.add('hidden');
-      langGroup.classList.add('hidden');
-      autocadGroup.classList.add('hidden');
 
-      if (type === 'research') {
-        selectedServiceName = "مشاريع • تقارير • بحوث";
-        pageGroup.classList.remove('hidden');
-        langGroup.classList.remove('hidden');
-      } else if (type === 'autocad') {
-        selectedServiceName = "رسم وتصميم AutoCAD";
-        autocadGroup.classList.remove('hidden');
-      } else if (type === 'minitab') {
-        selectedServiceName = "تحليل البيانات Minitab";
-      } else if (type === 'formatting') {
-        selectedServiceName = "تنسيق PowerPoint / Word / PDF";
-        pageGroup.classList.remove('hidden');
+      <div class="services-grid">
+
+        <div
+          class="service-btn"
+          onclick="selectService('research', this)"
+        >
+
+          <span class="icon">📝</span>
+
+          <span class="title">
+            تقارير وبحوث
+          </span>
+
+        </div>
+
+
+        <div
+          class="service-btn"
+          onclick="selectService('autocad', this)"
+        >
+
+          <span class="icon">📐</span>
+
+          <span class="title">
+            تصميم AutoCAD
+          </span>
+
+        </div>
+
+
+        <div
+          class="service-btn"
+          onclick="selectService('minitab', this)"
+        >
+
+          <span class="icon">📊</span>
+
+          <span class="title">
+            تحليل Minitab
+          </span>
+
+        </div>
+
+
+        <div
+          class="service-btn"
+          onclick="selectService('formatting', this)"
+        >
+
+          <span class="icon">💻</span>
+
+          <span class="title">
+            تنسيق وتصميم
+          </span>
+
+        </div>
+
+      </div>
+
+
+      <div
+        id="dynamicFields"
+        class="hidden"
+      >
+
+        <hr>
+
+
+        <!-- Department -->
+
+        <div class="form-group">
+
+          <label>
+            التخصص / الكلية *
+          </label>
+
+          <input
+            type="text"
+            id="department"
+            maxlength="200"
+            placeholder="مثال: هندسة مدني / كلية العلوم"
+          >
+
+        </div>
+
+
+        <!-- Title -->
+
+        <div class="form-group">
+
+          <label>
+            عنوان العمل / اسم المادة *
+          </label>
+
+          <input
+            type="text"
+            id="title"
+            maxlength="300"
+            placeholder="أدخل العنوان التفصيلي للطلب"
+          >
+
+        </div>
+
+
+        <!-- Pages -->
+
+        <div
+          id="pageCountGroup"
+          class="form-group hidden"
+        >
+
+          <label>
+            عدد الصفحات / السلايدات
+          </label>
+
+          <input
+            type="number"
+            id="pageCount"
+            min="1"
+            max="10000"
+            placeholder="مثال: 10"
+          >
+
+        </div>
+
+
+        <!-- Language -->
+
+        <div
+          id="languageGroup"
+          class="form-group hidden"
+        >
+
+          <label>
+            لغة التقرير / العمل
+          </label>
+
+          <select id="language">
+
+            <option value="العربية">
+              اللغة العربية
+            </option>
+
+            <option value="الإنكليزية">
+              اللغة الإنكليزية
+            </option>
+
+            <option value="مزدوج (عربي + إنكليزي)">
+              مزدوج (عربي + إنكليزي)
+            </option>
+
+          </select>
+
+        </div>
+
+
+        <!-- AutoCAD -->
+
+        <div
+          id="autocadGroup"
+          class="form-group hidden"
+        >
+
+          <label>
+            نوع الرسم الهندسي المطلوب
+          </label>
+
+          <select id="autocadType">
+
+            <option value="Plan">
+              مخطط أفقي (Plan)
+            </option>
+
+            <option value="Elevation/Section">
+              واجهة / مقطع
+            </option>
+
+            <option value="3D Model">
+              مجسم ثلاثي الأبعاد
+            </option>
+
+            <option value="رسم مشروع كامل">
+              مشروع متكامل
+            </option>
+
+          </select>
+
+        </div>
+
+
+        <!-- Deadline -->
+
+        <div class="form-group">
+
+          <label>
+            الموعد النهائي للتسليم *
+          </label>
+
+          <input
+            type="datetime-local"
+            id="deadline"
+          >
+
+        </div>
+
+
+        <!-- Notes -->
+
+        <div class="form-group">
+
+          <label>
+            تعليمات إضافية من الدكتور / تفاصيل الشغل
+          </label>
+
+          <textarea
+            id="notes"
+            maxlength="2000"
+            rows="4"
+            placeholder="اكتب أي شروط خاصة أو ملاحظات مهمة..."
+          ></textarea>
+
+        </div>
+
+
+        <!-- File -->
+
+        <div class="form-group">
+
+          <label>
+            إرفاق مخطط / ملف التعليمات / صور الملازم
+            (اختياري)
+          </label>
+
+          <div
+            class="file-upload-box"
+            onclick="document.getElementById('fileInput').click()"
+          >
+
+            <span>
+              📁
+            </span>
+
+            <div style="margin-top:6px">
+              اضغط لاختيار صورة أو ملف
+            </div>
+
+            <div
+              id="fileStatus"
+              class="file-status"
+            ></div>
+
+          </div>
+
+
+          <input
+            type="file"
+            id="fileInput"
+            accept="image/*,.pdf,.doc,.docx"
+            onchange="handleFileSelect(this)"
+          >
+
+        </div>
+
+
+        <div
+          id="errorBox"
+          class="error-box hidden"
+        ></div>
+
+
+        <button
+          id="submitButton"
+          class="btn-submit"
+          onclick="submitOrder()"
+        >
+          إرسال الطلب 🚀
+        </button>
+
+      </div>
+
+    </div>
+
+
+    <!-- ================= SUCCESS ================= -->
+
+    <div
+      id="successContainer"
+      class="success-box hidden"
+    >
+
+      <div class="success-icon">
+        ✅
+      </div>
+
+      <h3 style="margin:0">
+        تم إرسال طلبك بنجاح!
+      </h3>
+
+      <p style="font-size:13px">
+        رقم الطلب المرجعي:
+      </p>
+
+      <div
+        id="orderBadge"
+        class="order-id-badge"
+      >
+        NB-2026-000000
+      </div>
+
+      <p style="font-size:12px">
+        سيقوم المشرف بمراجعة الطلب
+        والتواصل معك عبر محادثة البوت.
+      </p>
+
+      <button
+        class="btn-submit"
+        onclick="closeApp()"
+      >
+        إغلاق النافذة
+      </button>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+<script>
+
+  // =====================================================
+  // Telegram
+  // =====================================================
+
+  const tg = window.Telegram.WebApp;
+
+  tg.ready();
+  tg.expand();
+
+
+  // =====================================================
+  // Backend
+  // =====================================================
+
+  const API_BASE =
+    "https://naba-88f2c996.fastapicloud.dev";
+
+
+  // =====================================================
+  // State
+  // =====================================================
+
+  let selectedServiceType = "";
+  let selectedFile = null;
+  let attachmentToken = "";
+
+
+  // =====================================================
+  // Services
+  // =====================================================
+
+  function selectService(
+    type,
+    element
+  ){
+
+    selectedServiceType = type;
+
+    document
+      .querySelectorAll(".service-btn")
+      .forEach(
+        btn => btn.classList.remove("selected")
+      );
+
+    element.classList.add("selected");
+
+    document
+      .getElementById("dynamicFields")
+      .classList.remove("hidden");
+
+
+    const pageGroup =
+      document.getElementById("pageCountGroup");
+
+    const languageGroup =
+      document.getElementById("languageGroup");
+
+    const autocadGroup =
+      document.getElementById("autocadGroup");
+
+
+    pageGroup.classList.add("hidden");
+    languageGroup.classList.add("hidden");
+    autocadGroup.classList.add("hidden");
+
+
+    if(type === "research"){
+
+      pageGroup.classList.remove("hidden");
+      languageGroup.classList.remove("hidden");
+
+    }
+
+
+    else if(type === "autocad"){
+
+      autocadGroup.classList.remove("hidden");
+
+    }
+
+
+    else if(type === "formatting"){
+
+      pageGroup.classList.remove("hidden");
+
+    }
+
+  }
+
+
+  // =====================================================
+  // File selection
+  // =====================================================
+
+  function handleFileSelect(
+    input
+  ){
+
+    const file =
+      input.files[0];
+
+    const status =
+      document.getElementById(
+        "fileStatus"
+      );
+
+    selectedFile =
+      file || null;
+
+    attachmentToken = "";
+
+
+    if(!file){
+
+      status.innerText = "";
+      return;
+
+    }
+
+
+    const maxSize =
+      5 * 1024 * 1024;
+
+
+    if(file.size > maxSize){
+
+      selectedFile = null;
+
+      input.value = "";
+
+      status.innerText = "";
+
+      showError(
+        "حجم الملف أكبر من 5 MB."
+      );
+
+      return;
+
+    }
+
+
+    status.innerText =
+      "✓ تم اختيار الملف: "
+      + file.name;
+
+    hideError();
+
+  }
+
+
+  // =====================================================
+  // Error UI
+  // =====================================================
+
+  function showError(
+    message
+  ){
+
+    const box =
+      document.getElementById(
+        "errorBox"
+      );
+
+    box.innerText = message;
+
+    box.classList.remove(
+      "hidden"
+    );
+
+  }
+
+
+  function hideError(){
+
+    document
+      .getElementById("errorBox")
+      .classList.add("hidden");
+
+  }
+
+
+  // =====================================================
+  // API helper
+  // =====================================================
+
+  async function apiRequest(
+    url,
+    options
+  ){
+
+    const response =
+      await fetch(
+        API_BASE.replace(/\/$/, "")
+        + url,
+        options
+      );
+
+
+    const data =
+      await response
+        .json()
+        .catch(
+          () => ({})
+        );
+
+
+    if(!response.ok){
+
+      throw new Error(
+        data.detail
+        || "حدث خطأ في الخادم"
+      );
+
+    }
+
+
+    return data;
+
+  }
+
+
+  // =====================================================
+  // Upload attachment
+  // =====================================================
+
+  async function uploadAttachment(){
+
+    if(!selectedFile){
+
+      return "";
+    }
+
+
+    if(!tg.initData){
+
+      throw new Error(
+        "بيانات Telegram غير موجودة. افتح التطبيق من داخل البوت."
+      );
+
+    }
+
+
+    const form =
+      new FormData();
+
+    form.append(
+      "file",
+      selectedFile,
+      selectedFile.name
+    );
+
+
+    const data =
+      await apiRequest(
+        "/api/upload",
+        {
+          method:"POST",
+
+          headers:{
+            "X-Telegram-Init-Data":
+              tg.initData
+          },
+
+          body:form
+        }
+      );
+
+
+    return data.token || "";
+
+  }
+
+
+  // =====================================================
+  // Submit order
+  // =====================================================
+
+  async function submitOrder(){
+
+    hideError();
+
+
+    if(!tg.initData){
+
+      showError(
+        "افتح تطبيق النبع من داخل Telegram، وليس من متصفح عادي."
+      );
+
+      return;
+
+    }
+
+
+    const department =
+      document
+        .getElementById("department")
+        .value
+        .trim();
+
+
+    const title =
+      document
+        .getElementById("title")
+        .value
+        .trim();
+
+
+    const deadline =
+      document
+        .getElementById("deadline")
+        .value;
+
+
+    const notes =
+      document
+        .getElementById("notes")
+        .value
+        .trim();
+
+
+    if(!selectedServiceType){
+
+      showError(
+        "اختر الخدمة المطلوبة أولًا."
+      );
+
+      return;
+
+    }
+
+
+    if(!department){
+
+      showError(
+        "أدخل التخصص أو الكلية."
+      );
+
+      return;
+
+    }
+
+
+    if(!title){
+
+      showError(
+        "أدخل عنوان العمل."
+      );
+
+      return;
+
+    }
+
+
+    if(!deadline){
+
+      showError(
+        "اختر الموعد النهائي."
+      );
+
+      return;
+
+    }
+
+
+    const deadlineDate =
+      new Date(deadline);
+
+
+    if(
+      Number.isNaN(
+        deadlineDate.getTime()
+      )
+    ){
+
+      showError(
+        "الموعد النهائي غير صالح."
+      );
+
+      return;
+
+    }
+
+
+    if(
+      deadlineDate.getTime()
+      < Date.now()
+    ){
+
+      showError(
+        "لا يمكن اختيار موعد في الماضي."
+      );
+
+      return;
+
+    }
+
+
+    const button =
+      document.getElementById(
+        "submitButton"
+      );
+
+
+    button.disabled = true;
+
+    button.innerText =
+      "جاري رفع المرفق...";
+
+
+    try{
+
+      // ---------------------------------------------
+      // 1. Upload attachment
+      // ---------------------------------------------
+
+      attachmentToken =
+        await uploadAttachment();
+
+
+      // ---------------------------------------------
+      // 2. Prepare order
+      // ---------------------------------------------
+
+      const payload = {
+
+        service_type:
+          selectedServiceType,
+
+        department:
+          department,
+
+        title:
+          title,
+
+        page_count:
+          document
+            .getElementById("pageCount")
+            .value
+            || "",
+
+        language:
+          document
+            .getElementById("language")
+            .value
+            || "",
+
+        autocad_type:
+          document
+            .getElementById("autocadType")
+            .value
+            || "",
+
+        deadline:
+          deadline,
+
+        notes:
+          notes,
+
+        attachment_token:
+          attachmentToken
+
+      };
+
+
+      // ---------------------------------------------
+      // 3. Send directly to FastAPI
+      //
+      // IMPORTANT:
+      // لا tg.sendData()
+      // ---------------------------------------------
+
+      button.innerText =
+        "جاري إرسال الطلب...";
+
+
+      const data =
+        await apiRequest(
+          "/api/orders",
+          {
+            method:"POST",
+
+            headers:{
+              "Content-Type":
+                "application/json",
+
+              "X-Telegram-Init-Data":
+                tg.initData
+            },
+
+            body:
+              JSON.stringify(payload)
+          }
+        );
+
+
+      // ---------------------------------------------
+      // 4. Only now show success
+      // ---------------------------------------------
+
+      if(
+        !data.ok
+        || !data.order_id
+      ){
+
+        throw new Error(
+          "لم يؤكد الخادم استلام الطلب."
+        );
+
       }
+
+
+      document
+        .getElementById("formContainer")
+        .classList.add("hidden");
+
+
+      document
+        .getElementById("orderBadge")
+        .innerText =
+          data.order_id;
+
+
+      document
+        .getElementById("successContainer")
+        .classList.remove("hidden");
+
+
     }
 
-    function handleFileSelect(input) {
-      const file = input.files[0];
-      const statusDiv = document.getElementById('fileStatus');
-      selectedFile = file || null;
-      attachmentToken = "";
-      if (file) statusDiv.innerText = "✓ تم اختيار الملف: " + file.name;
+    catch(error){
+
+      console.error(
+        "NABA order error:",
+        error
+      );
+
+
+      showError(
+        error.message
+        || "تعذر إرسال الطلب."
+      );
+
+
+      button.disabled = false;
+
+      button.innerText =
+        "إرسال الطلب 🚀";
+
     }
 
-    async function uploadAttachment() {
-      if (!selectedFile) return "";
-      if (!API_BASE) throw new Error("لم يتم ضبط رابط Backend في الواجهة");
-      const form = new FormData();
-      form.append("file", selectedFile, selectedFile.name);
-      const response = await fetch(API_BASE.replace(/\/$/, "") + "/api/upload", {
-        method: "POST",
-        headers: { "X-Telegram-Init-Data": tg.initData },
-        body: form
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.detail || "تعذر رفع المرفق");
-      return data.token;
-    }
+  }
 
-    async function submitOrder() {
-      const department = document.getElementById('department').value.trim();
-      const title = document.getElementById('title').value.trim();
-      const deadline = document.getElementById('deadline').value;
-      const notes = document.getElementById('notes').value.trim();
 
-      if (!selectedServiceType) { alert("اختر الخدمة المطلوبة أولًا."); return; }
-      if (!department || !title || !deadline) {
-        alert("يرجى تعبئة الحقول الأساسية المطلوبة (التخصص، العنوان، والموعد النهائي).");
-        return;
-      }
-      if (new Date(deadline) < new Date()) { alert("لا يمكن اختيار موعد نهائي في الماضي!"); return; }
+  // =====================================================
+  // Close Mini App
+  // =====================================================
 
-      const button = document.querySelector('.btn-submit');
-      button.disabled = true;
-      button.innerText = "جاري إرسال الطلب...";
-      try {
-        attachmentToken = await uploadAttachment();
-        const payload = {
-          service_type: selectedServiceType,
-          service_name: selectedServiceName,
-          department, title,
-          page_count: document.getElementById('pageCount').value || "غير محدد",
-          language: document.getElementById('language').value || "غير محدد",
-          autocad_type: document.getElementById('autocadType').value || "غير محدد",
-          deadline, notes,
-          attachment_token: attachmentToken
-        };
-        tg.sendData(JSON.stringify(payload));
-        document.getElementById('formContainer').classList.add('hidden');
-        document.getElementById('orderBadge').innerText = "جاري المعالجة عبر البوت";
-        document.getElementById('successContainer').classList.remove('hidden');
-      } catch (error) {
-        alert(error.message || "تعذر إرسال الطلب");
-        button.disabled = false;
-        button.innerText = "إرسال الطلب وحساب التكلفة 🚀";
-      }
-    }
+  function closeApp(){
 
-    function closeApp() {
-      tg.close();
-    }
-  </script>
+    tg.close();
+
+  }
+
+</script>
+
 </body>
+
 </html>
