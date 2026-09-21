@@ -283,11 +283,21 @@ async def web_app_data_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             saved = conn.execute("SELECT * FROM orders WHERE order_id=%s", (order_id,)).fetchone()
         notification = build_order_message(saved, {"first_name": user.first_name, "username": user.username})
         target = parse_channel_id()
-        if not target:
-            raise RuntimeError("CHANNEL_ID is not configured")
-        await send_order_message(target, notification, attachment)
+        if target:
+            try:
+                await send_order_message(target, notification, attachment)
+                channel_status = "تم إرسال نسخة إلى القناة بنجاح."
+            except Exception:
+                logger.exception("Channel delivery failed for order %s", order_id)
+                channel_status = "تم تسجيل الطلب، وسيتم إرسال إشعار القناة بعد معالجة المشكلة."
+        else:
+            logger.error("CHANNEL_ID is not configured for order %s", order_id)
+            channel_status = "تم تسجيل الطلب، وسيتم إرسال إشعار القناة بعد معالجة المشكلة."
         await message.reply_text(
-            f"✅ <b>تم استلام طلبك</b>\n\nرقم الطلب: <code>{order_id}</code>\nسيتم التواصل معك عبر هذه المحادثة.",
+            f"✅ <b>تم استلام طلبك</b>\n\n"
+            f"رقم الطلب: <code>{order_id}</code>\n"
+            f"{channel_status}\n"
+            "سيتم التواصل معك عبر هذه المحادثة.",
             parse_mode="HTML",
         )
     except Exception:
