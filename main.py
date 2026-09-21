@@ -396,6 +396,11 @@ def init_db():
         CREATE INDEX IF NOT EXISTS orders_created_at_idx
         ON orders(created_at)
         """,
+
+        """
+        CREATE INDEX IF NOT EXISTS audit_logs_timestamp_idx
+        ON audit_logs(timestamp)
+        """,
     ]
 
     with db() as conn:
@@ -441,6 +446,39 @@ async def init_db_with_retry(
             await asyncio.sleep(
                 delay * attempt
             )
+
+
+# =========================================================
+# Audit log helper
+# =========================================================
+
+def add_audit_log(
+    order_id: str,
+    action: str,
+    performed_by: str = "System",
+):
+    """
+    تسجيل نشاط حقيقي للطلب داخل audit_logs.
+    لا ينشئ جدولًا جديدًا.
+    """
+
+    with db() as conn:
+
+        conn.execute(
+            """
+            INSERT INTO audit_logs(
+                order_id,
+                action,
+                performed_by
+            )
+            VALUES(%s,%s,%s)
+            """,
+            (
+                order_id,
+                action,
+                performed_by,
+            ),
+        )
 
 
 # =========================================================
@@ -1246,114 +1284,105 @@ async def send_to_chat(
     )
 
 
+# =========================================================
+# Deliver order
+# =========================================================
+
 async def deliver_order(
     order: dict,
     user: dict,
     attachment,
 ) -> bool:
 
+    """
+    إرسال الطلب الكامل والمرفق إلى قناة Telegram فقط.
+
+    لا يتم إرسال نسخة كاملة إلى الأدمن الخاص.
+    """
+
     message = build_order_message(
         order,
         user,
     )
 
-    targets = []
-
-    # =====================================================
-    # القناة
-    # =====================================================
-
     channel = parse_channel_id()
 
-    if channel:
-        targets.append(channel)
-
     # =====================================================
-    # الأدمن
+    # يجب أن تكون القناة مضبوطة
     # =====================================================
 
-    targets.append(
-        ADMIN_TELEGRAM_ID
-    )
-
-    # =====================================================
-    # إزالة التكرار
-    # =====================================================
-
-    unique_targets = []
-
-    seen_targets = set()
-
-    for chat_id in targets:
-
-        key = str(chat_id)
-
-        if key not in seen_targets:
-
-            seen_targets.add(key)
-
-            unique_targets.append(
-                chat_id
-            )
-
-    if not unique_targets:
+    if not channel:
 
         logger.error(
-            "No Telegram delivery target configured"
+            "CHANNEL_ID is not configured"
         )
 
         return False
 
     # =====================================================
-    # إرسال إلى كل الوجهات
+    # إرسال الطلب إلى القناة فقط
     # =====================================================
 
-    successful_targets = 0
+    try:
 
-    for chat_id in unique_targets:
+        await send_to_chat(
+            channel,
+            message,
+            order["order_id"],
+            attachment,
+        )
 
-        try:
+        logger.info(
+            "Order %s delivered to channel %s",
+            order["order_id"],
+            channel,
+        )
 
-            await send_to_chat(
-                chat_id,
-                message,
-                order["order_id"],
-                attachment,
-            )
+    except TelegramError:
 
-            successful_targets += 1
+        logger.exception(
+            "Failed to deliver order %s "
+            "to channel %s",
+            order["order_id"],
+            channel,
+        )
 
-            logger.info(
-                "Order %s delivered to %s",
-                order["order_id"],
-                chat_id,
-            )
+        return False
 
-        except TelegramError:
+    except Exception:
 
-            logger.exception(
-                "Failed to deliver order %s "
-                "to %s",
-                order["order_id"],
-                chat_id,
-            )
+        logger.exception(
+            "Unexpected delivery error "
+            "for order %s",
+            order["order_id"],
+        )
 
-        except Exception:
-
-            logger.exception(
-                "Unexpected delivery error "
-                "for order %s",
-                order["order_id"],
-            )
+        return False
 
     # =====================================================
-    # الطلب يعتبر مسلّمًا فقط إذا نجحت كل الوجهات
+    # تسجيل النشاط الحقيقي
     # =====================================================
 
-    return (
-        successful_targets
-        == len(unique_targets)
-    )
+    try:
+
+        await asyncio.to_thread(
+            add_audit_log,
+            order["order_id"],
+            "ORDER_DELIVERED_TO_CHANNEL",
+            "System",
+        )
+
+    except Exception:
+
+        # فشل تسجيل النشاط لا يعني أن إرسال الطلب فشل.
+        # الطلب وصل إلى القناة بالفعل.
+        logger.exception(
+            "Could not write delivery audit log "
+            "for order %s",
+            order["order_id"],
+        )
+
+    return True
 
 
 # =========================================================
@@ -2161,7 +2190,7 @@ async def submit_order(
     )
 
     # =====================================================
-    # إرسال إلى القناة + الأدمن
+    # إرسال الطلب الكامل إلى القناة فقط
     # =====================================================
 
     delivered = await deliver_order(
@@ -2173,7 +2202,7 @@ async def submit_order(
     if not delivered:
 
         logger.error(
-            "Order %s saved but delivery failed",
+            "Order %s saved but channel delivery failed",
             order["order_id"],
         )
 
@@ -2183,7 +2212,7 @@ async def submit_order(
             status_code=502,
             detail=(
                 "تم حفظ الطلب، لكن تعذر إرساله "
-                "إلى القناة أو الأدمن. "
+                "إلى القناة. "
                 "حاول مرة أخرى أو تواصل مع الإدارة."
             ),
         )
@@ -2210,7 +2239,7 @@ async def submit_order(
             )
 
     # =====================================================
-    # إشعار المستخدم
+    # إشعار المستخدم فقط
     # =====================================================
 
     try:
@@ -2418,6 +2447,27 @@ def admin_dashboard(
             """
         ).fetchall()
 
+        # =================================================
+        # النشاطات الحقيقية
+        # =================================================
+
+        activity_rows = conn.execute(
+            """
+            SELECT
+                id,
+                order_id,
+                action,
+                performed_by,
+                timestamp
+
+            FROM audit_logs
+
+            ORDER BY timestamp DESC
+
+            LIMIT 50
+            """
+        ).fetchall()
+
     # =====================================================
     # أدوات التحويل
     # =====================================================
@@ -2537,6 +2587,37 @@ def admin_dashboard(
         )
 
     # =====================================================
+    # النشاطات
+    # =====================================================
+
+    activities = []
+
+    for row in activity_rows:
+
+        activities.append(
+            {
+                "id":
+                    int(row["id"]),
+
+                "order_id":
+                    row["order_id"],
+
+                "action":
+                    row["action"],
+
+                "performed_by":
+                    row["performed_by"],
+
+                "timestamp":
+                    (
+                        row["timestamp"].isoformat()
+                        if row["timestamp"]
+                        else None
+                    ),
+            }
+        )
+
+    # =====================================================
     # النتيجة
     # =====================================================
 
@@ -2638,6 +2719,9 @@ def admin_dashboard(
 
         "recent_orders":
             recent_orders,
+
+        "activities":
+            activities,
     }
 
 
