@@ -384,6 +384,37 @@ def init_db():
             """
         )
 
+        # Channel message mapping used by the channel_post reply workflow.
+        # The existing telegram_message_links table is preserved unchanged.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS channel_message_links (
+                id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                channel_chat_id BIGINT NOT NULL,
+                channel_message_id BIGINT NOT NULL,
+                user_id BIGINT NOT NULL,
+                order_id TEXT,
+                message_type TEXT NOT NULL DEFAULT 'customer',
+                created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(channel_chat_id, channel_message_id)
+            )
+            """
+        )
+
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS channel_message_links_user_id_idx
+            ON channel_message_links(user_id)
+            """
+        )
+
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS channel_message_links_lookup_idx
+            ON channel_message_links(channel_chat_id, channel_message_id)
+            """
+        )
+
         # -----------------------------
         # Orders migrations
         # -----------------------------
@@ -740,6 +771,47 @@ def add_audit_log(
             performed_by,
             details,
         )
+
+
+# =========================================================
+# Channel message link helpers
+# =========================================================
+
+def save_channel_message_link(
+    channel_chat_id: int,
+    channel_message_id: int,
+    user_id: int,
+    order_id: str | None = None,
+    message_type: str = "customer",
+):
+    with db() as conn:
+        conn.execute(
+            """
+            INSERT INTO channel_message_links (
+                channel_chat_id, channel_message_id, user_id, order_id, message_type
+            )
+            VALUES (%s,%s,%s,%s,%s)
+            ON CONFLICT (channel_chat_id, channel_message_id)
+            DO UPDATE SET
+                user_id=EXCLUDED.user_id,
+                order_id=EXCLUDED.order_id,
+                message_type=EXCLUDED.message_type
+            """,
+            (channel_chat_id, channel_message_id, user_id, order_id, message_type),
+        )
+
+
+def get_channel_message_link(channel_chat_id: int, channel_message_id: int):
+    with db() as conn:
+        return conn.execute(
+            """
+            SELECT id, channel_chat_id, channel_message_id, user_id, order_id, message_type, created_at
+            FROM channel_message_links
+            WHERE channel_chat_id=%s AND channel_message_id=%s
+            LIMIT 1
+            """,
+            (channel_chat_id, channel_message_id),
+        ).fetchone()
 
 
 # =========================================================
@@ -1578,7 +1650,7 @@ async def send_to_chat(
     attachment_message = (
         await telegram_app.bot.send_document(
             chat_id=chat_id,
-            document=io.BytesIO(data),
+            document=data,
             filename=filename,
             caption=caption,
         )
@@ -2083,6 +2155,20 @@ async def customer_private_message_handler(
                     (channel_message_id, order_id, user.id),
                 )
 
+                conn.execute(
+                    """
+                    INSERT INTO channel_message_links
+                        (channel_chat_id, channel_message_id, user_id, order_id, message_type)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (channel_chat_id, channel_message_id)
+                    DO UPDATE SET
+                        user_id=EXCLUDED.user_id,
+                        order_id=EXCLUDED.order_id,
+                        message_type=EXCLUDED.message_type
+                    """,
+                    (channel, channel_message_id, user.id, order_id, "customer"),
+                )
+
             add_audit_log_conn(
                 conn,
                 order_id,
@@ -2203,165 +2289,165 @@ async def channel_post_handler(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
 ):
-    """
-    Route an administrator reply made to a customer message in:
-      - the Telegram channel, or
-      - the linked discussion group.
+    """Handle only administrator Replies arriving as CHANNEL_POST updates."""
+    message = update.channel_post
 
-    The mapping is always resolved from the original channel message id.
-    For discussion-group replies Telegram normally exposes that id through
-    reply_to_message.forward_origin.message_id.
-    """
-    message = update.channel_post or update.message
-    if not message:
+    if not message or not message.chat:
         return
 
-    channel_id = parse_channel_id()
-    if not channel_id:
+    channel = parse_channel_id()
+    if channel is None:
         return
 
-    is_direct_channel_update = (
-        update.channel_post is not None
-        and str(message.chat.id) == str(channel_id)
-    )
-
-    is_discussion_update = (
-        update.message is not None
-        and getattr(message.chat, "type", None) in {"group", "supergroup"}
-    )
-
-    if not (is_direct_channel_update or is_discussion_update):
+    # Security boundary for channel_post: Telegram does not expose the
+    # human administrator as effective_user. Verify the configured channel.
+    if int(message.chat.id) != int(channel):
         return
 
-    replied_to = getattr(message, "reply_to_message", None)
-    if not replied_to:
-        return
-
-    reply_text = (
-        getattr(message, "text", None)
-        or getattr(message, "caption", None)
-        or ""
-    ).strip()
-    if not reply_text:
-        return
-
-    candidate_ids = []
-
-    # 1) A real reply inside the channel.
-    replied_chat = getattr(replied_to, "chat", None)
-    if (
-        getattr(replied_to, "message_id", None) is not None
-        and replied_chat is not None
-        and str(getattr(replied_chat, "id", "")) == str(channel_id)
-    ):
-        candidate_ids.append(replied_to.message_id)
-
-    # 2) A reply in the linked discussion group. The replied-to message is
-    # an automatic forward of the channel post in current Bot API versions.
-    origin = getattr(replied_to, "forward_origin", None)
-    origin_chat = getattr(origin, "chat", None) if origin else None
-    origin_chat_id = getattr(origin_chat, "id", None)
-    origin_message_id = getattr(origin, "message_id", None)
-    if (
-        origin_message_id is not None
-        and origin_chat_id is not None
-        and str(origin_chat_id) == str(channel_id)
-    ):
-        candidate_ids.append(origin_message_id)
-
-    # 3) Legacy python-telegram-bot fields.
-    legacy_chat = getattr(replied_to, "forward_from_chat", None)
-    legacy_chat_id = getattr(legacy_chat, "id", None)
-    legacy_message_id = getattr(
-        replied_to,
-        "forward_from_message_id",
-        None,
-    )
-    if (
-        legacy_message_id is not None
-        and legacy_chat_id is not None
-        and str(legacy_chat_id) == str(channel_id)
-    ):
-        candidate_ids.append(legacy_message_id)
-
-    candidate_ids = list(dict.fromkeys(candidate_ids))
-    if not candidate_ids:
+    if not message.reply_to_message:
         logger.info(
-            "Unmapped Telegram reply: chat=%s message=%s replied=%s",
-            getattr(message.chat, "id", None),
-            getattr(message, "message_id", None),
-            getattr(replied_to, "message_id", None),
+            "Channel post received without reply_to_message: %s",
+            message.message_id,
         )
         return
 
-    try:
-        with db() as conn:
-            order = conn.execute(
-                """
-                SELECT order_id, user_id
-                FROM telegram_message_links
-                WHERE channel_message_id = ANY(%s)
-                ORDER BY created_at DESC
-                LIMIT 1
-                """,
-                (candidate_ids,),
-            ).fetchone()
+    replied = message.reply_to_message
+    logger.info(
+        "CHANNEL REPLY DETECTED: channel=%s message=%s replied_to=%s",
+        message.chat.id, message.message_id, replied.message_id,
+    )
 
-            # Also support the original order-delivery messages used by the
-            # reference workflow, so old orders remain replyable.
-            if not order:
-                order = conn.execute(
+    link = await asyncio.to_thread(
+        get_channel_message_link,
+        int(channel),
+        int(replied.message_id),
+    )
+
+    # Keep compatibility with the developed version's existing mappings.
+    if not link:
+        try:
+            with db() as conn:
+                link = conn.execute(
                     """
                     SELECT order_id, user_id
-                    FROM orders
-                    WHERE channel_message_id = ANY(%s)
-                       OR channel_attachment_message_id = ANY(%s)
-                    ORDER BY created_at DESC
+                    FROM telegram_message_links
+                    WHERE channel_message_id=%s
                     LIMIT 1
                     """,
-                    (candidate_ids, candidate_ids),
+                    (replied.message_id,),
                 ).fetchone()
+                if not link:
+                    link = conn.execute(
+                        """
+                        SELECT order_id, user_id
+                        FROM orders
+                        WHERE channel_message_id=%s
+                           OR channel_attachment_message_id=%s
+                        LIMIT 1
+                        """,
+                        (replied.message_id, replied.message_id),
+                    ).fetchone()
+        except Exception:
+            logger.exception("Legacy channel message lookup failed")
 
-        if not order:
+    if not link:
+        logger.warning(
+            "Admin channel reply has no customer mapping: channel=%s replied_to=%s",
+            message.chat.id, replied.message_id,
+        )
+        return
+
+    user_id = int(link["user_id"])
+    order_id = link["order_id"]
+
+    try:
+        if message.text:
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=(
+                    "👨‍💼 <b>رسالة من الكادر:</b>\n\n"
+                    + html.escape(message.text)
+                ),
+                parse_mode="HTML",
+            )
+
+        elif message.photo:
+            await context.bot.send_photo(
+                chat_id=user_id,
+                photo=message.photo[-1].file_id,
+                caption=("👨‍💼 رسالة من الكادر\n\n" + (message.caption or ""))[:1024],
+            )
+
+        elif message.document:
+            await context.bot.send_document(
+                chat_id=user_id,
+                document=message.document.file_id,
+                caption=("👨‍💼 رسالة من الكادر\n\n" + (message.caption or ""))[:1024],
+            )
+
+        elif message.video:
+            await context.bot.send_video(
+                chat_id=user_id,
+                video=message.video.file_id,
+                caption=("👨‍💼 رسالة من الكادر\n\n" + (message.caption or ""))[:1024],
+            )
+
+        elif message.voice:
+            await context.bot.send_voice(
+                chat_id=user_id,
+                voice=message.voice.file_id,
+            )
+
+        elif message.audio:
+            await context.bot.send_audio(
+                chat_id=user_id,
+                audio=message.audio.file_id,
+                caption="👨‍💼 رسالة من الكادر",
+            )
+
+        elif message.sticker:
+            await context.bot.send_sticker(
+                chat_id=user_id,
+                sticker=message.sticker.file_id,
+            )
+
+        else:
             logger.warning(
-                "No customer mapping for channel message ids=%s",
-                candidate_ids,
+                "Unsupported admin channel reply type: %s",
+                message.message_id,
             )
             return
 
-        customer_message = (
-            "📩 <b>رسالة من إدارة النبع</b>\n\n"
-            f"🆔 الطلب: <code>{html.escape(order['order_id'])}</code>\n\n"
-            f"{html.escape(reply_text)}"
-        )
+        try:
+            await message.reply_text("✅ تم إرسال الرد إلى الزبون.")
+        except TelegramError:
+            logger.warning("Could not send admin confirmation", exc_info=True)
 
-        success = await notify_customer(
-            order["user_id"],
-            customer_message,
-        )
-
-        with db() as conn:
-            add_audit_log_conn(
-                conn,
-                order["order_id"],
-                (
-                    "ADMIN_CHANNEL_REPLY_TO_CUSTOMER"
-                    if success
-                    else "ADMIN_CHANNEL_REPLY_FAILED"
-                ),
-                "Admin",
-                reply_text[:2000],
-            )
+        try:
+            with db() as conn:
+                add_audit_log_conn(
+                    conn,
+                    order_id,
+                    "ADMIN_CHANNEL_REPLY_TO_CUSTOMER",
+                    "Admin",
+                    (message.text or message.caption or "مرفق")[:2000],
+                )
+        except Exception:
+            logger.exception("Could not write admin channel reply audit")
 
         logger.info(
-            "Channel reply routed: order=%s user=%s success=%s",
-            order["order_id"],
-            order["user_id"],
-            success,
+            "Admin channel reply forwarded: order=%s user=%s source_channel=%s replied_to=%s",
+            order_id, user_id, message.chat.id, replied.message_id,
         )
 
+    except TelegramError:
+        logger.exception("Failed to send admin channel reply to customer %s", user_id)
+        try:
+            await message.reply_text("❌ تعذر إرسال الرد إلى الزبون.")
+        except TelegramError:
+            pass
     except Exception:
-        logger.exception("Failed to route administrator channel reply")
+        logger.exception("Unexpected admin channel reply relay error for customer %s", user_id)
 
 
 # =========================================================
@@ -2592,17 +2678,8 @@ telegram_app.add_handler(
 
 telegram_app.add_handler(
     MessageHandler(
-        filters.ChatType.CHANNEL,
-        channel_post_handler,
-    )
-)
-
-# Replies to channel posts are normally delivered by Telegram as messages
-# inside the linked discussion group. Route those through the same handler.
-telegram_app.add_handler(
-    MessageHandler(
-        filters.ChatType.GROUPS
-        & ~filters.COMMAND,
+        filters.UpdateType.CHANNEL_POST
+        & filters.REPLY,
         channel_post_handler,
     )
 )
