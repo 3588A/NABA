@@ -1938,51 +1938,50 @@ async def forward_customer_message_to_channel(
 # Find channel link for admin reply
 # =========================================================
 
-def find_link_for_replied_message(message):
-    """Resolve the customer mapped to an admin reply.
+def find_link_for_replied_message(
+    message,
+):
 
-    Telegram discussion replies can reference the original channel post
-    through Message.forward_origin. Depending on Telegram/PTB version and
-    how the message was delivered, the origin may be exposed in slightly
-    different forms, so we try all useful identifiers before giving up.
-    """
-
-    if not message or not message.reply_to_message:
+    if not message:
         return None
 
-    replied = message.reply_to_message
-
-    logger.info(
-        "ADMIN REPLY DETECTED: chat_id=%s message_id=%s "
-        "reply_to_chat_id=%s reply_to_message_id=%s",
-        message.chat.id if message.chat else None,
-        message.message_id,
-        replied.chat.id if replied.chat else None,
-        replied.message_id,
+    replied = (
+        message.reply_to_message
     )
 
-    # 1) Direct mapping. This works when the reply points directly at the
-    # channel message itself.
-    if replied.chat:
+    if not replied:
+        return None
+
+    # =====================================================
+    # الطريقة الأولى:
+    # الرسالة نفسها في القناة
+    # =====================================================
+
+    chat = replied.chat
+
+    if chat:
+
         try:
+
             row = get_channel_message_link(
-                int(replied.chat.id),
+                int(chat.id),
                 int(replied.message_id),
             )
+
             if row:
-                logger.info(
-                    "CUSTOMER FOUND via direct mapping: user_id=%s",
-                    row["user_id"],
-                )
                 return row
+
         except Exception:
+
             logger.exception(
                 "Direct channel message link lookup failed"
             )
 
-    # 2) Telegram's modern forward origin. In a linked discussion group,
-    # the message being replied to is commonly a forwarded copy of the
-    # original channel post.
+    # =====================================================
+    # الطريقة الثانية:
+    # الرسالة جاءت من Forward / Origin
+    # =====================================================
+
     forward_origin = getattr(
         replied,
         "forward_origin",
@@ -1990,138 +1989,90 @@ def find_link_for_replied_message(message):
     )
 
     if forward_origin:
+
         origin_chat = getattr(
             forward_origin,
             "chat",
             None,
         )
+
         origin_message_id = getattr(
             forward_origin,
             "message_id",
             None,
         )
 
-        logger.info(
-            "Reply forward_origin: chat_id=%s message_id=%s type=%s",
-            getattr(origin_chat, "id", None),
-            origin_message_id,
-            type(forward_origin).__name__,
-        )
+        if (
+            origin_chat
+            and origin_message_id
+        ):
 
-        if origin_chat and origin_message_id:
             try:
+
                 row = get_channel_message_link(
                     int(origin_chat.id),
                     int(origin_message_id),
                 )
+
                 if row:
-                    logger.info(
-                        "CUSTOMER FOUND via forward_origin: user_id=%s",
-                        row["user_id"],
-                    )
                     return row
+
             except Exception:
+
                 logger.exception(
                     "Forward-origin channel link lookup failed"
                 )
 
-    # 3) Legacy Bot API fields. These may still be present for older
-    # forwarded-message payloads.
-    legacy_chat = getattr(
-        replied,
-        "forward_from_chat",
-        None,
-    )
-    legacy_message_id = getattr(
-        replied,
-        "forward_from_message_id",
-        None,
-    )
-
-    if legacy_chat and legacy_message_id:
-        logger.info(
-            "Legacy forward fields: chat_id=%s message_id=%s",
-            getattr(legacy_chat, "id", None),
-            legacy_message_id,
-        )
-        try:
-            row = get_channel_message_link(
-                int(legacy_chat.id),
-                int(legacy_message_id),
-            )
-            if row:
-                logger.info(
-                    "CUSTOMER FOUND via legacy forward fields: user_id=%s",
-                    row["user_id"],
-                )
-                return row
-        except Exception:
-            logger.exception(
-                "Legacy forward channel link lookup failed"
-            )
-
-    # 4) sender_chat is useful for some channel-originated messages.
-    sender_chat = getattr(
-        replied,
-        "sender_chat",
-        None,
-    )
-    if sender_chat:
-        try:
-            row = get_channel_message_link(
-                int(sender_chat.id),
-                int(replied.message_id),
-            )
-            if row:
-                logger.info(
-                    "CUSTOMER FOUND via sender_chat: user_id=%s",
-                    row["user_id"],
-                )
-                return row
-        except Exception:
-            logger.exception(
-                "sender_chat channel link lookup failed"
-            )
-
-    logger.warning(
-        "NO CUSTOMER MAPPING FOUND for admin reply. "
-        "reply_chat=%s reply_message=%s forward_origin=%r",
-        replied.chat.id if replied.chat else None,
-        replied.message_id,
-        forward_origin,
-    )
     return None
 
+
+# =========================================================
+# Forward admin reply to customer
+# =========================================================
 
 async def forward_admin_reply_to_customer(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
 ):
-    """Forward an admin's reply from the channel/discussion to the customer."""
 
     message = update.effective_message
-    admin = update.effective_user
 
-    if not message or not admin:
+    if not message:
         return
 
-    logger.info(
-        "ADMIN REPLY HANDLER: user_id=%s chat_id=%s message_id=%s",
-        admin.id,
-        message.chat.id if message.chat else None,
-        message.message_id,
-    )
+    # =====================================================
+    # هذه الدالة مخصصة فقط لردود الأدمن داخل القناة.
+    # في channel_post لا يوجد effective_user يمثل الأدمن
+    # البشري؛ Telegram ينسب المنشور إلى القناة نفسها.
+    # لذلك نتحقق من أن الرسالة جاءت من CHANNEL_ID.
+    # =====================================================
 
-    # Only the configured admin can relay messages to customers.
-    if admin.id != ADMIN_TELEGRAM_ID:
+    channel = parse_channel_id()
+
+    if channel is None or not message.chat:
         return
+
+    if int(message.chat.id) != int(channel):
+        return
+
+    # =====================================================
+    # يجب أن تكون الرسالة Reply داخل القناة
+    # =====================================================
 
     if not message.reply_to_message:
+
         logger.info(
-            "Admin message %s is not a reply; ignoring",
+            "Channel post received without reply_to_message: %s",
             message.message_id,
         )
         return
+
+    logger.info(
+        "CHANNEL REPLY DETECTED: channel=%s message=%s replied_to=%s",
+        message.chat.id,
+        message.message_id,
+        message.reply_to_message.message_id,
+    )
 
     link = await asyncio.to_thread(
         find_link_for_replied_message,
@@ -2129,34 +2080,55 @@ async def forward_admin_reply_to_customer(
     )
 
     if not link:
-        try:
-            await message.reply_text(
-                "⚠️ لم أتمكن من تحديد الزبون المرتبط بهذه الرسالة.\n"
-                "تأكد أن الرد تم باستخدام Reply على رسالة الزبون داخل القناة/مجموعة المناقشة."
-            )
-        except TelegramError:
-            logger.warning(
-                "Could not send missing-mapping confirmation",
-                exc_info=True,
-            )
+
+        logger.warning(
+            "Admin reply has no customer mapping. "
+            "channel=%s message=%s",
+            (
+                message.chat.id
+                if message.chat
+                else None
+            ),
+            message.message_id,
+        )
+
         return
 
-    user_id = int(link["user_id"])
+    user_id = int(
+        link["user_id"]
+    )
 
     try:
+
+        # =================================================
+        # النص
+        # =================================================
+
         if message.text:
+
             await context.bot.send_message(
                 chat_id=user_id,
                 text=(
                     "👨‍💼 <b>رسالة من الكادر:</b>\n\n"
-                    + html.escape(message.text)
+                    + html.escape(
+                        message.text
+                    )
                 ),
                 parse_mode="HTML",
             )
 
+        # =================================================
+        # صورة
+        # =================================================
+
         elif message.photo:
+
             photo = message.photo[-1]
-            caption = message.caption or ""
+
+            caption = (
+                message.caption or ""
+            )
+
             await context.bot.send_photo(
                 chat_id=user_id,
                 photo=photo.file_id,
@@ -2166,8 +2138,16 @@ async def forward_admin_reply_to_customer(
                 )[:1024],
             )
 
+        # =================================================
+        # مستند
+        # =================================================
+
         elif message.document:
-            caption = message.caption or ""
+
+            caption = (
+                message.caption or ""
+            )
+
             await context.bot.send_document(
                 chat_id=user_id,
                 document=message.document.file_id,
@@ -2177,8 +2157,16 @@ async def forward_admin_reply_to_customer(
                 )[:1024],
             )
 
+        # =================================================
+        # فيديو
+        # =================================================
+
         elif message.video:
-            caption = message.caption or ""
+
+            caption = (
+                message.caption or ""
+            )
+
             await context.bot.send_video(
                 chat_id=user_id,
                 video=message.video.file_id,
@@ -2188,81 +2176,107 @@ async def forward_admin_reply_to_customer(
                 )[:1024],
             )
 
+        # =================================================
+        # Voice
+        # =================================================
+
         elif message.voice:
+
             await context.bot.send_voice(
                 chat_id=user_id,
                 voice=message.voice.file_id,
             )
 
+        # =================================================
+        # Audio
+        # =================================================
+
         elif message.audio:
-            caption = message.caption or ""
+
             await context.bot.send_audio(
                 chat_id=user_id,
                 audio=message.audio.file_id,
                 caption=(
-                    "👨‍💼 رسالة من الكادر\n\n"
-                    + caption
-                )[:1024],
+                    "👨‍💼 رسالة من الكادر"
+                ),
             )
 
+        # =================================================
+        # Sticker
+        # =================================================
+
         elif message.sticker:
+
             await context.bot.send_sticker(
                 chat_id=user_id,
                 sticker=message.sticker.file_id,
             )
 
+        # =================================================
+        # نوع غير مدعوم
+        # =================================================
+
         else:
+
             logger.warning(
-                "Unsupported admin reply type: message_id=%s",
+                "Unsupported admin reply type: %s",
                 message.message_id,
             )
-            try:
-                await message.reply_text(
-                    "⚠️ نوع الرسالة هذا غير مدعوم حاليًا للإرسال إلى الزبون."
-                )
-            except TelegramError:
-                pass
+
             return
 
+        # =================================================
+        # تأكيد للأدمن
+        # =================================================
+
         try:
+
             await message.reply_text(
                 "✅ تم إرسال الرد إلى الزبون."
             )
+
         except TelegramError:
+
             logger.warning(
                 "Could not send admin confirmation",
                 exc_info=True,
             )
 
         logger.info(
-            "Admin reply forwarded to user %s from replied message %s",
+            "Admin reply forwarded to user %s "
+            "from channel message %s",
             user_id,
-            message.reply_to_message.message_id,
+            (
+                message.reply_to_message.message_id
+                if message.reply_to_message
+                else None
+            ),
         )
 
     except TelegramError:
+
         logger.exception(
-            "Failed to send admin reply to customer %s",
+            "Failed to send admin reply "
+            "to customer %s",
             user_id,
         )
+
         try:
+
             await message.reply_text(
                 "❌ تعذر إرسال الرد إلى الزبون."
             )
+
         except TelegramError:
             pass
 
     except Exception:
+
         logger.exception(
-            "Unexpected admin reply relay error for customer %s",
+            "Unexpected admin reply relay error "
+            "for customer %s",
             user_id,
         )
-        try:
-            await message.reply_text(
-                "❌ حدث خطأ أثناء إرسال الرسالة."
-            )
-        except TelegramError:
-            pass
 
 
 # =========================================================
@@ -2513,12 +2527,8 @@ telegram_app.add_handler(
 
 telegram_app.add_handler(
     MessageHandler(
-        filters.REPLY
-        & (
-            filters.ChatType.GROUP
-            | filters.ChatType.SUPERGROUP
-            | filters.ChatType.CHANNEL
-        ),
+        filters.UpdateType.CHANNEL_POST
+        & filters.REPLY,
         forward_admin_reply_to_customer,
     )
 )
