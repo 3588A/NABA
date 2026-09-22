@@ -12,16 +12,33 @@ import string
 import time
 from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Literal
+from typing import Optional, Literal
 from urllib.parse import parse_qsl, urlparse
+
+import openpyxl
+from openpyxl.styles import Alignment, Font, PatternFill, Border, Side
+from openpyxl.utils import get_column_letter
 
 import psycopg
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import (
+    FastAPI,
+    File,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+)
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
-from PIL import Image, ImageOps
+from fastapi.responses import (
+    FileResponse,
+    JSONResponse,
+    StreamingResponse,
+)
+from PIL import Image
 from psycopg.rows import dict_row
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from telegram import (
@@ -63,25 +80,19 @@ def env(name: str, default: str = "") -> str:
     return value.strip().strip("'\"").strip()
 
 
-def env_int(name: str, default: int) -> int:
+def env_int(name: str, default: int = 0) -> int:
     raw = env(name, str(default))
-
     try:
         return int(raw)
-
     except ValueError:
-        raise RuntimeError(
-            f"{name} must be an integer"
-        )
+        raise RuntimeError(f"{name} must be an integer")
 
 
 def origin_of(url: str) -> str:
     parsed = urlparse(url)
 
     if not parsed.scheme or not parsed.netloc:
-        raise RuntimeError(
-            f"Invalid URL: {url}"
-        )
+        raise RuntimeError(f"Invalid URL: {url}")
 
     return f"{parsed.scheme}://{parsed.netloc}"
 
@@ -97,31 +108,24 @@ WEB_APP_URL = env("WEB_APP_URL")
 BACKEND_URL = env("BACKEND_URL").rstrip("/")
 
 WEBHOOK_PATH = "/webhook"
-
 WEBHOOK_URL = env("WEBHOOK_URL").rstrip("/")
 
 DATABASE_URL = env("DATABASE_URL")
 
-
-# =========================================================
-# ADMIN SECURITY
-# =========================================================
-
-ADMIN_TELEGRAM_ID = 6931187332
+ADMIN_TELEGRAM_ID = env_int(
+    "ADMIN_TELEGRAM_ID",
+    6931187332,
+)
 
 ADMIN_USER_ID = ADMIN_TELEGRAM_ID
 
+MAX_ATTACHMENT_MB = env_int("MAX_ATTACHMENT_MB", 5)
+MAX_ATTACHMENT_BYTES = MAX_ATTACHMENT_MB * 1024 * 1024
 
-MAX_ATTACHMENT_MB = env_int(
-    "MAX_ATTACHMENT_MB",
+MAX_PENDING_ATTACHMENTS = env_int(
+    "MAX_PENDING_ATTACHMENTS",
     5,
 )
-
-MAX_ATTACHMENT_BYTES = (
-    MAX_ATTACHMENT_MB * 1024 * 1024
-)
-
-MAX_PENDING_ATTACHMENTS = 5
 
 INIT_DATA_MAX_AGE = env_int(
     "INIT_DATA_MAX_AGE",
@@ -135,93 +139,50 @@ CAMERA_URL = (
 
 
 if not BOT_TOKEN:
-    raise RuntimeError(
-        "BOT_TOKEN is not configured"
-    )
+    raise RuntimeError("BOT_TOKEN is not configured")
+
 
 if not DATABASE_URL:
-    raise RuntimeError(
-        "DATABASE_URL is not configured"
-    )
+    raise RuntimeError("DATABASE_URL is not configured")
 
-if not WEB_APP_URL:
-    raise RuntimeError(
-        "WEB_APP_URL is not configured"
-    )
 
-if not WEB_APP_URL.startswith("https://"):
-    raise RuntimeError(
-        "WEB_APP_URL must use HTTPS"
-    )
+if not WEB_APP_URL or not WEB_APP_URL.startswith("https://"):
+    raise RuntimeError("WEB_APP_URL must use HTTPS")
 
-if not BACKEND_URL:
-    raise RuntimeError(
-        "BACKEND_URL is not configured"
-    )
 
-if not BACKEND_URL.startswith("https://"):
-    raise RuntimeError(
-        "BACKEND_URL must use HTTPS"
-    )
+if not BACKEND_URL or not BACKEND_URL.startswith("https://"):
+    raise RuntimeError("BACKEND_URL must use HTTPS")
 
 
 if not WEBHOOK_URL:
-    WEBHOOK_URL = (
-        f"{BACKEND_URL}{WEBHOOK_PATH}"
-    )
+    WEBHOOK_URL = f"{BACKEND_URL}{WEBHOOK_PATH}"
 
 
 if not WEBHOOK_URL.startswith("https://"):
-    raise RuntimeError(
-        "WEBHOOK_URL must use HTTPS"
-    )
+    raise RuntimeError("WEBHOOK_URL must use HTTPS")
 
 
-# =========================================================
-# Webhook secret
-# =========================================================
-
-configured_webhook_secret = env(
-    "WEBHOOK_SECRET"
-)
+configured_webhook_secret = env("WEBHOOK_SECRET")
 
 if re.fullmatch(
     r"[A-Za-z0-9_-]{16,256}",
     configured_webhook_secret or "",
 ):
-    WEBHOOK_SECRET = (
-        configured_webhook_secret
-    )
-
+    WEBHOOK_SECRET = configured_webhook_secret
 else:
     WEBHOOK_SECRET = hashlib.sha256(
         f"naba-webhook:{BOT_TOKEN}".encode()
     ).hexdigest()
 
 
-# =========================================================
-# Camera permissions
-# =========================================================
+PHOTO_ALLOWED_IDS = {ADMIN_TELEGRAM_ID}
 
-PHOTO_ALLOWED_IDS = {
-    ADMIN_TELEGRAM_ID
-}
-
-for raw_id in env(
-    "PHOTO_ALLOWED_IDS"
-).split(","):
-
+for raw_id in env("PHOTO_ALLOWED_IDS").split(","):
     raw_id = raw_id.strip()
 
     if raw_id.lstrip("-").isdigit():
-        PHOTO_ALLOWED_IDS.add(
-            int(raw_id)
-        )
+        PHOTO_ALLOWED_IDS.add(int(raw_id))
 
-
-# =========================================================
-# Application paths
-# =========================================================
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -244,44 +205,85 @@ SERVICES = {
 }
 
 
-# =========================================================
-# Service detail labels
-# =========================================================
-
 SERVICE_DETAIL_LABELS = {
+    "cv_type": "نوع السيرة الذاتية",
+    "photo": "الصورة",
+    "language": "لغة السيرة الذاتية",
+    "target_job": "الوظيفة / المجال المستهدف",
+    "design_type": "نوع التصميم",
+    "brand_name": "اسم المشروع / العلامة",
+    "business_field": "مجال النشاط",
+    "design_idea": "فكرة التصميم والتفاصيل المطلوبة",
+    "preferred_colors": "الألوان / النمط المفضل",
+    "usage": "أماكن استخدام التصميم",
+    "extra_notes": "تعليمات إضافية",
+}
 
-    "cv_type":
-        "نوع السيرة الذاتية",
 
-    "photo":
-        "الصورة",
+# =========================================================
+# Order workflow
+# =========================================================
 
-    "language":
-        "لغة السيرة الذاتية",
+VALID_STATUSES = [
+    "NEW",
+    "UNDER_REVIEW",
+    "WAITING_CUSTOMER",
+    "ACCEPTED",
+    "READY_TO_START",
+    "IN_PROGRESS",
+    "READY_FOR_DELIVERY",
+    "COMPLETED",
+    "REJECTED",
+    "CANCELLED",
+]
 
-    "target_job":
-        "الوظيفة / المجال المستهدف",
 
-    "design_type":
-        "نوع التصميم",
+ALLOWED_STATUS_TRANSITIONS = {
+    "NEW": [
+        "UNDER_REVIEW",
+        "REJECTED",
+        "CANCELLED",
+    ],
 
-    "brand_name":
-        "اسم المشروع / العلامة",
+    "UNDER_REVIEW": [
+        "WAITING_CUSTOMER",
+        "READY_TO_START",
+        "REJECTED",
+        "CANCELLED",
+    ],
 
-    "business_field":
-        "مجال النشاط",
+    "WAITING_CUSTOMER": [
+        "ACCEPTED",
+        "REJECTED",
+        "CANCELLED",
+    ],
 
-    "design_idea":
-        "فكرة التصميم والتفاصيل المطلوبة",
+    "ACCEPTED": [
+        "READY_TO_START",
+        "CANCELLED",
+    ],
 
-    "preferred_colors":
-        "الألوان / النمط المفضل",
+    "READY_TO_START": [
+        "IN_PROGRESS",
+        "CANCELLED",
+    ],
 
-    "usage":
-        "أماكن استخدام التصميم",
+    "IN_PROGRESS": [
+        "UNDER_REVIEW",
+        "READY_FOR_DELIVERY",
+        "CANCELLED",
+    ],
 
-    "extra_notes":
-        "تعليمات إضافية",
+    "READY_FOR_DELIVERY": [
+        "COMPLETED",
+        "CANCELLED",
+    ],
+
+    "COMPLETED": [],
+
+    "REJECTED": [],
+
+    "CANCELLED": [],
 }
 
 
@@ -291,7 +293,6 @@ SERVICE_DETAIL_LABELS = {
 
 @contextmanager
 def db():
-
     conn = psycopg.connect(
         DATABASE_URL,
         row_factory=dict_row,
@@ -299,64 +300,121 @@ def db():
     )
 
     try:
-
         yield conn
-
         conn.commit()
 
     except Exception:
-
         conn.rollback()
-
         raise
 
     finally:
-
         conn.close()
 
 
 def init_db():
-
     statements = [
-
         """
         CREATE TABLE IF NOT EXISTS orders (
             order_id TEXT PRIMARY KEY,
+
             user_id BIGINT NOT NULL,
+
             username TEXT NOT NULL DEFAULT '',
+
             service_type TEXT NOT NULL DEFAULT '',
+
             service_name TEXT NOT NULL DEFAULT '',
+
             department TEXT NOT NULL DEFAULT '',
+
             title TEXT NOT NULL DEFAULT '',
+
             page_count TEXT NOT NULL DEFAULT '',
+
             language TEXT NOT NULL DEFAULT '',
+
             autocad_type TEXT NOT NULL DEFAULT '',
+
             deadline TEXT NOT NULL DEFAULT '',
+
             notes TEXT NOT NULL DEFAULT '',
+
             order_status TEXT NOT NULL DEFAULT 'NEW',
-            payment_status TEXT NOT NULL DEFAULT 'PENDING',
+
+            payment_status TEXT NOT NULL DEFAULT 'UNPAID',
+
             price NUMERIC(12,2) NOT NULL DEFAULT 0,
+
             deposit NUMERIC(12,2) NOT NULL DEFAULT 0,
+
             remaining_balance NUMERIC(12,2) NOT NULL DEFAULT 0,
+
+            created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+            service_details JSONB NOT NULL DEFAULT '{}'::jsonb,
+
+            admin_note TEXT NOT NULL DEFAULT '',
+
+            delivery_date TEXT NOT NULL DEFAULT '',
+
+            delivery_time TEXT NOT NULL DEFAULT '',
+
+            quotation_price NUMERIC(12,2) NOT NULL DEFAULT 0,
+
+            quotation_currency TEXT NOT NULL DEFAULT 'IQD',
+
+            quotation_notes TEXT NOT NULL DEFAULT '',
+
+            customer_decision TEXT NOT NULL DEFAULT 'PENDING',
+
+            customer_decision_at TIMESTAMPTZ,
+
+            idempotency_key TEXT,
+
+            idempotency_fingerprint TEXT,
+
+            delivery_channel_status TEXT NOT NULL DEFAULT 'PENDING',
+
+            channel_message_id BIGINT,
+
+            channel_attachment_message_id BIGINT
+        )
+        """,
+
+        """
+        CREATE TABLE IF NOT EXISTS payments (
+            id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+
+            order_id TEXT NOT NULL
+                REFERENCES orders(order_id)
+                ON DELETE CASCADE,
+
+            amount NUMERIC(12,2) NOT NULL,
+
+            currency TEXT NOT NULL DEFAULT 'IQD',
+
+            payment_method TEXT NOT NULL DEFAULT 'CASH',
+
+            recorded_by TEXT NOT NULL DEFAULT 'Admin',
+
             created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
         """,
 
         """
-        ALTER TABLE orders
-        ADD COLUMN IF NOT EXISTS
-        service_details JSONB
-        NOT NULL DEFAULT '{}'::jsonb
-        """,
-
-        """
         CREATE TABLE IF NOT EXISTS audit_logs (
             id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+
             order_id TEXT NOT NULL
                 REFERENCES orders(order_id)
                 ON DELETE CASCADE,
+
             action TEXT NOT NULL,
+
             performed_by TEXT NOT NULL DEFAULT 'System',
+
+            details TEXT NOT NULL DEFAULT '',
+
             timestamp TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
         """,
@@ -364,44 +422,27 @@ def init_db():
         """
         CREATE TABLE IF NOT EXISTS attachments (
             token TEXT PRIMARY KEY,
+
             user_id BIGINT NOT NULL,
+
             filename TEXT NOT NULL,
+
             content_type TEXT NOT NULL,
+
             data BYTEA NOT NULL,
+
             created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-        """,
-
-        # =================================================
-        # ربط رسائل القناة بالزبائن
-        # =================================================
-        """
-        CREATE TABLE IF NOT EXISTS channel_message_links (
-            id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-
-            channel_chat_id BIGINT NOT NULL,
-
-            channel_message_id BIGINT NOT NULL,
-
-            user_id BIGINT NOT NULL,
-
-            order_id TEXT,
-
-            message_type TEXT NOT NULL DEFAULT 'customer',
-
-            created_at TIMESTAMPTZ NOT NULL
-                DEFAULT CURRENT_TIMESTAMP,
-
-            UNIQUE(
-                channel_chat_id,
-                channel_message_id
-            )
         )
         """,
 
         """
         CREATE INDEX IF NOT EXISTS orders_user_id_idx
         ON orders(user_id)
+        """,
+
+        """
+        CREATE INDEX IF NOT EXISTS orders_idempotency_idx
+        ON orders(idempotency_key)
         """,
 
         """
@@ -420,18 +461,13 @@ def init_db():
         """,
 
         """
-        CREATE INDEX IF NOT EXISTS
-        channel_message_links_user_id_idx
-        ON channel_message_links(user_id)
+        CREATE INDEX IF NOT EXISTS payments_order_id_idx
+        ON payments(order_id)
         """,
 
         """
-        CREATE INDEX IF NOT EXISTS
-        channel_message_links_lookup_idx
-        ON channel_message_links(
-            channel_chat_id,
-            channel_message_id
-        )
+        CREATE INDEX IF NOT EXISTS orders_channel_message_idx
+        ON orders(channel_message_id)
         """,
     ]
 
@@ -440,22 +476,54 @@ def init_db():
         for statement in statements:
             conn.execute(statement)
 
+        # -------------------------------------------------
+        # Safe migrations for existing installations
+        # -------------------------------------------------
+
+        conn.execute(
+            """
+            ALTER TABLE orders
+            ADD COLUMN IF NOT EXISTS channel_message_id BIGINT
+            """
+        )
+
+        conn.execute(
+            """
+            ALTER TABLE orders
+            ADD COLUMN IF NOT EXISTS channel_attachment_message_id BIGINT
+            """
+        )
+
+        conn.execute(
+            """
+            ALTER TABLE orders
+            ADD COLUMN IF NOT EXISTS delivery_channel_status
+            TEXT NOT NULL DEFAULT 'PENDING'
+            """
+        )
+
+        # -------------------------------------------------
+        # Unique idempotency protection
+        # -------------------------------------------------
+
+        conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS
+            orders_user_id_idempotency_unique
+            ON orders(user_id, idempotency_key)
+            WHERE idempotency_key IS NOT NULL
+            """
+        )
+
 
 async def init_db_with_retry(
     attempts: int = 5,
     delay: int = 3,
 ):
-
-    for attempt in range(
-        1,
-        attempts + 1,
-    ):
+    for attempt in range(1, attempts + 1):
 
         try:
-
-            await asyncio.to_thread(
-                init_db
-            )
+            await asyncio.to_thread(init_db)
 
             logger.info(
                 "Database initialized successfully"
@@ -475,108 +543,15 @@ async def init_db_with_retry(
             if attempt == attempts:
                 raise
 
-            await asyncio.sleep(
-                delay * attempt
-            )
+            await asyncio.sleep(delay * attempt)
 
-
-# =========================================================
-# Channel message link helpers
-# =========================================================
-
-def save_channel_message_link(
-    channel_chat_id: int,
-    channel_message_id: int,
-    user_id: int,
-    order_id: str | None = None,
-    message_type: str = "customer",
-):
-    """
-    حفظ العلاقة بين رسالة القناة والزبون.
-
-    هذه العلاقة هي التي تسمح للبوت بمعرفة:
-    "هذه الرسالة في القناة تخص أي زبون؟"
-    """
-
-    with db() as conn:
-
-        conn.execute(
-            """
-            INSERT INTO channel_message_links (
-                channel_chat_id,
-                channel_message_id,
-                user_id,
-                order_id,
-                message_type
-            )
-            VALUES (%s,%s,%s,%s,%s)
-
-            ON CONFLICT (
-                channel_chat_id,
-                channel_message_id
-            )
-            DO UPDATE SET
-                user_id = EXCLUDED.user_id,
-                order_id = EXCLUDED.order_id,
-                message_type = EXCLUDED.message_type
-            """,
-            (
-                channel_chat_id,
-                channel_message_id,
-                user_id,
-                order_id,
-                message_type,
-            ),
-        )
-
-
-def get_channel_message_link(
-    channel_chat_id: int,
-    channel_message_id: int,
-):
-    """
-    استرجاع الزبون المرتبط برسالة القناة.
-    """
-
-    with db() as conn:
-
-        row = conn.execute(
-            """
-            SELECT
-                id,
-                channel_chat_id,
-                channel_message_id,
-                user_id,
-                order_id,
-                message_type,
-                created_at
-
-            FROM channel_message_links
-
-            WHERE channel_chat_id=%s
-              AND channel_message_id=%s
-
-            LIMIT 1
-            """,
-            (
-                channel_chat_id,
-                channel_message_id,
-            ),
-        ).fetchone()
-
-    return row
-
-
-# =========================================================
-# Audit log helper
-# =========================================================
 
 def add_audit_log(
     order_id: str,
     action: str,
     performed_by: str = "System",
+    details: str = "",
 ):
-
     with db() as conn:
 
         conn.execute(
@@ -584,37 +559,64 @@ def add_audit_log(
             INSERT INTO audit_logs(
                 order_id,
                 action,
-                performed_by
+                performed_by,
+                details
             )
-            VALUES(%s,%s,%s)
+            VALUES(%s, %s, %s, %s)
             """,
             (
                 order_id,
                 action,
                 performed_by,
+                details,
             ),
         )
+
+
+def add_audit_log_conn(
+    conn,
+    order_id: str,
+    action: str,
+    performed_by: str = "System",
+    details: str = "",
+):
+    """
+    Adds an audit entry using the SAME database transaction.
+    This avoids order/audit inconsistency.
+    """
+
+    conn.execute(
+        """
+        INSERT INTO audit_logs(
+            order_id,
+            action,
+            performed_by,
+            details
+        )
+        VALUES(%s, %s, %s, %s)
+        """,
+        (
+            order_id,
+            action,
+            performed_by,
+            details,
+        ),
+    )
 
 
 # =========================================================
 # Telegram Mini App authentication
 # =========================================================
 
-def verify_init_data(
-    init_data: str,
-) -> dict:
+def verify_init_data(init_data: str) -> dict:
 
     if not init_data:
-
         raise HTTPException(
             status_code=401,
-            detail=(
-                "افتح تطبيق النبع من داخل Telegram"
-            ),
+            detail="افتح تطبيق النبع من داخل Telegram",
         )
 
     try:
-
         pairs_list = parse_qsl(
             init_data,
             keep_blank_values=True,
@@ -623,26 +625,17 @@ def verify_init_data(
         pairs = dict(pairs_list)
 
     except Exception:
-
         raise HTTPException(
             status_code=401,
-            detail=(
-                "بيانات Telegram غير صالحة"
-            ),
+            detail="بيانات Telegram غير صالحة",
         )
 
-    received_hash = pairs.pop(
-        "hash",
-        None,
-    )
+    received_hash = pairs.pop("hash", None)
 
     if not received_hash:
-
         raise HTTPException(
             status_code=401,
-            detail=(
-                "تعذر التحقق من جلسة Telegram"
-            ),
+            detail="تعذر التحقق من جلسة Telegram",
         )
 
     data_check_string = "\n".join(
@@ -666,32 +659,21 @@ def verify_init_data(
         expected_hash,
         received_hash,
     ):
-
         raise HTTPException(
             status_code=401,
-            detail=(
-                "جلسة Telegram غير موثوقة"
-            ),
+            detail="جلسة Telegram غير موثوقة",
         )
 
     try:
 
         user = json.loads(
-            pairs.get(
-                "user",
-                "{}",
-            )
+            pairs.get("user", "{}")
         )
 
-        user_id = int(
-            user["id"]
-        )
+        user_id = int(user["id"])
 
         auth_date = int(
-            pairs.get(
-                "auth_date",
-                "0",
-            )
+            pairs.get("auth_date", "0")
         )
 
     except (
@@ -703,13 +685,10 @@ def verify_init_data(
 
         raise HTTPException(
             status_code=401,
-            detail=(
-                "بيانات مستخدم Telegram غير صالحة"
-            ),
+            detail="بيانات مستخدم Telegram غير صالحة",
         )
 
     if not auth_date:
-
         raise HTTPException(
             status_code=401,
             detail="auth_date مفقود",
@@ -718,81 +697,49 @@ def verify_init_data(
     now = int(time.time())
 
     if auth_date > now + 60:
-
         raise HTTPException(
             status_code=401,
-            detail=(
-                "وقت جلسة Telegram غير صالح"
-            ),
+            detail="وقت جلسة Telegram غير صالح",
         )
 
     if now - auth_date > INIT_DATA_MAX_AGE:
-
         raise HTTPException(
             status_code=401,
-            detail=(
-                "انتهت صلاحية جلسة Telegram، "
-                "أعد فتح التطبيق"
-            ),
+            detail="انتهت صلاحية جلسة Telegram، أعد فتح التطبيق",
         )
 
     return {
         "id": user_id,
-        "username": (
-            user.get("username", "")
-            or ""
-        ),
-        "first_name": (
-            user.get("first_name", "")
-            or ""
-        ),
-        "last_name": (
-            user.get("last_name", "")
-            or ""
-        ),
+        "username": user.get("username", "") or "",
+        "first_name": user.get("first_name", "") or "",
+        "last_name": user.get("last_name", "") or "",
     }
 
 
-def init_user_from_header(
-    request: Request,
-) -> dict:
-
+def init_user_from_header(request: Request) -> dict:
     init_data = request.headers.get(
         "X-Telegram-Init-Data",
         "",
     )
 
-    return verify_init_data(
-        init_data
-    )
+    return verify_init_data(init_data)
 
 
-# =========================================================
-# ADMIN AUTHORIZATION
-# =========================================================
+def require_admin(request: Request) -> dict:
 
-def require_admin(
-    request: Request,
-) -> dict:
-
-    user = init_user_from_header(
-        request
-    )
+    user = init_user_from_header(request)
 
     if user["id"] != ADMIN_TELEGRAM_ID:
-
         raise HTTPException(
             status_code=403,
-            detail=(
-                "غير مصرح لك بالوصول إلى لوحة التحكم"
-            ),
+            detail="غير مصرح لك بالوصول إلى لوحة التحكم",
         )
 
     return user
 
 
 # =========================================================
-# Order model
+# Models
 # =========================================================
 
 class OrderIn(BaseModel):
@@ -857,9 +804,7 @@ class OrderIn(BaseModel):
         default_factory=dict
     )
 
-    @field_validator(
-        "service_details"
-    )
+    @field_validator("service_details")
     @classmethod
     def validate_service_details(
         cls,
@@ -867,7 +812,6 @@ class OrderIn(BaseModel):
     ) -> dict[str, str]:
 
         if len(value) > 20:
-
             raise ValueError(
                 "تفاصيل الخدمة كثيرة جدًا"
             )
@@ -875,33 +819,18 @@ class OrderIn(BaseModel):
         for key, item in value.items():
 
             if len(str(key)) > 80:
-
                 raise ValueError(
                     "اسم حقل الخدمة طويل جدًا"
                 )
 
             if len(str(item)) > 1000:
-
                 raise ValueError(
                     "قيمة تفاصيل الخدمة طويلة جدًا"
                 )
 
-        encoded = json.dumps(
-            value,
-            ensure_ascii=False,
-        )
-
-        if len(encoded) > 6000:
-
-            raise ValueError(
-                "تفاصيل الخدمة تتجاوز الحد المسموح"
-            )
-
         return value
 
-    @field_validator(
-        "deadline"
-    )
+    @field_validator("deadline")
     @classmethod
     def validate_deadline(
         cls,
@@ -909,18 +838,151 @@ class OrderIn(BaseModel):
     ) -> str:
 
         try:
-
-            datetime.fromisoformat(
-                value
-            )
+            parsed = datetime.fromisoformat(value)
 
         except ValueError:
-
             raise ValueError(
-                "Invalid deadline"
+                "صيغة الموعد غير صحيحة"
+            )
+
+        # Reject clearly invalid past deadlines.
+        if parsed.tzinfo is not None:
+            now = datetime.now(parsed.tzinfo)
+        else:
+            now = datetime.now()
+
+        if parsed < now:
+            raise ValueError(
+                "موعد التسليم يجب أن يكون في المستقبل"
             )
 
         return value
+
+
+class QuotationIn(BaseModel):
+
+    model_config = ConfigDict(
+        str_strip_whitespace=True,
+        extra="ignore",
+    )
+
+    price: Decimal = Field(
+        gt=0,
+        max_digits=12,
+        decimal_places=2,
+    )
+
+    currency: str = Field(
+        default="IQD",
+        max_length=10,
+    )
+
+    delivery_date: str = Field(
+        min_length=1,
+        max_length=40,
+    )
+
+    delivery_time: str = Field(
+        default="",
+        max_length=40,
+    )
+
+    notes: str = Field(
+        default="",
+        max_length=1000,
+    )
+
+    @field_validator("currency")
+    @classmethod
+    def normalize_currency(
+        cls,
+        value: str,
+    ) -> str:
+
+        value = value.upper().strip()
+
+        if not re.fullmatch(
+            r"[A-Z]{3,10}",
+            value,
+        ):
+            raise ValueError(
+                "العملة غير صالحة"
+            )
+
+        return value
+
+
+class StatusUpdateIn(BaseModel):
+
+    model_config = ConfigDict(
+        str_strip_whitespace=True,
+        extra="ignore",
+    )
+
+    status: str = Field(
+        min_length=1,
+        max_length=50,
+    )
+
+    admin_note: str = Field(
+        default="",
+        max_length=1000,
+    )
+
+
+class PaymentIn(BaseModel):
+
+    model_config = ConfigDict(
+        str_strip_whitespace=True,
+        extra="ignore",
+    )
+
+    amount: Decimal = Field(
+        gt=0,
+        max_digits=12,
+        decimal_places=2,
+    )
+
+    currency: str = Field(
+        default="IQD",
+        max_length=10,
+    )
+
+    payment_method: str = Field(
+        default="CASH",
+        max_length=50,
+    )
+
+    @field_validator("currency")
+    @classmethod
+    def normalize_currency(
+        cls,
+        value: str,
+    ) -> str:
+
+        value = value.upper().strip()
+
+        if not re.fullmatch(
+            r"[A-Z]{3,10}",
+            value,
+        ):
+            raise ValueError(
+                "العملة غير صالحة"
+            )
+
+        return value
+
+
+class AdminNoteIn(BaseModel):
+
+    model_config = ConfigDict(
+        str_strip_whitespace=True,
+        extra="ignore",
+    )
+
+    admin_note: str = Field(
+        max_length=2000
+    )
 
 
 # =========================================================
@@ -936,44 +998,116 @@ def new_order_id() -> str:
         for _ in range(6)
     )
 
-    return (
-        f"NB-{year}-{random_part}"
+    return f"NB-{year}-{random_part}"
+
+
+def compute_order_fingerprint(
+    user_id: int,
+    data: OrderIn,
+) -> str:
+
+    raw = "|".join(
+        [
+            str(user_id),
+            data.service_type,
+            data.title.strip().lower(),
+            data.department.strip().lower(),
+            data.deadline.strip(),
+            json.dumps(
+                data.service_details,
+                ensure_ascii=False,
+                sort_keys=True,
+            ),
+        ]
     )
 
-
-def get_attachment(
-    user_id: int,
-    token: str,
-):
-
-    with db() as conn:
-
-        row = conn.execute(
-            """
-            SELECT
-                token,
-                user_id,
-                filename,
-                content_type,
-                data,
-                created_at
-            FROM attachments
-            WHERE token=%s
-              AND user_id=%s
-            """,
-            (
-                token,
-                user_id,
-            ),
-        ).fetchone()
-
-    return row
+    return hashlib.sha256(
+        raw.encode()
+    ).hexdigest()
 
 
 def create_order(
     user: dict,
     data: OrderIn,
+    idempotency_key: Optional[str] = None,
 ):
+
+    fingerprint = compute_order_fingerprint(
+        user["id"],
+        data,
+    )
+
+    # -----------------------------------------------------
+    # Normalize idempotency key
+    # -----------------------------------------------------
+
+    if idempotency_key:
+        idempotency_key = idempotency_key.strip()
+
+        if len(idempotency_key) > 200:
+            raise HTTPException(
+                status_code=400,
+                detail="Idempotency-Key طويل جدًا",
+            )
+
+    # -----------------------------------------------------
+    # Check existing request
+    # -----------------------------------------------------
+
+    with db() as conn:
+
+        if idempotency_key:
+
+            existing = conn.execute(
+                """
+                SELECT *
+                FROM orders
+                WHERE user_id=%s
+                  AND idempotency_key=%s
+                FOR UPDATE
+                """,
+                (
+                    user["id"],
+                    idempotency_key,
+                ),
+            ).fetchone()
+
+            if existing:
+
+                return (
+                    existing,
+                    None,
+                    True,
+                )
+
+        existing_fp = conn.execute(
+            """
+            SELECT *
+            FROM orders
+            WHERE user_id=%s
+              AND idempotency_fingerprint=%s
+              AND created_at >
+                  CURRENT_TIMESTAMP - INTERVAL '2 minutes'
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (
+                user["id"],
+                fingerprint,
+            ),
+        ).fetchone()
+
+        if existing_fp:
+
+            return (
+                existing_fp,
+                None,
+                True,
+            )
+
+    # -----------------------------------------------------
+    # Create new order
+    # -----------------------------------------------------
 
     for _ in range(10):
 
@@ -1012,8 +1146,8 @@ def create_order(
                         raise HTTPException(
                             status_code=400,
                             detail=(
-                                "المرفق غير موجود أو "
-                                "انتهت صلاحيته، أعد رفعه"
+                                "المرفق غير موجود أو انتهت صلاحيته، "
+                                "أعد رفعه"
                             ),
                         )
 
@@ -1032,104 +1166,108 @@ def create_order(
                         autocad_type,
                         deadline,
                         notes,
-                        service_details
+                        service_details,
+                        idempotency_key,
+                        idempotency_fingerprint
                     )
                     VALUES (
-                        %s,%s,%s,%s,%s,%s,%s,
-                        %s,%s,%s,%s,%s,%s::jsonb
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s::jsonb,
+                        %s,
+                        %s
                     )
                     RETURNING *
                     """,
                     (
                         order_id,
                         user["id"],
-                        (
-                            user["username"]
-                            or user["first_name"]
-                            or ""
-                        ),
+                        user["username"]
+                        or user["first_name"]
+                        or "",
                         data.service_type,
-                        SERVICES[
-                            data.service_type
-                        ],
+                        SERVICES[data.service_type],
                         data.department,
                         data.title,
-                        (
-                            data.page_count
-                            or "غير محدد"
-                        ),
-                        (
-                            data.language
-                            or "غير محدد"
-                        ),
-                        (
-                            data.autocad_type
-                            or "غير محدد"
-                        ),
+                        data.page_count or "غير محدد",
+                        data.language or "غير محدد",
+                        data.autocad_type or "غير محدد",
                         data.deadline,
-                        (
-                            data.notes
-                            or "لا توجد ملاحظات"
-                        ),
+                        data.notes or "لا توجد ملاحظات",
                         json.dumps(
                             data.service_details,
                             ensure_ascii=False,
                         ),
+                        idempotency_key,
+                        fingerprint,
                     ),
                 ).fetchone()
 
-                conn.execute(
-                    """
-                    INSERT INTO audit_logs(
-                        order_id,
-                        action,
-                        performed_by
-                    )
-                    VALUES(%s,%s,%s)
-                    """,
-                    (
-                        order_id,
-                        "ORDER_CREATED",
-                        f"User_{user['id']}",
-                    ),
+                add_audit_log_conn(
+                    conn,
+                    order_id,
+                    "ORDER_CREATED",
+                    f"User_{user['id']}",
+                    "تم إنشاء الطلب بنجاح",
                 )
 
-            return order, attachment
+            return (
+                order,
+                attachment,
+                False,
+            )
 
         except psycopg.errors.UniqueViolation:
+
+            # A unique conflict can mean either:
+            # - generated order ID collision
+            # - idempotency race
+            # - idempotency unique index conflict
+            #
+            # Check whether the client's idempotency key
+            # already produced an order.
+
+            if idempotency_key:
+
+                with db() as conn:
+
+                    existing = conn.execute(
+                        """
+                        SELECT *
+                        FROM orders
+                        WHERE user_id=%s
+                          AND idempotency_key=%s
+                        LIMIT 1
+                        """,
+                        (
+                            user["id"],
+                            idempotency_key,
+                        ),
+                    ).fetchone()
+
+                    if existing:
+                        return (
+                            existing,
+                            None,
+                            True,
+                        )
 
             continue
 
     raise HTTPException(
         status_code=500,
-        detail=(
-            "تعذر إنشاء رقم الطلب، "
-            "حاول مرة أخرى"
-        ),
+        detail="تعذر إنشاء رقم الطلب، حاول مرة أخرى",
     )
-
-
-def delete_attachment(
-    user_id: int,
-    token: str,
-):
-
-    if not token:
-        return
-
-    with db() as conn:
-
-        conn.execute(
-            """
-            DELETE FROM attachments
-            WHERE token=%s
-              AND user_id=%s
-            """,
-            (
-                token,
-                user_id,
-            ),
-        )
 
 
 def store_attachment(
@@ -1147,7 +1285,7 @@ def store_attachment(
             """
             DELETE FROM attachments
             WHERE created_at <
-            CURRENT_TIMESTAMP - INTERVAL '1 day'
+                CURRENT_TIMESTAMP - INTERVAL '1 day'
             """
         )
 
@@ -1179,7 +1317,7 @@ def store_attachment(
                 content_type,
                 data
             )
-            VALUES(%s,%s,%s,%s,%s)
+            VALUES(%s, %s, %s, %s, %s)
             """,
             (
                 token,
@@ -1193,8 +1331,30 @@ def store_attachment(
     return token
 
 
+def delete_attachment(
+    user_id: int,
+    token: str,
+):
+    if not token:
+        return
+
+    with db() as conn:
+
+        conn.execute(
+            """
+            DELETE FROM attachments
+            WHERE token=%s
+              AND user_id=%s
+            """,
+            (
+                token,
+                user_id,
+            ),
+        )
+
+
 # =========================================================
-# Telegram messages
+# Telegram helpers
 # =========================================================
 
 def parse_channel_id():
@@ -1229,6 +1389,9 @@ def build_order_message(
         f"👤 <b>الطالب:</b> "
         f"{e(user.get('first_name') or '')} "
         f"(@{e(username)})\n"
+
+        f"🆔 <b>Telegram ID:</b> "
+        f"<code>{order['user_id']}</code>\n"
 
         f"🛠️ <b>الخدمة:</b> "
         f"{e(order['service_name'])}\n"
@@ -1267,13 +1430,11 @@ def build_order_message(
     ):
 
         try:
-
             service_details = json.loads(
                 service_details
             )
 
         except Exception:
-
             service_details = {}
 
     if service_details:
@@ -1287,8 +1448,8 @@ def build_order_message(
             label = SERVICE_DETAIL_LABELS.get(
                 key,
                 str(key)
-                    .replace("_", " ")
-                    .strip(),
+                .replace("_", " ")
+                .strip(),
             )
 
             details_text += (
@@ -1303,22 +1464,20 @@ def build_order_message(
         or "لا توجد ملاحظات"
     )
 
-    available = max(
+    # Telegram HTML message limit is 4096.
+    # Keep a safe margin.
+    remaining_chars = max(
         100,
-        3800 - len(text),
+        3900 - len(text),
     )
 
     text += (
         "📝 <b>الملاحظات:</b> "
-        + e(notes[:available])
+        + e(notes[:remaining_chars])
     )
 
     return text
 
-
-# =========================================================
-# Send order to Telegram
-# =========================================================
 
 async def send_to_chat(
     chat_id,
@@ -1327,38 +1486,20 @@ async def send_to_chat(
     attachment,
 ):
 
-    sent_message = await telegram_app.bot.send_message(
+    message = await telegram_app.bot.send_message(
         chat_id=chat_id,
         text=text,
         parse_mode="HTML",
     )
 
-    # حفظ رسالة الطلب الأساسية في القناة
-    if (
-        chat_id == parse_channel_id()
-        and attachment is not None
-    ):
-        try:
-
-            await asyncio.to_thread(
-                save_channel_message_link,
-                int(chat_id),
-                int(sent_message.message_id),
-                int(attachment["user_id"]),
-                order_id,
-                "order",
-            )
-
-        except Exception:
-
-            logger.exception(
-                "Could not save channel link "
-                "for order %s",
-                order_id,
-            )
+    attachment_message = None
 
     if not attachment:
-        return sent_message
+
+        return (
+            message,
+            None,
+        )
 
     data = bytes(
         attachment["data"]
@@ -1366,6 +1507,7 @@ async def send_to_chat(
 
     filename = (
         attachment["filename"]
+        or "attachment"
     )
 
     caption = (
@@ -1377,9 +1519,7 @@ async def send_to_chat(
         or ""
     )
 
-    if content_type.startswith(
-        "image/"
-    ):
+    if content_type.startswith("image/"):
 
         try:
 
@@ -1391,26 +1531,15 @@ async def send_to_chat(
                 )
             )
 
-            if chat_id == parse_channel_id():
-
-                await asyncio.to_thread(
-                    save_channel_message_link,
-                    int(chat_id),
-                    int(
-                        attachment_message.message_id
-                    ),
-                    int(attachment["user_id"]),
-                    order_id,
-                    "order_attachment",
-                )
-
-            return sent_message
+            return (
+                message,
+                attachment_message,
+            )
 
         except TelegramError:
 
             logger.warning(
-                "send_photo failed; "
-                "trying document",
+                "send_photo failed; trying document",
                 exc_info=True,
             )
 
@@ -1423,35 +1552,11 @@ async def send_to_chat(
         )
     )
 
-    if chat_id == parse_channel_id():
+    return (
+        message,
+        attachment_message,
+    )
 
-        try:
-
-            await asyncio.to_thread(
-                save_channel_message_link,
-                int(chat_id),
-                int(
-                    attachment_message.message_id
-                ),
-                int(attachment["user_id"]),
-                order_id,
-                "order_attachment",
-            )
-
-        except Exception:
-
-            logger.exception(
-                "Could not save attachment "
-                "channel link for order %s",
-                order_id,
-            )
-
-    return sent_message
-
-
-# =========================================================
-# Deliver order
-# =========================================================
 
 async def deliver_order(
     order: dict,
@@ -1459,10 +1564,7 @@ async def deliver_order(
     attachment,
 ) -> bool:
 
-    message = build_order_message(
-        order,
-        user,
-    )
+    order_id = order["order_id"]
 
     channel = parse_channel_id()
 
@@ -1474,809 +1576,331 @@ async def deliver_order(
 
         return False
 
+    # -----------------------------------------------------
+    # Do not duplicate already-delivered orders
+    # -----------------------------------------------------
+
     try:
 
-        await send_to_chat(
-            channel,
-            message,
-            order["order_id"],
-            attachment,
+        with db() as conn:
+
+            current = conn.execute(
+                """
+                SELECT
+                    delivery_channel_status,
+                    channel_message_id,
+                    channel_attachment_message_id
+                FROM orders
+                WHERE order_id=%s
+                """,
+                (order_id,),
+            ).fetchone()
+
+        if (
+            current
+            and current["delivery_channel_status"]
+            == "DELIVERED"
+            and current["channel_message_id"]
+        ):
+
+            logger.info(
+                "Order %s already delivered",
+                order_id,
+            )
+
+            return True
+
+    except Exception:
+
+        logger.exception(
+            "Could not check delivery status for %s",
+            order_id,
         )
 
-        # إذا كان هناك مرفق ولم تكن user_id موجودة فيه
-        # نربط الرسالة الأساسية هنا أيضًا.
-        try:
+    # -----------------------------------------------------
+    # Mark as sending
+    # -----------------------------------------------------
 
-            if attachment:
+    try:
 
-                attachment_user_id = (
-                    attachment.get("user_id")
-                )
+        with db() as conn:
 
-                if attachment_user_id:
+            conn.execute(
+                """
+                UPDATE orders
+                SET delivery_channel_status='SENDING'
+                WHERE order_id=%s
+                """,
+                (order_id,),
+            )
 
-                    with db() as conn:
+    except Exception:
 
-                        row = conn.execute(
-                            """
-                            SELECT
-                                channel_message_id
-                            FROM channel_message_links
-                            WHERE channel_chat_id=%s
-                              AND order_id=%s
-                              AND message_type='order'
-                            ORDER BY id DESC
-                            LIMIT 1
-                            """,
-                            (
-                                int(channel),
-                                order["order_id"],
-                            ),
-                        ).fetchone()
+        logger.exception(
+            "Could not mark order %s as SENDING",
+            order_id,
+        )
 
-                    if row:
+    # -----------------------------------------------------
+    # Send to channel
+    # -----------------------------------------------------
 
-                        pass
+    try:
 
-        except Exception:
+        message, attachment_message = (
+            await send_to_chat(
+                channel,
+                build_order_message(
+                    order,
+                    user,
+                ),
+                order_id,
+                attachment,
+            )
+        )
 
-            logger.exception(
-                "Could not verify order channel link"
+        with db() as conn:
+
+            conn.execute(
+                """
+                UPDATE orders
+                SET
+                    delivery_channel_status='DELIVERED',
+                    channel_message_id=%s,
+                    channel_attachment_message_id=%s
+                WHERE order_id=%s
+                """,
+                (
+                    message.message_id,
+                    (
+                        attachment_message.message_id
+                        if attachment_message
+                        else None
+                    ),
+                    order_id,
+                ),
+            )
+
+            add_audit_log_conn(
+                conn,
+                order_id,
+                "ORDER_DELIVERED_TO_CHANNEL",
+                "System",
+                (
+                    f"تم الإرسال إلى القناة {channel} "
+                    f"| message_id={message.message_id}"
+                ),
             )
 
         logger.info(
             "Order %s delivered to channel %s",
-            order["order_id"],
+            order_id,
             channel,
         )
 
-    except TelegramError:
-
-        logger.exception(
-            "Failed to deliver order %s "
-            "to channel %s",
-            order["order_id"],
-            channel,
-        )
-
-        return False
+        return True
 
     except Exception:
 
         logger.exception(
-            "Unexpected delivery error "
-            "for order %s",
-            order["order_id"],
-        )
-
-        return False
-
-    try:
-
-        await asyncio.to_thread(
-            add_audit_log,
-            order["order_id"],
-            "ORDER_DELIVERED_TO_CHANNEL",
-            "System",
-        )
-
-    except Exception:
-
-        logger.exception(
-            "Could not write delivery audit log "
-            "for order %s",
-            order["order_id"],
-        )
-
-    return True
-
-
-# =========================================================
-# Customer message relay
-# =========================================================
-
-def customer_display_name(
-    user,
-) -> str:
-
-    if not user:
-        return "غير معروف"
-
-    full_name = (
-        " ".join(
-            part
-            for part in [
-                user.first_name,
-                user.last_name,
-            ]
-            if part
-        )
-        .strip()
-    )
-
-    return full_name or "غير معروف"
-
-
-def build_customer_header(
-    user,
-) -> str:
-
-    name = html.escape(
-        customer_display_name(user)
-    )
-
-    username = (
-        user.username
-        if user and user.username
-        else None
-    )
-
-    username_text = (
-        f"@{html.escape(username)}"
-        if username
-        else "بدون username"
-    )
-
-    user_id = (
-        str(user.id)
-        if user
-        else "غير معروف"
-    )
-
-    return (
-        "💬 <b>رسالة من زبون</b>\n\n"
-        f"👤 <b>الاسم:</b> {name}\n"
-        f"🔹 <b>Username:</b> {username_text}\n"
-        f"🆔 <b>Telegram ID:</b> "
-        f"<code>{user_id}</code>\n\n"
-    )
-
-
-async def save_customer_channel_link(
-    channel_message,
-    user,
-):
-
-    channel = parse_channel_id()
-
-    if not channel:
-        return
-
-    try:
-
-        await asyncio.to_thread(
-            save_channel_message_link,
-            int(channel),
-            int(channel_message.message_id),
-            int(user.id),
-            None,
-            "customer",
-        )
-
-    except Exception:
-
-        logger.exception(
-            "Failed to save customer channel message link"
-        )
-
-
-async def forward_customer_message_to_channel(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-):
-
-    message = update.effective_message
-    user = update.effective_user
-
-    if not message or not user:
-        return
-
-    channel = parse_channel_id()
-
-    if not channel:
-
-        logger.error(
-            "Cannot forward customer message: "
-            "CHANNEL_ID is not configured"
+            "Failed to deliver order %s",
+            order_id,
         )
 
         try:
 
-            await message.reply_text(
-                "❌ تعذر إرسال رسالتك حاليًا. "
-                "تواصل مع الإدارة."
-            )
+            with db() as conn:
 
-        except TelegramError:
-            pass
-
-        return
-
-    header = build_customer_header(
-        user
-    )
-
-    try:
-
-        # =================================================
-        # النص
-        # =================================================
-
-        if message.text:
-
-            channel_message = (
-                await context.bot.send_message(
-                    chat_id=channel,
-                    text=(
-                        header
-                        + html.escape(
-                            message.text
-                        )
-                    ),
-                    parse_mode="HTML",
+                conn.execute(
+                    """
+                    UPDATE orders
+                    SET delivery_channel_status='FAILED'
+                    WHERE order_id=%s
+                    """,
+                    (order_id,),
                 )
-            )
 
-        # =================================================
-        # صورة
-        # =================================================
-
-        elif message.photo:
-
-            photo = message.photo[-1]
-
-            caption = (
-                header
-                + html.escape(
-                    message.caption or ""
+                add_audit_log_conn(
+                    conn,
+                    order_id,
+                    "ORDER_CHANNEL_DELIVERY_FAILED",
+                    "System",
+                    "فشل إرسال الطلب إلى القناة",
                 )
-            )
-
-            channel_message = (
-                await context.bot.send_photo(
-                    chat_id=channel,
-                    photo=photo.file_id,
-                    caption=caption[:1024],
-                    parse_mode="HTML",
-                )
-            )
-
-        # =================================================
-        # مستند / ملف
-        # =================================================
-
-        elif message.document:
-
-            caption = (
-                header
-                + html.escape(
-                    message.caption or ""
-                )
-            )
-
-            channel_message = (
-                await context.bot.send_document(
-                    chat_id=channel,
-                    document=message.document.file_id,
-                    caption=caption[:1024],
-                    parse_mode="HTML",
-                )
-            )
-
-        # =================================================
-        # فيديو
-        # =================================================
-
-        elif message.video:
-
-            caption = (
-                header
-                + html.escape(
-                    message.caption or ""
-                )
-            )
-
-            channel_message = (
-                await context.bot.send_video(
-                    chat_id=channel,
-                    video=message.video.file_id,
-                    caption=caption[:1024],
-                    parse_mode="HTML",
-                )
-            )
-
-        # =================================================
-        # Voice
-        # =================================================
-
-        elif message.voice:
-
-            channel_message = (
-                await context.bot.send_voice(
-                    chat_id=channel,
-                    voice=message.voice.file_id,
-                    caption=header[:1024],
-                    parse_mode="HTML",
-                )
-            )
-
-        # =================================================
-        # Audio
-        # =================================================
-
-        elif message.audio:
-
-            caption = (
-                header
-                + html.escape(
-                    message.caption or ""
-                )
-            )
-
-            channel_message = (
-                await context.bot.send_audio(
-                    chat_id=channel,
-                    audio=message.audio.file_id,
-                    caption=caption[:1024],
-                    parse_mode="HTML",
-                )
-            )
-
-        # =================================================
-        # Sticker
-        # =================================================
-
-        elif message.sticker:
-
-            channel_message = (
-                await context.bot.send_sticker(
-                    chat_id=channel,
-                    sticker=message.sticker.file_id,
-                )
-            )
-
-            # إرسال بيانات صاحب الستكر بشكل منفصل
-            info_message = (
-                await context.bot.send_message(
-                    chat_id=channel,
-                    text=header,
-                    parse_mode="HTML",
-                )
-            )
-
-            await save_customer_channel_link(
-                info_message,
-                user,
-            )
-
-            # حفظ الستكر أيضًا للربط
-            await save_customer_channel_link(
-                channel_message,
-                user,
-            )
-
-            await message.reply_text(
-                "✅ تم إرسال رسالتك إلى الكادر."
-            )
-
-            return
-
-        # =================================================
-        # نوع غير مدعوم
-        # =================================================
-
-        else:
-
-            await message.reply_text(
-                "⚠️ هذا النوع من الرسائل غير مدعوم حاليًا.\n"
-                "أرسل نصًا أو صورة أو ملفًا أو فيديو أو صوتًا."
-            )
-
-            return
-
-        # =================================================
-        # حفظ العلاقة في PostgreSQL
-        # =================================================
-
-        await save_customer_channel_link(
-            channel_message,
-            user,
-        )
-
-        logger.info(
-            "Customer message forwarded: "
-            "user=%s channel_message=%s",
-            user.id,
-            channel_message.message_id,
-        )
-
-        # =================================================
-        # إشعار الزبون
-        # =================================================
-
-        await message.reply_text(
-            "✅ تم إرسال رسالتك إلى الكادر."
-        )
-
-    except TelegramError:
-
-        logger.exception(
-            "Failed to forward customer message "
-            "from user %s",
-            user.id,
-        )
-
-        try:
-
-            await message.reply_text(
-                "❌ تعذر إرسال رسالتك حاليًا. "
-                "حاول مرة أخرى."
-            )
-
-        except TelegramError:
-            pass
-
-    except Exception:
-
-        logger.exception(
-            "Unexpected customer relay error "
-            "for user %s",
-            user.id,
-        )
-
-        try:
-
-            await message.reply_text(
-                "❌ حدث خطأ أثناء إرسال الرسالة."
-            )
-
-        except TelegramError:
-            pass
-
-
-# =========================================================
-# Find channel link for admin reply
-# =========================================================
-
-def find_link_for_replied_message(
-    message,
-):
-
-    if not message:
-        return None
-
-    replied = (
-        message.reply_to_message
-    )
-
-    if not replied:
-        return None
-
-    # =====================================================
-    # الطريقة الأولى:
-    # الرسالة نفسها في القناة
-    # =====================================================
-
-    chat = replied.chat
-
-    if chat:
-
-        try:
-
-            row = get_channel_message_link(
-                int(chat.id),
-                int(replied.message_id),
-            )
-
-            if row:
-                return row
 
         except Exception:
 
             logger.exception(
-                "Direct channel message link lookup failed"
+                "Could not update failed delivery status"
             )
 
-    # =====================================================
-    # الطريقة الثانية:
-    # الرسالة جاءت من Forward / Origin
-    # =====================================================
-
-    forward_origin = getattr(
-        replied,
-        "forward_origin",
-        None,
-    )
-
-    if forward_origin:
-
-        origin_chat = getattr(
-            forward_origin,
-            "chat",
-            None,
-        )
-
-        origin_message_id = getattr(
-            forward_origin,
-            "message_id",
-            None,
-        )
-
-        if (
-            origin_chat
-            and origin_message_id
-        ):
-
-            try:
-
-                row = get_channel_message_link(
-                    int(origin_chat.id),
-                    int(origin_message_id),
-                )
-
-                if row:
-                    return row
-
-            except Exception:
-
-                logger.exception(
-                    "Forward-origin channel link lookup failed"
-                )
-
-    return None
+        return False
 
 
 # =========================================================
-# Forward admin reply to customer
+# Customer notifications
 # =========================================================
 
-async def forward_admin_reply_to_customer(
+async def notify_customer(
+    user_id: int,
+    text: str,
+):
+
+    try:
+
+        await telegram_app.bot.send_message(
+            chat_id=user_id,
+            text=text,
+            parse_mode="HTML",
+        )
+
+        return True
+
+    except TelegramError:
+
+        logger.warning(
+            "Could not notify user %s",
+            user_id,
+            exc_info=True,
+        )
+
+        return False
+
+
+# =========================================================
+# Admin reply to customer
+# =========================================================
+
+async def admin_reply_command(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
 ):
+
+    if not update.effective_user:
+        return
+
+    if update.effective_user.id != ADMIN_TELEGRAM_ID:
+        return
 
     message = update.effective_message
 
     if not message:
         return
 
-    # =====================================================
-    # هذه الدالة مخصصة فقط لردود الأدمن داخل القناة.
-    # في channel_post لا يوجد effective_user يمثل الأدمن
-    # البشري؛ Telegram ينسب المنشور إلى القناة نفسها.
-    # لذلك نتحقق من أن الرسالة جاءت من CHANNEL_ID.
-    # =====================================================
+    text = message.text or ""
 
-    channel = parse_channel_id()
+    parts = text.split(maxsplit=2)
 
-    if channel is None or not message.chat:
-        return
+    if len(parts) < 3:
 
-    if int(message.chat.id) != int(channel):
-        return
-
-    # =====================================================
-    # يجب أن تكون الرسالة Reply داخل القناة
-    # =====================================================
-
-    if not message.reply_to_message:
-
-        logger.info(
-            "Channel post received without reply_to_message: %s",
-            message.message_id,
-        )
-        return
-
-    logger.info(
-        "CHANNEL REPLY DETECTED: channel=%s message=%s replied_to=%s",
-        message.chat.id,
-        message.message_id,
-        message.reply_to_message.message_id,
-    )
-
-    link = await asyncio.to_thread(
-        find_link_for_replied_message,
-        message,
-    )
-
-    if not link:
-
-        logger.warning(
-            "Admin reply has no customer mapping. "
-            "channel=%s message=%s",
-            (
-                message.chat.id
-                if message.chat
-                else None
-            ),
-            message.message_id,
+        await message.reply_text(
+            "الاستخدام الصحيح:\n\n"
+            "/reply NB-2026-123456 نص الرد"
         )
 
         return
 
-    user_id = int(
-        link["user_id"]
-    )
+    order_id = parts[1].strip()
 
-    try:
+    reply_text = parts[2].strip()
 
-        # =================================================
-        # النص
-        # =================================================
+    if not reply_text:
 
-        if message.text:
+        await message.reply_text(
+            "اكتب نص الرد بعد رقم الطلب."
+        )
 
-            await context.bot.send_message(
-                chat_id=user_id,
-                text=(
-                    "👨‍💼 <b>رسالة من الكادر:</b>\n\n"
-                    + html.escape(
-                        message.text
-                    )
-                ),
-                parse_mode="HTML",
-            )
+        return
 
-        # =================================================
-        # صورة
-        # =================================================
+    with db() as conn:
 
-        elif message.photo:
+        order = conn.execute(
+            """
+            SELECT
+                order_id,
+                user_id,
+                title
+            FROM orders
+            WHERE order_id=%s
+            """,
+            (order_id,),
+        ).fetchone()
 
-            photo = message.photo[-1]
+        if not order:
 
-            caption = (
-                message.caption or ""
-            )
-
-            await context.bot.send_photo(
-                chat_id=user_id,
-                photo=photo.file_id,
-                caption=(
-                    "👨‍💼 رسالة من الكادر\n\n"
-                    + caption
-                )[:1024],
-            )
-
-        # =================================================
-        # مستند
-        # =================================================
-
-        elif message.document:
-
-            caption = (
-                message.caption or ""
-            )
-
-            await context.bot.send_document(
-                chat_id=user_id,
-                document=message.document.file_id,
-                caption=(
-                    "👨‍💼 رسالة من الكادر\n\n"
-                    + caption
-                )[:1024],
-            )
-
-        # =================================================
-        # فيديو
-        # =================================================
-
-        elif message.video:
-
-            caption = (
-                message.caption or ""
-            )
-
-            await context.bot.send_video(
-                chat_id=user_id,
-                video=message.video.file_id,
-                caption=(
-                    "👨‍💼 رسالة من الكادر\n\n"
-                    + caption
-                )[:1024],
-            )
-
-        # =================================================
-        # Voice
-        # =================================================
-
-        elif message.voice:
-
-            await context.bot.send_voice(
-                chat_id=user_id,
-                voice=message.voice.file_id,
-            )
-
-        # =================================================
-        # Audio
-        # =================================================
-
-        elif message.audio:
-
-            await context.bot.send_audio(
-                chat_id=user_id,
-                audio=message.audio.file_id,
-                caption=(
-                    "👨‍💼 رسالة من الكادر"
-                ),
-            )
-
-        # =================================================
-        # Sticker
-        # =================================================
-
-        elif message.sticker:
-
-            await context.bot.send_sticker(
-                chat_id=user_id,
-                sticker=message.sticker.file_id,
-            )
-
-        # =================================================
-        # نوع غير مدعوم
-        # =================================================
-
-        else:
-
-            logger.warning(
-                "Unsupported admin reply type: %s",
-                message.message_id,
+            await message.reply_text(
+                f"❌ الطلب {order_id} غير موجود."
             )
 
             return
 
-        # =================================================
-        # تأكيد للأدمن
-        # =================================================
-
-        try:
-
-            await message.reply_text(
-                "✅ تم إرسال الرد إلى الزبون."
-            )
-
-        except TelegramError:
-
-            logger.warning(
-                "Could not send admin confirmation",
-                exc_info=True,
-            )
-
-        logger.info(
-            "Admin reply forwarded to user %s "
-            "from channel message %s",
-            user_id,
-            (
-                message.reply_to_message.message_id
-                if message.reply_to_message
-                else None
-            ),
+        add_audit_log_conn(
+            conn,
+            order_id,
+            "ADMIN_MESSAGE_TO_CUSTOMER",
+            "Admin",
+            reply_text[:2000],
         )
 
-    except TelegramError:
+    success = await notify_customer(
+        order["user_id"],
+        (
+            "📩 <b>رسالة من إدارة النبع</b>\n\n"
+            f"🆔 الطلب: "
+            f"<code>{html.escape(order_id)}</code>\n\n"
+            f"{html.escape(reply_text)}"
+        ),
+    )
 
-        logger.exception(
-            "Failed to send admin reply "
-            "to customer %s",
-            user_id,
+    if success:
+
+        await message.reply_text(
+            f"✅ تم إرسال الرد إلى صاحب الطلب {order_id}."
         )
 
-        try:
+    else:
 
-            await message.reply_text(
-                "❌ تعذر إرسال الرد إلى الزبون."
-            )
-
-        except TelegramError:
-            pass
-
-    except Exception:
-
-        logger.exception(
-            "Unexpected admin reply relay error "
-            "for customer %s",
-            user_id,
+        await message.reply_text(
+            "❌ تعذر إرسال الرسالة إلى الزبون."
         )
+
+
+# =========================================================
+# Channel post handler
+# =========================================================
+
+async def channel_post_handler(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+
+    post = update.channel_post
+
+    if not post:
+        return
+
+    channel = parse_channel_id()
+
+    if not channel:
+        return
+
+    if str(post.chat.id) != str(channel):
+        return
+
+    # We intentionally do not treat an ordinary new
+    # channel post as a customer reply.
+    #
+    # Telegram channels without a linked discussion group
+    # do not expose an admin "reply to customer" message
+    # as a private message update to the bot.
+    #
+    # We log the event for diagnostics only.
+
+    logger.info(
+        "Channel post received: chat=%s message_id=%s",
+        post.chat.id,
+        post.message_id,
+    )
 
 
 # =========================================================
@@ -2300,6 +1924,9 @@ async def start_command(
             ]
         ]
     )
+
+    if not update.effective_message:
+        return
 
     await update.effective_message.reply_text(
         (
@@ -2333,11 +1960,9 @@ async def channel_diagnosis(
 
         me = await telegram_app.bot.get_me()
 
-        member = (
-            await telegram_app.bot.get_chat_member(
-                channel,
-                me.id,
-            )
+        member = await telegram_app.bot.get_chat_member(
+            channel,
+            me.id,
         )
 
         if member.status not in (
@@ -2348,34 +1973,28 @@ async def channel_diagnosis(
             return (
                 False,
                 (
-                    f"البوت موجود في "
-                    f"«{chat.title}» "
-                    f"لكن حالته "
-                    f"«{member.status}». "
+                    f"البوت موجود في «{chat.title}» "
+                    f"لكن حالته «{member.status}». "
                     "يجب أن يكون Administrator."
-                ),
-            )
-
-        if getattr(
-            member,
-            "can_post_messages",
-            None,
-        ) is False:
-
-            return (
-                False,
-                (
-                    f"البوت Admin في "
-                    f"«{chat.title}» "
-                    "لكن صلاحية النشر غير مفعلة."
                 ),
             )
 
         if send_test:
 
-            await telegram_app.bot.send_message(
-                chat_id=channel,
-                text="✅ رسالة اختبار من بوت النبع",
+            test_message = (
+                await telegram_app.bot.send_message(
+                    chat_id=channel,
+                    text="✅ رسالة اختبار من بوت النبع",
+                )
+            )
+
+            return (
+                True,
+                (
+                    f"القناة «{chat.title}» جاهزة. "
+                    f"البوت @{me.username} قادر على النشر. "
+                    f"message_id={test_message.message_id}"
+                ),
             )
 
         return (
@@ -2399,11 +2018,9 @@ async def testchannel_command(
     context: ContextTypes.DEFAULT_TYPE,
 ):
 
-    if not update.effective_user:
-        return
-
     if (
-        update.effective_user.id
+        not update.effective_user
+        or update.effective_user.id
         != ADMIN_TELEGRAM_ID
     ):
         return
@@ -2421,40 +2038,82 @@ async def testchannel_command(
     )
 
 
-async def camera_command(
+async def redeliver_command(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
 ):
 
-    if not update.effective_user:
-        return
-
     if (
-        update.effective_user.id
-        not in PHOTO_ALLOWED_IDS
+        not update.effective_user
+        or update.effective_user.id
+        != ADMIN_TELEGRAM_ID
     ):
         return
 
-    keyboard = InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton(
-                    "📸 فتح الكاميرا / المعرض",
-                    web_app=WebAppInfo(
-                        url=CAMERA_URL
-                    ),
-                )
-            ]
-        ]
+    message = update.effective_message
+
+    if not message:
+        return
+
+    parts = (
+        (message.text or "")
+        .split(maxsplit=1)
     )
 
-    await update.effective_message.reply_text(
-        (
-            "اضغط الزر لالتقاط صورة "
-            "أو اختيارها ونشرها في القناة:"
-        ),
-        reply_markup=keyboard,
+    if len(parts) != 2:
+
+        await message.reply_text(
+            "الاستخدام:\n\n"
+            "/redeliver NB-2026-123456"
+        )
+
+        return
+
+    order_id = parts[1].strip()
+
+    with db() as conn:
+
+        order = conn.execute(
+            """
+            SELECT *
+            FROM orders
+            WHERE order_id=%s
+            """,
+            (order_id,),
+        ).fetchone()
+
+    if not order:
+
+        await message.reply_text(
+            "❌ الطلب غير موجود."
+        )
+
+        return
+
+    user = {
+        "id": order["user_id"],
+        "username": order["username"],
+        "first_name": "",
+        "last_name": "",
+    }
+
+    delivered = await deliver_order(
+        order,
+        user,
+        None,
     )
+
+    if delivered:
+
+        await message.reply_text(
+            f"✅ تمت محاولة إرسال الطلب {order_id} إلى القناة."
+        )
+
+    else:
+
+        await message.reply_text(
+            f"❌ فشل إرسال الطلب {order_id} إلى القناة."
+        )
 
 
 # =========================================================
@@ -2467,18 +2126,12 @@ telegram_app = (
     .build()
 )
 
-
-# =========================================================
-# Commands
-# =========================================================
-
 telegram_app.add_handler(
     CommandHandler(
         "start",
         start_command,
     )
 )
-
 
 telegram_app.add_handler(
     CommandHandler(
@@ -2487,61 +2140,43 @@ telegram_app.add_handler(
     )
 )
 
-
 telegram_app.add_handler(
     CommandHandler(
-        "camera",
-        camera_command,
+        "reply",
+        admin_reply_command,
     )
 )
 
+telegram_app.add_handler(
+    CommandHandler(
+        "redeliver",
+        redeliver_command,
+    )
+)
 
-# =========================================================
-# Customer private messages
-# =========================================================
-#
-# أي رسالة خاصة من الزبون:
-# Text / Photo / Document / Video /
-# Voice / Audio / Sticker
-#
-# تتحول إلى القناة.
-#
-# =========================================================
+telegram_app.add_handler(
+    MessageHandler(
+        filters.ChatType.CHANNEL,
+        channel_post_handler,
+    )
+)
 
 telegram_app.add_handler(
     MessageHandler(
         filters.ChatType.PRIVATE
+        & filters.TEXT
         & ~filters.COMMAND,
-        forward_customer_message_to_channel,
+        start_command,
     )
 )
 
 
 # =========================================================
-# Admin replies
-# =========================================================
-#
-# الأدمن يجب أن يعمل Reply على رسالة القناة.
-#
-# =========================================================
-
-telegram_app.add_handler(
-    MessageHandler(
-        filters.UpdateType.CHANNEL_POST
-        & filters.REPLY,
-        forward_admin_reply_to_customer,
-    )
-)
-
-
-# =========================================================
-# FastAPI lifespan
+# Lifespan
 # =========================================================
 
 @asynccontextmanager
-async def lifespan(
-    _: FastAPI,
-):
+async def lifespan(_: FastAPI):
 
     await init_db_with_retry()
 
@@ -2552,9 +2187,15 @@ async def lifespan(
         await telegram_app.bot.set_webhook(
             url=WEBHOOK_URL,
             secret_token=WEBHOOK_SECRET,
+
+            # Important:
+            # message = private/admin messages
+            # channel_post = posts made in channel
+            # edited_channel_post = edited channel posts
             allowed_updates=[
                 "message",
                 "channel_post",
+                "edited_channel_post",
             ],
         )
 
@@ -2567,32 +2208,6 @@ async def lifespan(
 
         logger.exception(
             "Failed to configure Telegram webhook"
-        )
-
-    try:
-
-        ok, info = await channel_diagnosis(
-            send_test=False
-        )
-
-        if ok:
-
-            logger.info(
-                "Channel diagnosis: %s",
-                info,
-            )
-
-        else:
-
-            logger.error(
-                "Channel diagnosis: %s",
-                info,
-            )
-
-    except Exception:
-
-        logger.exception(
-            "Channel diagnosis failed"
         )
 
     yield
@@ -2614,58 +2229,150 @@ async def lifespan(
 
 app = FastAPI(
     title="النبع للخدمات الجامعية API",
-    version="5.0.0",
+    version="7.0.0",
     lifespan=lifespan,
 )
 
-
-# =========================================================
-# CORS
-# =========================================================
 
 allowed_origins = {
     origin_of(WEB_APP_URL),
     origin_of(BACKEND_URL),
 }
 
+
 extra_origins = os.getenv(
     "ALLOWED_ORIGINS",
     "",
 )
 
+
 for origin in extra_origins.split(","):
 
     origin = (
-        origin.strip()
+        origin
+        .strip()
         .rstrip("/")
     )
 
     if origin:
-        allowed_origins.add(
-            origin
-        )
+        allowed_origins.add(origin)
 
 
 app.add_middleware(
     CORSMiddleware,
+
     allow_origins=sorted(
         allowed_origins
     ),
+
     allow_credentials=False,
+
     allow_methods=[
         "GET",
         "POST",
+        "PUT",
+        "PATCH",
+        "DELETE",
         "OPTIONS",
     ],
+
     allow_headers=[
         "Content-Type",
         "X-Telegram-Init-Data",
+        "Idempotency-Key",
     ],
 )
 
 
 # =========================================================
-# Root
+# File validation
+# =========================================================
+
+DOCUMENT_SIGNATURES = {
+
+    "application/pdf":
+        b"%PDF",
+
+    "application/msword":
+        b"\xd0\xcf\x11\xe0",
+
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+        b"PK\x03\x04",
+}
+
+
+def validate_file(
+    data: bytes,
+    declared_type: str,
+) -> str:
+
+    declared_type = (
+        declared_type
+        or ""
+    ).lower().strip()
+
+    if declared_type.startswith(
+        "image/"
+    ):
+
+        try:
+
+            with Image.open(
+                io.BytesIO(data)
+            ) as img:
+
+                img.verify()
+
+                mime = Image.MIME.get(
+                    img.format or ""
+                )
+
+        except Exception:
+
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "الصورة تالفة أو غير مدعومة. "
+                    "استخدم JPG أو PNG أو WebP."
+                ),
+            )
+
+        if mime not in {
+            "image/jpeg",
+            "image/png",
+            "image/webp",
+            "image/gif",
+        }:
+
+            raise HTTPException(
+                status_code=400,
+                detail="صيغة الصورة غير مدعومة",
+            )
+
+        return mime
+
+    signature = DOCUMENT_SIGNATURES.get(
+        declared_type
+    )
+
+    if (
+        not signature
+        or not data.startswith(signature)
+    ):
+
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "نوع الملف غير مدعوم أو تالف. "
+                "المسموح PDF / DOC / DOCX / صور."
+            ),
+        )
+
+    return declared_type
+
+
+# =========================================================
+# Root / health
 # =========================================================
 
 @app.get("/")
@@ -2688,33 +2395,20 @@ def read_root():
     }
 
 
-# =========================================================
-# Health
-# =========================================================
-
 @app.get("/health")
 def health():
 
     try:
 
         with db() as conn:
-
-            conn.execute(
-                "SELECT 1"
-            )
+            conn.execute("SELECT 1")
 
         return {
             "status": "ok",
             "database": "connected",
-            "telegram": bool(BOT_TOKEN),
-            "webhook": WEBHOOK_URL,
         }
 
     except Exception:
-
-        logger.exception(
-            "Health check failed"
-        )
 
         return JSONResponse(
             status_code=503,
@@ -2756,32 +2450,10 @@ async def telegram_webhook(
 
         body = await request.json()
 
-    except Exception:
-
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid JSON",
-        )
-
-    try:
-
         update = Update.de_json(
             body,
             telegram_app.bot,
         )
-
-    except Exception:
-
-        logger.exception(
-            "Invalid Telegram update"
-        )
-
-        raise HTTPException(
-            status_code=400,
-            detail="Bad Telegram update",
-        )
-
-    try:
 
         await telegram_app.process_update(
             update
@@ -2793,105 +2465,18 @@ async def telegram_webhook(
             "Failed to process Telegram update"
         )
 
+        raise HTTPException(
+            status_code=400,
+            detail="Bad Telegram update",
+        )
+
     return {
         "ok": True
     }
 
 
 # =========================================================
-# File validation
-# =========================================================
-
-DOCUMENT_SIGNATURES = {
-
-    "application/pdf":
-        b"%PDF",
-
-    "application/msword":
-        b"\xd0\xcf\x11\xe0",
-
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-        b"PK\x03\x04",
-}
-
-
-def validate_file(
-    data: bytes,
-    declared_type: str,
-) -> str:
-
-    if declared_type.startswith(
-        "image/"
-    ):
-
-        try:
-
-            with Image.open(
-                io.BytesIO(data)
-            ) as img:
-
-                img.verify()
-
-                mime = Image.MIME.get(
-                    img.format or ""
-                )
-
-        except Exception:
-
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    "الصورة تالفة أو غير مدعومة. "
-                    "استخدم JPG أو PNG أو WebP."
-                ),
-            )
-
-        if mime not in {
-            "image/jpeg",
-            "image/png",
-            "image/webp",
-            "image/gif",
-        }:
-
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    "صيغة الصورة غير مدعومة"
-                ),
-            )
-
-        return mime
-
-    signature = DOCUMENT_SIGNATURES.get(
-        declared_type
-    )
-
-    if not signature:
-
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "نوع الملف غير مدعوم. "
-                "المسموح PDF / DOC / DOCX / صور."
-            ),
-        )
-
-    if not data.startswith(
-        signature
-    ):
-
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "محتوى الملف لا يطابق نوعه"
-            ),
-        )
-
-    return declared_type
-
-
-# =========================================================
-# Upload attachment
+# Upload
 # =========================================================
 
 @app.post("/api/upload")
@@ -2925,24 +2510,14 @@ async def upload_attachment(
             ),
         )
 
-    declared_type = (
-        file.content_type
-        or ""
-    )
-
     content_type = validate_file(
         data,
-        declared_type,
+        file.content_type or "",
     )
 
     filename = os.path.basename(
         file.filename or ""
-    ).strip()
-
-    filename = filename[:100]
-
-    if not filename:
-        filename = "attachment"
+    ).strip()[:100] or "attachment"
 
     token = await asyncio.to_thread(
         store_attachment,
@@ -2952,143 +2527,9 @@ async def upload_attachment(
         data,
     )
 
-    logger.info(
-        "Attachment uploaded by user %s: %s",
-        user["id"],
-        filename,
-    )
-
     return {
         "token": token,
         "filename": filename,
-    }
-
-
-# =========================================================
-# Photo processing
-# =========================================================
-
-def prepare_photo(
-    data: bytes,
-) -> bytes:
-
-    try:
-
-        with Image.open(
-            io.BytesIO(data)
-        ) as img:
-
-            img = ImageOps.exif_transpose(
-                img
-            )
-
-            img = img.convert(
-                "RGB"
-            )
-
-            img.thumbnail(
-                (2560, 2560)
-            )
-
-            output = io.BytesIO()
-
-            img.save(
-                output,
-                "JPEG",
-                quality=85,
-                optimize=True,
-            )
-
-            return output.getvalue()
-
-    except Exception:
-
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "الصورة تالفة أو صيغتها غير مدعومة"
-            ),
-        )
-
-
-# =========================================================
-# Camera/photo endpoint
-# =========================================================
-
-@app.post("/api/photo")
-async def publish_photo(
-    request: Request,
-    file: UploadFile = File(...),
-):
-
-    user = init_user_from_header(
-        request
-    )
-
-    if user["id"] not in PHOTO_ALLOWED_IDS:
-
-        raise HTTPException(
-            status_code=403,
-            detail="غير مصرح لك بالنشر",
-        )
-
-    channel = parse_channel_id()
-
-    if channel is None:
-
-        raise HTTPException(
-            status_code=503,
-            detail="CHANNEL_ID غير مضبوط",
-        )
-
-    data = await file.read(
-        MAX_ATTACHMENT_BYTES + 1
-    )
-
-    if not data:
-
-        raise HTTPException(
-            status_code=400,
-            detail="الصورة فارغة",
-        )
-
-    if len(data) > MAX_ATTACHMENT_BYTES:
-
-        raise HTTPException(
-            status_code=413,
-            detail=(
-                f"حجم الصورة يجب ألا يتجاوز "
-                f"{MAX_ATTACHMENT_MB} MB"
-            ),
-        )
-
-    photo = await asyncio.to_thread(
-        prepare_photo,
-        data,
-    )
-
-    try:
-
-        await telegram_app.bot.send_photo(
-            chat_id=channel,
-            photo=photo,
-        )
-
-    except TelegramError as exc:
-
-        logger.exception(
-            "Photo publishing failed"
-        )
-
-        raise HTTPException(
-            status_code=502,
-            detail=(
-                f"تعذر النشر في القناة: {exc}"
-            ),
-        )
-
-    return {
-        "ok": True
     }
 
 
@@ -3100,17 +2541,76 @@ async def publish_photo(
 async def submit_order(
     payload: OrderIn,
     request: Request,
+    idempotency_key: Optional[str] = Header(
+        None,
+        alias="Idempotency-Key",
+    ),
 ):
 
     user = init_user_from_header(
         request
     )
 
-    order, attachment = await asyncio.to_thread(
-        create_order,
-        user,
-        payload,
+    order, attachment, is_duplicate = (
+        await asyncio.to_thread(
+            create_order,
+            user,
+            payload,
+            idempotency_key,
+        )
     )
+
+    # -----------------------------------------------------
+    # Existing order
+    # -----------------------------------------------------
+
+    if is_duplicate:
+
+        delivery_status = (
+            order.get(
+                "delivery_channel_status"
+            )
+            or "PENDING"
+        )
+
+        # Already delivered.
+        if (
+            delivery_status == "DELIVERED"
+            and order.get("channel_message_id")
+        ):
+
+            return {
+                "ok": True,
+                "order_id": order["order_id"],
+                "delivered": True,
+                "duplicate": True,
+            }
+
+        # Failed/PENDING/SENDING:
+        # attempt recovery.
+        existing_user = {
+            "id": order["user_id"],
+            "username": order["username"],
+            "first_name": "",
+            "last_name": "",
+        }
+
+        delivered = await deliver_order(
+            order,
+            existing_user,
+            None,
+        )
+
+        return {
+            "ok": True,
+            "order_id": order["order_id"],
+            "delivered": delivered,
+            "duplicate": True,
+        }
+
+    # -----------------------------------------------------
+    # First delivery
+    # -----------------------------------------------------
 
     delivered = await deliver_order(
         order,
@@ -3118,22 +2618,8 @@ async def submit_order(
         attachment,
     )
 
-    if not delivered:
-
-        logger.error(
-            "Order %s saved but channel delivery failed",
-            order["order_id"],
-        )
-
-        raise HTTPException(
-            status_code=502,
-            detail=(
-                "تم حفظ الطلب، لكن تعذر إرساله "
-                "إلى القناة. "
-                "حاول مرة أخرى أو تواصل مع الإدارة."
-            ),
-        )
-
+    # Delete temporary attachment only after
+    # successful or attempted order creation.
     if payload.attachment_token:
 
         try:
@@ -3151,38 +2637,286 @@ async def submit_order(
                 payload.attachment_token,
             )
 
-    try:
+    # -----------------------------------------------------
+    # Customer notification
+    # -----------------------------------------------------
 
-        await telegram_app.bot.send_message(
-            chat_id=user["id"],
-            text=(
-                "✅ <b>تم استلام طلبك</b>\n\n"
-                f"رقم الطلب: "
-                f"<code>"
-                f"{html.escape(order['order_id'])}"
-                f"</code>\n"
-                "سيتم التواصل معك من قبل الكادر."
-            ),
-            parse_mode="HTML",
-        )
+    notification_ok = await notify_customer(
+        user["id"],
+        (
+            "✅ <b>تم استلام طلبك</b>\n\n"
+            f"رقم الطلب: "
+            f"<code>{html.escape(order['order_id'])}</code>\n"
+            "سيتم مراجعة الطلب وإرسال عرض السعر قريباً."
+        ),
+    )
 
-    except TelegramError:
+    if not notification_ok:
 
-        logger.warning(
-            "Could not notify user %s",
-            user["id"],
-            exc_info=True,
-        )
+        try:
+
+            with db() as conn:
+
+                add_audit_log_conn(
+                    conn,
+                    order["order_id"],
+                    "CUSTOMER_NOTIFICATION_FAILED",
+                    "System",
+                    "تعذر إرسال رسالة التأكيد للزبون",
+                )
+
+        except Exception:
+
+            logger.exception(
+                "Could not write notification audit"
+            )
 
     return {
         "ok": True,
         "order_id": order["order_id"],
-        "delivered": True,
+        "delivered": delivered,
     }
 
 
 # =========================================================
-# ADMIN DASHBOARD
+# Customer order status
+# =========================================================
+
+@app.get("/api/orders/{order_id}")
+def get_order_status(
+    order_id: str,
+    request: Request,
+):
+
+    user = init_user_from_header(
+        request
+    )
+
+    with db() as conn:
+
+        row = conn.execute(
+            """
+            SELECT *
+            FROM orders
+            WHERE order_id=%s
+              AND user_id=%s
+            """,
+            (
+                order_id,
+                user["id"],
+            ),
+        ).fetchone()
+
+    if not row:
+
+        raise HTTPException(
+            status_code=404,
+            detail="الطلب غير موجود",
+        )
+
+    return row
+
+
+# =========================================================
+# Accept quotation
+# =========================================================
+
+@app.post(
+    "/api/orders/{order_id}/accept_quotation"
+)
+async def accept_quotation(
+    order_id: str,
+    request: Request,
+):
+
+    user = init_user_from_header(
+        request
+    )
+
+    with db() as conn:
+
+        order = conn.execute(
+            """
+            SELECT *
+            FROM orders
+            WHERE order_id=%s
+            FOR UPDATE
+            """,
+            (order_id,),
+        ).fetchone()
+
+        if not order:
+
+            raise HTTPException(
+                status_code=404,
+                detail="الطلب غير موجود",
+            )
+
+        if order["user_id"] != user["id"]:
+
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "غير مصرح لك باتخاذ قرار "
+                    "بشأن هذا الطلب"
+                ),
+            )
+
+        if order["order_status"] != "WAITING_CUSTOMER":
+
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "الطلب ليس في حالة انتظار "
+                    "قرار الزبون"
+                ),
+            )
+
+        conn.execute(
+            """
+            UPDATE orders
+            SET
+                customer_decision='ACCEPTED',
+                customer_decision_at=CURRENT_TIMESTAMP,
+                order_status='ACCEPTED'
+            WHERE order_id=%s
+            """,
+            (order_id,),
+        )
+
+        add_audit_log_conn(
+            conn,
+            order_id,
+            "QUOTATION_ACCEPTED",
+            f"User_{user['id']}",
+            "تم قبول العرض من قبل الزبون",
+        )
+
+        customer_id = order["user_id"]
+
+    await notify_customer(
+        customer_id,
+        (
+            "✅ تم تسجيل قبولك لعرض السعر "
+            f"للطلب <code>{html.escape(order_id)}</code>."
+        ),
+    )
+
+    await notify_customer(
+        ADMIN_TELEGRAM_ID,
+        (
+            "✅ الزبون أقر قبول عرض السعر "
+            f"للطلب <code>{html.escape(order_id)}</code>"
+        ),
+    )
+
+    return {
+        "ok": True,
+        "status": "ACCEPTED",
+    }
+
+
+# =========================================================
+# Reject quotation
+# =========================================================
+
+@app.post(
+    "/api/orders/{order_id}/reject_quotation"
+)
+async def reject_quotation(
+    order_id: str,
+    request: Request,
+):
+
+    user = init_user_from_header(
+        request
+    )
+
+    with db() as conn:
+
+        order = conn.execute(
+            """
+            SELECT *
+            FROM orders
+            WHERE order_id=%s
+            FOR UPDATE
+            """,
+            (order_id,),
+        ).fetchone()
+
+        if not order:
+
+            raise HTTPException(
+                status_code=404,
+                detail="الطلب غير موجود",
+            )
+
+        if order["user_id"] != user["id"]:
+
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "غير مصرح لك باتخاذ قرار "
+                    "بشأن هذا الطلب"
+                ),
+            )
+
+        if order["order_status"] != "WAITING_CUSTOMER":
+
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "الطلب ليس في حالة انتظار "
+                    "قرار الزبون"
+                ),
+            )
+
+        conn.execute(
+            """
+            UPDATE orders
+            SET
+                customer_decision='REJECTED',
+                customer_decision_at=CURRENT_TIMESTAMP,
+                order_status='REJECTED'
+            WHERE order_id=%s
+            """,
+            (order_id,),
+        )
+
+        add_audit_log_conn(
+            conn,
+            order_id,
+            "QUOTATION_REJECTED",
+            f"User_{user['id']}",
+            "تم رفض العرض من قبل الزبون",
+        )
+
+        customer_id = order["user_id"]
+
+    await notify_customer(
+        customer_id,
+        (
+            "❌ تم تسجيل رفض عرض السعر "
+            f"للطلب <code>{html.escape(order_id)}</code>."
+        ),
+    )
+
+    await notify_customer(
+        ADMIN_TELEGRAM_ID,
+        (
+            "❌ الزبون رفض عرض السعر "
+            f"للطلب <code>{html.escape(order_id)}</code>"
+        ),
+    )
+
+    return {
+        "ok": True,
+        "status": "REJECTED",
+    }
+
+
+# =========================================================
+# Admin access
 # =========================================================
 
 @app.get("/api/admin/access")
@@ -3201,14 +2935,811 @@ def admin_access(
     }
 
 
+# =========================================================
+# Admin orders
+# =========================================================
+
+@app.get("/api/admin/orders")
+def search_and_list_orders(
+    request: Request,
+    q: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    service_type: Optional[str] = Query(None),
+    limit: int = Query(
+        50,
+        ge=1,
+        le=200,
+    ),
+    offset: int = Query(
+        0,
+        ge=0,
+    ),
+):
+
+    require_admin(request)
+
+    conditions = []
+
+    params = []
+
+    if q:
+
+        conditions.append(
+            """
+            (
+                order_id ILIKE %s
+                OR username ILIKE %s
+                OR title ILIKE %s
+                OR CAST(user_id AS TEXT) ILIKE %s
+            )
+            """
+        )
+
+        wildcard = f"%{q}%"
+
+        params.extend(
+            [
+                wildcard,
+                wildcard,
+                wildcard,
+                wildcard,
+            ]
+        )
+
+    if status:
+
+        if status.upper() not in VALID_STATUSES:
+
+            raise HTTPException(
+                status_code=400,
+                detail="حالة غير صالحة",
+            )
+
+        conditions.append(
+            "order_status = %s"
+        )
+
+        params.append(
+            status.upper()
+        )
+
+    if service_type:
+
+        if service_type not in SERVICES:
+
+            raise HTTPException(
+                status_code=400,
+                detail="نوع الخدمة غير صالح",
+            )
+
+        conditions.append(
+            "service_type = %s"
+        )
+
+        params.append(
+            service_type
+        )
+
+    where_clause = (
+        " WHERE "
+        + " AND ".join(conditions)
+        if conditions
+        else ""
+    )
+
+    query = f"""
+        SELECT *
+        FROM orders
+        {where_clause}
+        ORDER BY created_at DESC
+        LIMIT %s OFFSET %s
+    """
+
+    query_params = list(params)
+
+    query_params.extend(
+        [
+            limit,
+            offset,
+        ]
+    )
+
+    with db() as conn:
+
+        rows = conn.execute(
+            query,
+            query_params,
+        ).fetchall()
+
+        total = conn.execute(
+            f"""
+            SELECT COUNT(*) AS cnt
+            FROM orders
+            {where_clause}
+            """,
+            params,
+        ).fetchone()["cnt"]
+
+    return {
+        "ok": True,
+        "total": total,
+        "orders": rows,
+    }
+
+
+# =========================================================
+# Admin order details
+# =========================================================
+
+@app.get(
+    "/api/admin/orders/{order_id}"
+)
+def get_order_details_admin(
+    order_id: str,
+    request: Request,
+):
+
+    require_admin(request)
+
+    with db() as conn:
+
+        order = conn.execute(
+            """
+            SELECT *
+            FROM orders
+            WHERE order_id=%s
+            """,
+            (order_id,),
+        ).fetchone()
+
+        if not order:
+
+            raise HTTPException(
+                status_code=404,
+                detail="الطلب غير موجود",
+            )
+
+        payments = conn.execute(
+            """
+            SELECT *
+            FROM payments
+            WHERE order_id=%s
+            ORDER BY created_at ASC
+            """,
+            (order_id,),
+        ).fetchall()
+
+        audit = conn.execute(
+            """
+            SELECT *
+            FROM audit_logs
+            WHERE order_id=%s
+            ORDER BY timestamp DESC
+            """,
+            (order_id,),
+        ).fetchall()
+
+    return {
+        "ok": True,
+        "order": order,
+        "payments": payments,
+        "audit_logs": audit,
+    }
+
+
+# =========================================================
+# Admin quotation
+# =========================================================
+
+@app.post(
+    "/api/admin/orders/{order_id}/quotation"
+)
+async def set_quotation(
+    order_id: str,
+    payload: QuotationIn,
+    request: Request,
+):
+
+    require_admin(request)
+
+    with db() as conn:
+
+        order = conn.execute(
+            """
+            SELECT *
+            FROM orders
+            WHERE order_id=%s
+            FOR UPDATE
+            """,
+            (order_id,),
+        ).fetchone()
+
+        if not order:
+
+            raise HTTPException(
+                status_code=404,
+                detail="الطلب غير موجود",
+            )
+
+        # -------------------------------------------------
+        # Prevent quotation on closed orders
+        # -------------------------------------------------
+
+        if order["order_status"] in {
+            "COMPLETED",
+            "CANCELLED",
+            "REJECTED",
+        }:
+
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "لا يمكن إرسال عرض سعر "
+                    "لطلب مغلق أو مكتمل."
+                ),
+            )
+
+        # -------------------------------------------------
+        # Currency consistency
+        # -------------------------------------------------
+
+        currency = (
+            payload.currency
+            .upper()
+            .strip()
+        )
+
+        if order["deposit"] and Decimal(
+            str(order["deposit"])
+        ) > 0:
+
+            existing_currency = conn.execute(
+                """
+                SELECT currency
+                FROM payments
+                WHERE order_id=%s
+                ORDER BY created_at ASC
+                LIMIT 1
+                """,
+                (order_id,),
+            ).fetchone()
+
+            if (
+                existing_currency
+                and existing_currency["currency"]
+                and existing_currency["currency"]
+                != currency
+            ):
+
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "عملة عرض السعر يجب أن تطابق "
+                        "عملة الدفعات السابقة."
+                    ),
+                )
+
+        price = payload.price
+
+        deposit = Decimal(
+            str(order["deposit"] or 0)
+        )
+
+        remaining = price - deposit
+
+        if remaining < 0:
+
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "السعر الجديد أقل من إجمالي "
+                    "المبلغ المدفوع مسبقًا."
+                ),
+            )
+
+        if deposit == 0:
+            payment_status = "UNPAID"
+        elif remaining == 0:
+            payment_status = "PAID"
+        else:
+            payment_status = "PARTIALLY_PAID"
+
+        conn.execute(
+            """
+            UPDATE orders
+            SET
+                quotation_price=%s,
+                price=%s,
+                remaining_balance=%s,
+                quotation_currency=%s,
+                delivery_date=%s,
+                delivery_time=%s,
+                quotation_notes=%s,
+                payment_status=%s,
+                order_status='WAITING_CUSTOMER',
+                customer_decision='PENDING',
+                customer_decision_at=NULL
+            WHERE order_id=%s
+            """,
+            (
+                price,
+                price,
+                remaining,
+                currency,
+                payload.delivery_date,
+                payload.delivery_time,
+                payload.notes,
+                payment_status,
+                order_id,
+            ),
+        )
+
+        details = (
+            f"السعر: {price} {currency} | "
+            f"الموعد: {payload.delivery_date}"
+        )
+
+        add_audit_log_conn(
+            conn,
+            order_id,
+            "QUOTATION_SENT",
+            "Admin",
+            details,
+        )
+
+        customer_id = order["user_id"]
+
+    notification_ok = await notify_customer(
+        customer_id,
+        (
+            f"📋 <b>عرض سعر جديد لطلبك رقم "
+            f"{html.escape(order_id)}</b>\n\n"
+
+            f"💰 <b>السعر الكلي:</b> "
+            f"{html.escape(str(price))} "
+            f"{html.escape(currency)}\n"
+
+            f"📅 <b>موعد التسليم:</b> "
+            f"{html.escape(payload.delivery_date)} "
+            f"{html.escape(payload.delivery_time)}\n"
+
+            f"📝 <b>ملاحظات العرض:</b> "
+            f"{html.escape(payload.notes or 'لا يوجد')}\n\n"
+
+            "الرجاء فتح تطبيق النبع لقبول أو رفض العرض."
+        ),
+    )
+
+    if not notification_ok:
+
+        try:
+
+            with db() as conn:
+
+                add_audit_log_conn(
+                    conn,
+                    order_id,
+                    "QUOTATION_NOTIFICATION_FAILED",
+                    "System",
+                    "تعذر إرسال عرض السعر للزبون",
+                )
+
+        except Exception:
+
+            logger.exception(
+                "Could not write quotation notification audit"
+            )
+
+    return {
+        "ok": True,
+        "order_id": order_id,
+        "status": "WAITING_CUSTOMER",
+    }
+
+
+# =========================================================
+# Admin status update
+# =========================================================
+
+@app.post(
+    "/api/admin/orders/{order_id}/status"
+)
+async def update_order_status(
+    order_id: str,
+    payload: StatusUpdateIn,
+    request: Request,
+):
+
+    require_admin(request)
+
+    new_status = (
+        payload.status
+        .upper()
+        .strip()
+    )
+
+    if new_status not in VALID_STATUSES:
+
+        raise HTTPException(
+            status_code=400,
+            detail="حالة غير صالحة",
+        )
+
+    with db() as conn:
+
+        order = conn.execute(
+            """
+            SELECT *
+            FROM orders
+            WHERE order_id=%s
+            FOR UPDATE
+            """,
+            (order_id,),
+        ).fetchone()
+
+        if not order:
+
+            raise HTTPException(
+                status_code=404,
+                detail="الطلب غير موجود",
+            )
+
+        current_status = (
+            order["order_status"]
+        )
+
+        allowed = (
+            ALLOWED_STATUS_TRANSITIONS.get(
+                current_status,
+                [],
+            )
+        )
+
+        if (
+            new_status not in allowed
+            and new_status != current_status
+        ):
+
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"لا يمكن الانتقال من الحالة "
+                    f"'{current_status}' "
+                    f"إلى '{new_status}' مباشرة."
+                ),
+            )
+
+        # -------------------------------------------------
+        # Keep customer decision logically consistent
+        # -------------------------------------------------
+
+        customer_decision_sql = ""
+
+        if new_status == "ACCEPTED":
+
+            customer_decision_sql = (
+                ", customer_decision='ACCEPTED', "
+                "customer_decision_at=COALESCE("
+                "customer_decision_at, CURRENT_TIMESTAMP)"
+            )
+
+        elif new_status == "REJECTED":
+
+            customer_decision_sql = (
+                ", customer_decision='REJECTED', "
+                "customer_decision_at=COALESCE("
+                "customer_decision_at, CURRENT_TIMESTAMP)"
+            )
+
+        conn.execute(
+            f"""
+            UPDATE orders
+            SET
+                order_status=%s,
+                admin_note=CASE
+                    WHEN %s <> ''
+                    THEN %s
+                    ELSE admin_note
+                END
+                {customer_decision_sql}
+            WHERE order_id=%s
+            """,
+            (
+                new_status,
+                payload.admin_note,
+                payload.admin_note,
+                order_id,
+            ),
+        )
+
+        add_audit_log_conn(
+            conn,
+            order_id,
+            f"STATUS_CHANGED_TO_{new_status}",
+            "Admin",
+            payload.admin_note,
+        )
+
+        customer_id = order["user_id"]
+
+    await notify_customer(
+        customer_id,
+        (
+            f"🔄 <b>تحديث حالة الطلب "
+            f"{html.escape(order_id)}</b>\n\n"
+            f"الحالة الجديدة: "
+            f"<b>{html.escape(new_status)}</b>"
+        ),
+    )
+
+    return {
+        "ok": True,
+        "order_id": order_id,
+        "status": new_status,
+    }
+
+
+# =========================================================
+# Admin payment
+# =========================================================
+
+@app.post(
+    "/api/admin/orders/{order_id}/payments"
+)
+def record_payment(
+    order_id: str,
+    payload: PaymentIn,
+    request: Request,
+):
+
+    require_admin(request)
+
+    with db() as conn:
+
+        order = conn.execute(
+            """
+            SELECT *
+            FROM orders
+            WHERE order_id=%s
+            FOR UPDATE
+            """,
+            (order_id,),
+        ).fetchone()
+
+        if not order:
+
+            raise HTTPException(
+                status_code=404,
+                detail="الطلب غير موجود",
+            )
+
+        total_price = Decimal(
+            str(order["price"] or 0)
+        )
+
+        if total_price <= 0:
+
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "يرجى تحديد سعر الطلب أولاً "
+                    "قبل تسجيل الدفع"
+                ),
+            )
+
+        quotation_currency = (
+            order["quotation_currency"]
+            or "IQD"
+        ).upper()
+
+        payment_currency = (
+            payload.currency
+            .upper()
+            .strip()
+        )
+
+        # -------------------------------------------------
+        # Never mix currencies
+        # -------------------------------------------------
+
+        if payment_currency != quotation_currency:
+
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "عملة الدفعة يجب أن تطابق "
+                    "عملة الطلب: "
+                    f"{quotation_currency}"
+                ),
+            )
+
+        existing_payments = conn.execute(
+            """
+            SELECT
+                COALESCE(SUM(amount), 0) AS total
+            FROM payments
+            WHERE order_id=%s
+              AND currency=%s
+            """,
+            (
+                order_id,
+                quotation_currency,
+            ),
+        ).fetchone()["total"]
+
+        existing_payments = Decimal(
+            str(existing_payments or 0)
+        )
+
+        new_total_paid = (
+            existing_payments
+            + payload.amount
+        )
+
+        remaining = (
+            total_price
+            - new_total_paid
+        )
+
+        if remaining < 0:
+
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "مبلغ الدفعة يتجاوز "
+                    "المتبقي للطلب"
+                ),
+            )
+
+        if remaining == 0:
+
+            payment_status = "PAID"
+
+        elif new_total_paid > 0:
+
+            payment_status = "PARTIALLY_PAID"
+
+        else:
+
+            payment_status = "UNPAID"
+
+        conn.execute(
+            """
+            INSERT INTO payments(
+                order_id,
+                amount,
+                currency,
+                payment_method,
+                recorded_by
+            )
+            VALUES(
+                %s,
+                %s,
+                %s,
+                %s,
+                'Admin'
+            )
+            """,
+            (
+                order_id,
+                payload.amount,
+                payment_currency,
+                payload.payment_method,
+            ),
+        )
+
+        conn.execute(
+            """
+            UPDATE orders
+            SET
+                deposit=%s,
+                remaining_balance=%s,
+                payment_status=%s
+            WHERE order_id=%s
+            """,
+            (
+                new_total_paid,
+                remaining,
+                payment_status,
+                order_id,
+            ),
+        )
+
+        add_audit_log_conn(
+            conn,
+            order_id,
+            "PAYMENT_RECORDED",
+            "Admin",
+            (
+                f"مبلغ: {payload.amount} "
+                f"{payment_currency} | "
+                f"الحالة الجديدة: {payment_status}"
+            ),
+        )
+
+    return {
+        "ok": True,
+        "order_id": order_id,
+        "total_paid": str(
+            new_total_paid
+        ),
+        "remaining_balance": str(
+            remaining
+        ),
+        "payment_status": payment_status,
+    }
+
+
+# =========================================================
+# Admin note
+# =========================================================
+
+@app.post(
+    "/api/admin/orders/{order_id}/notes"
+)
+def update_admin_note(
+    order_id: str,
+    payload: AdminNoteIn,
+    request: Request,
+):
+
+    require_admin(request)
+
+    with db() as conn:
+
+        order = conn.execute(
+            """
+            SELECT order_id
+            FROM orders
+            WHERE order_id=%s
+            FOR UPDATE
+            """,
+            (order_id,),
+        ).fetchone()
+
+        if not order:
+
+            raise HTTPException(
+                status_code=404,
+                detail="الطلب غير موجود",
+            )
+
+        conn.execute(
+            """
+            UPDATE orders
+            SET admin_note=%s
+            WHERE order_id=%s
+            """,
+            (
+                payload.admin_note,
+                order_id,
+            ),
+        )
+
+        add_audit_log_conn(
+            conn,
+            order_id,
+            "ADMIN_NOTE_UPDATED",
+            "Admin",
+            payload.admin_note,
+        )
+
+    return {
+        "ok": True,
+        "order_id": order_id,
+    }
+
+
+# =========================================================
+# Admin dashboard
+# =========================================================
+
 @app.get("/api/admin/dashboard")
 def admin_dashboard(
     request: Request,
 ):
 
-    require_admin(
-        request
-    )
+    require_admin(request)
 
     with db() as conn:
 
@@ -3217,11 +3748,13 @@ def admin_dashboard(
             SELECT
                 COUNT(*) AS total_orders,
 
-                COUNT(*) FILTER (
+                COUNT(*)
+                FILTER (
                     WHERE created_at >= CURRENT_DATE
                 ) AS today_orders,
 
-                COUNT(*) FILTER (
+                COUNT(*)
+                FILTER (
                     WHERE created_at >=
                     date_trunc(
                         'month',
@@ -3255,16 +3788,9 @@ def admin_dashboard(
                     order_status,
                     'UNKNOWN'
                 ) AS status,
-
                 COUNT(*) AS count
-
             FROM orders
-
             GROUP BY order_status
-
-            ORDER BY
-                count DESC,
-                status ASC
             """
         ).fetchall()
 
@@ -3274,16 +3800,10 @@ def admin_dashboard(
                 service_type,
                 service_name,
                 COUNT(*) AS count
-
             FROM orders
-
             GROUP BY
                 service_type,
                 service_name
-
-            ORDER BY
-                count DESC,
-                service_type ASC
             """
         ).fetchall()
 
@@ -3294,57 +3814,26 @@ def admin_dashboard(
                     payment_status,
                     'UNKNOWN'
                 ) AS status,
-
                 COUNT(*) AS count
-
             FROM orders
-
             GROUP BY payment_status
-
-            ORDER BY
-                count DESC,
-                status ASC
             """
         ).fetchall()
 
         recent_rows = conn.execute(
             """
-            SELECT
-                order_id,
-                user_id,
-                username,
-                service_type,
-                service_name,
-                department,
-                title,
-                order_status,
-                payment_status,
-                price,
-                deposit,
-                remaining_balance,
-                created_at
-
+            SELECT *
             FROM orders
-
             ORDER BY created_at DESC
-
             LIMIT 20
             """
         ).fetchall()
 
         activity_rows = conn.execute(
             """
-            SELECT
-                id,
-                order_id,
-                action,
-                performed_by,
-                timestamp
-
+            SELECT *
             FROM audit_logs
-
             ORDER BY timestamp DESC
-
             LIMIT 50
             """
         ).fetchall()
@@ -3352,7 +3841,6 @@ def admin_dashboard(
     def money(value):
 
         try:
-
             return float(
                 value or 0
             )
@@ -3361,129 +3849,22 @@ def admin_dashboard(
             TypeError,
             ValueError,
         ):
-
             return 0.0
 
     status_counts = {
         str(row["status"]):
-            int(row["count"])
+        int(row["count"])
         for row in status_rows
     }
 
-    new_count = status_counts.get(
+    processing_excluded = {
         "NEW",
-        0,
-    )
-
-    completed_count = status_counts.get(
         "COMPLETED",
-        0,
-    )
-
-    cancelled_count = status_counts.get(
         "CANCELLED",
-        0,
-    )
-
-    processing_count = sum(
-        count
-        for status, count
-        in status_counts.items()
-        if status not in {
-            "NEW",
-            "COMPLETED",
-            "CANCELLED",
-        }
-    )
-
-    recent_orders = []
-
-    for row in recent_rows:
-
-        recent_orders.append(
-            {
-                "order_id":
-                    row["order_id"],
-
-                "user_id":
-                    row["user_id"],
-
-                "username":
-                    row["username"],
-
-                "service_type":
-                    row["service_type"],
-
-                "service_name":
-                    row["service_name"],
-
-                "department":
-                    row["department"],
-
-                "title":
-                    row["title"],
-
-                "order_status":
-                    row["order_status"],
-
-                "payment_status":
-                    row["payment_status"],
-
-                "price":
-                    money(
-                        row["price"]
-                    ),
-
-                "deposit":
-                    money(
-                        row["deposit"]
-                    ),
-
-                "remaining_balance":
-                    money(
-                        row[
-                            "remaining_balance"
-                        ]
-                    ),
-
-                "created_at":
-                    (
-                        row["created_at"].isoformat()
-                        if row["created_at"]
-                        else None
-                    ),
-            }
-        )
-
-    activities = []
-
-    for row in activity_rows:
-
-        activities.append(
-            {
-                "id":
-                    int(row["id"]),
-
-                "order_id":
-                    row["order_id"],
-
-                "action":
-                    row["action"],
-
-                "performed_by":
-                    row["performed_by"],
-
-                "timestamp":
-                    (
-                        row["timestamp"].isoformat()
-                        if row["timestamp"]
-                        else None
-                    ),
-            }
-        )
+        "REJECTED",
+    }
 
     return {
-
         "ok": True,
 
         "generated_at":
@@ -3495,59 +3876,69 @@ def admin_dashboard(
 
             "total_orders":
                 int(
-                    totals[
-                        "total_orders"
-                    ]
+                    totals["total_orders"]
                     or 0
                 ),
 
             "today_orders":
                 int(
-                    totals[
-                        "today_orders"
-                    ]
+                    totals["today_orders"]
                     or 0
                 ),
 
             "month_orders":
                 int(
-                    totals[
-                        "month_orders"
-                    ]
+                    totals["month_orders"]
                     or 0
                 ),
 
             "new_orders":
-                new_count,
+                status_counts.get(
+                    "NEW",
+                    0,
+                ),
 
             "processing_orders":
-                processing_count,
+                sum(
+                    value
+                    for key, value
+                    in status_counts.items()
+                    if key
+                    not in processing_excluded
+                ),
 
             "completed_orders":
-                completed_count,
+                status_counts.get(
+                    "COMPLETED",
+                    0,
+                ),
 
             "cancelled_orders":
-                cancelled_count,
+                (
+                    status_counts.get(
+                        "CANCELLED",
+                        0,
+                    )
+                    +
+                    status_counts.get(
+                        "REJECTED",
+                        0,
+                    )
+                ),
 
             "total_price":
                 money(
-                    totals[
-                        "total_price"
-                    ]
+                    totals["total_price"]
                 ),
 
             "total_deposit":
                 money(
-                    totals[
-                        "total_deposit"
-                    ]
+                    totals["total_deposit"]
                 ),
 
             "total_remaining":
                 money(
-                    totals[
-                        "total_remaining"
-                    ]
+                    totals["total_remaining"]
                 ),
         },
 
@@ -3555,7 +3946,6 @@ def admin_dashboard(
             status_counts,
 
         "service_counts": [
-
             {
                 "service_type":
                     row["service_type"],
@@ -3571,75 +3961,444 @@ def admin_dashboard(
         ],
 
         "payment_counts": {
-
             str(row["status"]):
-                int(row["count"])
-
+            int(row["count"])
             for row in payment_rows
         },
 
         "recent_orders":
-            recent_orders,
+            recent_rows,
 
         "activities":
-            activities,
+            activity_rows,
     }
 
 
 # =========================================================
-# Order status
+# Excel report
 # =========================================================
 
-@app.get(
-    "/api/orders/{order_id}"
-)
-def get_order_status(
-    order_id: str,
-    request: Request,
-):
+def build_excel_report() -> bytes:
 
-    user = init_user_from_header(
-        request
+    wb = openpyxl.Workbook()
+
+    header_fill = PatternFill(
+        start_color="087FC1",
+        end_color="087FC1",
+        fill_type="solid",
     )
+
+    header_font = Font(
+        name="Calibri",
+        size=11,
+        bold=True,
+        color="FFFFFF",
+    )
+
+    thin_border = Border(
+        left=Side(
+            style="thin",
+            color="CCCCCC",
+        ),
+        right=Side(
+            style="thin",
+            color="CCCCCC",
+        ),
+        top=Side(
+            style="thin",
+            color="CCCCCC",
+        ),
+        bottom=Side(
+            style="thin",
+            color="CCCCCC",
+        ),
+    )
+
+    def style_table(ws):
+
+        ws.views.sheetView[0].rightToLeft = True
+
+        for col in range(
+            1,
+            ws.max_column + 1,
+        ):
+
+            cell = ws.cell(
+                row=1,
+                column=col,
+            )
+
+            cell.fill = header_fill
+
+            cell.font = header_font
+
+            cell.alignment = Alignment(
+                horizontal="center",
+                vertical="center",
+            )
+
+            ws.column_dimensions[
+                get_column_letter(col)
+            ].width = 20
+
+        for row in range(
+            2,
+            ws.max_row + 1,
+        ):
+
+            for col in range(
+                1,
+                ws.max_column + 1,
+            ):
+
+                cell = ws.cell(
+                    row=row,
+                    column=col,
+                )
+
+                cell.border = thin_border
+
+                cell.alignment = Alignment(
+                    horizontal="center",
+                    vertical="center",
+                    wrap_text=True,
+                )
 
     with db() as conn:
 
-        row = conn.execute(
+        orders = conn.execute(
             """
-            SELECT
-                order_id,
-                service_name,
-                title,
-                order_status,
-                payment_status,
-                price,
-                deposit,
-                remaining_balance,
-                created_at
-
+            SELECT *
             FROM orders
+            ORDER BY created_at DESC
+            """
+        ).fetchall()
 
-            WHERE order_id=%s
-              AND user_id=%s
-            """,
-            (
-                order_id,
-                user["id"],
-            ),
-        ).fetchone()
+        payments = conn.execute(
+            """
+            SELECT *
+            FROM payments
+            ORDER BY created_at DESC
+            """
+        ).fetchall()
 
-    if not row:
+        activities = conn.execute(
+            """
+            SELECT *
+            FROM audit_logs
+            ORDER BY timestamp DESC
+            """
+        ).fetchall()
 
-        raise HTTPException(
-            status_code=404,
-            detail="الطلب غير موجود",
+    # -----------------------------------------------------
+    # Orders
+    # -----------------------------------------------------
+
+    ws1 = wb.active
+
+    ws1.title = "Orders"
+
+    ws1.append(
+        [
+            "رقم الطلب",
+            "المستخدم ID",
+            "اسم المستخدم",
+            "الخدمة",
+            "التخصص",
+            "العنوان",
+            "الحالة",
+            "السعر",
+            "المدفوع",
+            "المتبقي",
+            "قرار الزبون",
+            "حالة الإرسال للقناة",
+            "Channel Message ID",
+            "موعد التسليم",
+            "تاريخ الإنشاء",
+        ]
+    )
+
+    for order in orders:
+
+        ws1.append(
+            [
+                order["order_id"],
+                order["user_id"],
+                order["username"],
+                order["service_name"],
+                order["department"],
+                order["title"],
+                order["order_status"],
+                float(
+                    order["price"] or 0
+                ),
+                float(
+                    order["deposit"] or 0
+                ),
+                float(
+                    order["remaining_balance"] or 0
+                ),
+                order["customer_decision"],
+                order[
+                    "delivery_channel_status"
+                ],
+                order[
+                    "channel_message_id"
+                ],
+                (
+                    f"{order['delivery_date']} "
+                    f"{order['delivery_time']}"
+                ),
+                (
+                    order["created_at"]
+                    .strftime(
+                        "%Y-%m-%d %H:%M"
+                    )
+                    if order["created_at"]
+                    else ""
+                ),
+            ]
         )
 
-    return row
+    style_table(ws1)
+
+    # -----------------------------------------------------
+    # Payments
+    # -----------------------------------------------------
+
+    ws2 = wb.create_sheet(
+        "Payments"
+    )
+
+    ws2.append(
+        [
+            "رقم المعاملة",
+            "رقم الطلب",
+            "المبلغ",
+            "العملة",
+            "طريقة الدفع",
+            "المسجل",
+            "التاريخ",
+        ]
+    )
+
+    for payment in payments:
+
+        ws2.append(
+            [
+                payment["id"],
+                payment["order_id"],
+                float(
+                    payment["amount"] or 0
+                ),
+                payment["currency"],
+                payment["payment_method"],
+                payment["recorded_by"],
+                (
+                    payment["created_at"]
+                    .strftime(
+                        "%Y-%m-%d %H:%M"
+                    )
+                    if payment["created_at"]
+                    else ""
+                ),
+            ]
+        )
+
+    style_table(ws2)
+
+    # -----------------------------------------------------
+    # Activity
+    # -----------------------------------------------------
+
+    ws3 = wb.create_sheet(
+        "Activity"
+    )
+
+    ws3.append(
+        [
+            "رقم النشاط",
+            "رقم الطلب",
+            "الحدث",
+            "بواسطة",
+            "التفاصيل",
+            "التاريخ",
+        ]
+    )
+
+    for activity in activities:
+
+        ws3.append(
+            [
+                activity["id"],
+                activity["order_id"],
+                activity["action"],
+                activity["performed_by"],
+                activity["details"],
+                (
+                    activity["timestamp"]
+                    .strftime(
+                        "%Y-%m-%d %H:%M"
+                    )
+                    if activity["timestamp"]
+                    else ""
+                ),
+            ]
+        )
+
+    style_table(ws3)
+
+    # -----------------------------------------------------
+    # Summary
+    # -----------------------------------------------------
+
+    ws4 = wb.create_sheet(
+        "Summary"
+    )
+
+    ws4.append(
+        [
+            "المؤشر",
+            "القيمة",
+        ]
+    )
+
+    total_price = sum(
+        (
+            Decimal(
+                str(order["price"] or 0)
+            )
+            for order in orders
+        ),
+        Decimal("0"),
+    )
+
+    total_paid = sum(
+        (
+            Decimal(
+                str(order["deposit"] or 0)
+            )
+            for order in orders
+        ),
+        Decimal("0"),
+    )
+
+    total_remaining = sum(
+        (
+            Decimal(
+                str(
+                    order[
+                        "remaining_balance"
+                    ]
+                    or 0
+                )
+            )
+            for order in orders
+        ),
+        Decimal("0"),
+    )
+
+    ws4.append(
+        [
+            "إجمالي الطلبات",
+            len(orders),
+        ]
+    )
+
+    ws4.append(
+        [
+            "إجمالي المبالغ",
+            float(total_price),
+        ]
+    )
+
+    ws4.append(
+        [
+            "إجمالي المدفوعات",
+            float(total_paid),
+        ]
+    )
+
+    ws4.append(
+        [
+            "إجمالي المتبقي",
+            float(total_remaining),
+        ]
+    )
+
+    style_table(ws4)
+
+    output = io.BytesIO()
+
+    wb.save(output)
+
+    return output.getvalue()
 
 
 # =========================================================
-# Run locally
+# Excel export
+# =========================================================
+
+@app.get(
+    "/api/admin/export/excel"
+)
+async def export_excel_report(
+    request: Request,
+    send_telegram: bool = Query(False),
+):
+
+    require_admin(request)
+
+    excel_bytes = (
+        await asyncio.to_thread(
+            build_excel_report
+        )
+    )
+
+    if send_telegram:
+
+        try:
+
+            await telegram_app.bot.send_document(
+                chat_id=ADMIN_TELEGRAM_ID,
+                document=excel_bytes,
+                filename="NABA_Orders.xlsx",
+                caption=(
+                    "📊 تقرير طلبات وسجلات "
+                    "النبع للخدمات الجامعية الشامل."
+                ),
+            )
+
+        except TelegramError as exc:
+
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "تعذر إرسال التقرير عبر "
+                    f"التليجرام: {exc}"
+                ),
+            )
+
+    # IMPORTANT:
+    # FileResponse requires an actual file path.
+    # The report is already in memory, therefore
+    # StreamingResponse is the correct response type.
+
+    return StreamingResponse(
+        io.BytesIO(excel_bytes),
+        media_type=(
+            "application/vnd.openxmlformats-"
+            "officedocument.spreadsheetml.sheet"
+        ),
+        headers={
+            "Content-Disposition":
+                'attachment; filename="NABA_Orders.xlsx"'
+        },
+    )
+
+
+# =========================================================
+# Local execution
 # =========================================================
 
 if __name__ == "__main__":
