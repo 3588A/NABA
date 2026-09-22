@@ -2762,6 +2762,19 @@
     }
 
 
+    const contentType =
+      response.headers.get(
+        "content-type"
+      ) || "";
+
+    if (!contentType.includes(
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )) {
+      throw new Error(
+        "الخادم لم يُرجع ملف Excel صالحًا."
+      );
+    }
+
     return response;
 
   }
