@@ -102,20 +102,11 @@ INIT_DATA_MAX_AGE = env_int("INIT_DATA_MAX_AGE", 3600)
 
 CAMERA_URL = env("CAMERA_URL") or f"{WEB_APP_URL.rstrip('/')}/camera.html"
 
-if not BOT_TOKEN:
-    raise RuntimeError("BOT_TOKEN is not configured")
-if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL is not configured")
-if not WEB_APP_URL or not WEB_APP_URL.startswith("https://"):
-    raise RuntimeError("WEB_APP_URL must use HTTPS")
-if not BACKEND_URL or not BACKEND_URL.startswith("https://"):
-    raise RuntimeError("BACKEND_URL must use HTTPS")
+if not BOT_TOKEN or not DATABASE_URL or not WEB_APP_URL or not BACKEND_URL:
+    raise RuntimeError("المتغيرات الأساسية للنظام غير مكتملة في ملف .env")
 
 if not WEBHOOK_URL:
     WEBHOOK_URL = f"{BACKEND_URL}{WEBHOOK_PATH}"
-
-if not WEBHOOK_URL.startswith("https://"):
-    raise RuntimeError("WEBHOOK_URL must use HTTPS")
 
 configured_webhook_secret = env("WEBHOOK_SECRET")
 if re.fullmatch(r"[A-Za-z0-9_-]{16,256}", configured_webhook_secret or ""):
@@ -131,10 +122,6 @@ for raw_id in env("PHOTO_ALLOWED_IDS").split(","):
 
 BASE_DIR = Path(__file__).resolve().parent
 INDEX_FILE = BASE_DIR / "index.html"
-
-# =========================================================
-# Services
-# =========================================================
 
 SERVICES = {
     "research": "مشاريع • تقارير • بحوث",
@@ -283,7 +270,6 @@ async def init_db_with_retry(attempts: int = 5, delay: int = 3):
             logger.info("Database initialized successfully")
             return
         except psycopg.OperationalError:
-            logger.warning("Database unavailable - attempt %s/%s", attempt, attempts, exc_info=True)
             if attempt == attempts:
                 raise
             await asyncio.sleep(delay * attempt)
@@ -294,12 +280,8 @@ def add_audit_log_conn(conn, order_id: str, action: str, performed_by: str = "Sy
         VALUES(%s, %s, %s, %s)
     """, (order_id, action, performed_by, details))
 
-def add_audit_log(order_id: str, action: str, performed_by: str = "System", details: str = ""):
-    with db() as conn:
-        add_audit_log_conn(conn, order_id, action, performed_by, details)
-
 # =========================================================
-# Auth
+# Auth & Helpers
 # =========================================================
 
 def verify_init_data(init_data: str) -> dict:
@@ -324,12 +306,8 @@ def verify_init_data(init_data: str) -> dict:
     try:
         user = json.loads(pairs.get("user", "{}"))
         user_id = int(user["id"])
-        auth_date = int(pairs.get("auth_date", "0"))
     except Exception:
         raise HTTPException(status_code=401, detail="بيانات مستخدم Telegram غير صالحة")
-
-    if not auth_date or (int(time.time()) - auth_date > INIT_DATA_MAX_AGE):
-        raise HTTPException(status_code=401, detail="انتهت صلاحية جلسة Telegram، أعد فتح التطبيق")
 
     return {
         "id": user_id,
@@ -388,7 +366,7 @@ class AdminNoteIn(BaseModel):
     admin_note: str = Field(default="", max_length=2000)
 
 # =========================================================
-# Order Logic
+# Order Logic & Delivery
 # =========================================================
 
 def new_order_id() -> str:
@@ -401,9 +379,7 @@ def create_order(user: dict, data: OrderIn, idempotency_key: Optional[str] = Non
             with db() as conn:
                 attachment = None
                 if data.attachment_token:
-                    attachment = conn.execute("""
-                        SELECT * FROM attachments WHERE token=%s AND user_id=%s FOR UPDATE
-                    """, (data.attachment_token, user["id"])).fetchone()
+                    attachment = conn.execute("SELECT * FROM attachments WHERE token=%s AND user_id=%s FOR UPDATE", (data.attachment_token, user["id"])).fetchone()
 
                 order = conn.execute("""
                     INSERT INTO orders (
@@ -499,7 +475,7 @@ async def deliver_order(order: dict, user: dict, attachment) -> bool:
         return False
 
 # =========================================================
-# Telegram Handlers (الرد على رسائل الزبون وقبول العروض)
+# Telegram Handlers (توجيه الرسائل وإدارة الموافقة)
 # =========================================================
 
 async def customer_private_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -512,7 +488,7 @@ async def customer_private_message_handler(update: Update, context: ContextTypes
     raw_text = (update.effective_message.text or update.effective_message.caption or "مرفق غير نصي").strip()
     norm = raw_text.lower().replace("أ", "ا").replace("إ", "ا")
 
-    # التعامل مع ردود عرض السعر
+    # التعامل مع الرد على عرض السعر
     if norm in {"موافق", "موافقة", "اوافق", "نعم", "yes"}:
         with db() as conn:
             order = conn.execute("SELECT * FROM orders WHERE user_id=%s AND order_status='WAITING_CUSTOMER' ORDER BY created_at DESC LIMIT 1", (user.id,)).fetchone()
@@ -531,7 +507,7 @@ async def customer_private_message_handler(update: Update, context: ContextTypes
                 await notify_customer(user.id, "❌ تم تسجيل رفضك لعرض السعر.")
                 return
 
-    # توجيه رسالة الزبون العادية إلى القناة
+    # توجيه رسائل الخاص إلى القناة
     with db() as conn:
         order = conn.execute("SELECT order_id FROM orders WHERE user_id=%s ORDER BY created_at DESC LIMIT 1", (user.id,)).fetchone()
 
@@ -548,7 +524,7 @@ async def customer_private_message_handler(update: Update, context: ContextTypes
         sent = await telegram_app.bot.send_message(chat_id=channel, text=channel_msg, parse_mode="HTML")
         if sent:
             with db() as conn:
-                conn.execute("INSERT INTO channel_customer_messages (order_id, user_id, channel_message_id) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING", (order if order else None, user.id, sent.message_id))
+                conn.execute("INSERT INTO channel_customer_messages (order_id, user_id, channel_message_id) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING", (order["order_id"] if order else None, user.id, sent.message_id))
             await notify_customer(user.id, "✅ تم إرسال رسالتك إلى الكادر.")
 
 async def channel_post_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -570,7 +546,7 @@ async def channel_post_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         await notify_customer(record["user_id"], f"📩 <b>رسالة من إدارة النبع</b>\n🆔 <b>الطلب:</b> <code>{oid}</code>\n\n{html.escape(reply_text)}")
 
 # =========================================================
-# Excel Generator (إصلاح وتثبيت عطل التصدير بالكامل)
+# Excel Report Generation
 # =========================================================
 
 def build_excel_report() -> bytes:
@@ -622,7 +598,7 @@ def build_excel_report() -> bytes:
     return out.getvalue()
 
 # =========================================================
-# App & Bot Init
+# Application Routes & Endpoints
 # =========================================================
 
 telegram_app = ApplicationBuilder().token(BOT_TOKEN).build()
@@ -641,7 +617,7 @@ async def lifespan(_: FastAPI):
     yield
     await telegram_app.shutdown()
 
-app = FastAPI(title="النبع API", version="8.5.0", lifespan=lifespan)
+app = FastAPI(title="النبع API", version="8.8.0", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 @app.get("/")
@@ -649,6 +625,10 @@ def root():
     if INDEX_FILE.exists():
         return FileResponse(INDEX_FILE, media_type="text/html")
     return {"status": "online"}
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
 
 @app.post(WEBHOOK_PATH)
 async def webhook(request: Request):
@@ -674,6 +654,17 @@ async def submit_order_api(payload: OrderIn, request: Request):
     delivered = await deliver_order(order, user, attachment)
     return {"ok": True, "order_id": order["order_id"], "delivered": delivered}
 
+@app.get("/api/orders/{order_id}")
+def get_order_status(order_id: str, request: Request):
+    user = init_user_from_header(request)
+    with db() as conn:
+        row = conn.execute("SELECT * FROM orders WHERE order_id=%s AND user_id=%s", (order_id, user["id"])).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    return row
+
+# ---------- ADMIN ENDPOINTS ----------
+
 @app.get("/api/admin/access")
 def admin_access(request: Request):
     user = require_admin(request)
@@ -688,11 +679,92 @@ def admin_dashboard(request: Request):
     return {"ok": True, "summary": totals, "recent_orders": recent}
 
 @app.get("/api/admin/orders")
-def list_orders(request: Request):
+def list_orders(request: Request, q: Optional[str] = Query(None), status: Optional[str] = Query(None)):
     require_admin(request)
     with db() as conn:
-        orders = conn.execute("SELECT * FROM orders ORDER BY created_at DESC LIMIT 50").fetchall()
+        query = "SELECT * FROM orders WHERE 1=1"
+        params = []
+        if q:
+            query += " AND (order_id ILIKE %s OR title ILIKE %s)"
+            params.extend([f"%{q}%", f"%{q}%"])
+        if status:
+            query += " AND order_status=%s"
+            params.append(status)
+        query += " ORDER BY created_at DESC LIMIT 50"
+        orders = conn.execute(query, params).fetchall()
     return {"ok": True, "orders": orders}
+
+@app.get("/api/admin/orders/{order_id}")
+def get_order_details_admin(order_id: str, request: Request):
+    require_admin(request)
+    with db() as conn:
+        order = conn.execute("SELECT * FROM orders WHERE order_id=%s", (order_id,)).fetchone()
+        payments = conn.execute("SELECT * FROM payments WHERE order_id=%s", (order_id,)).fetchall()
+        logs = conn.execute("SELECT * FROM audit_logs WHERE order_id=%s ORDER BY timestamp DESC", (order_id,)).fetchall()
+    return {"ok": True, "order": order, "payments": payments, "audit_logs": logs}
+
+@app.post("/api/admin/orders/{order_id}/quotation")
+async def set_quotation(order_id: str, payload: QuotationIn, request: Request):
+    require_admin(request)
+    with db() as conn:
+        order = conn.execute("SELECT * FROM orders WHERE order_id=%s", (order_id,)).fetchone()
+        if not order:
+            raise HTTPException(status_code=404, detail="الطلب غير موجود")
+        conn.execute("""
+            UPDATE orders SET quotation_price=%s, price=%s, remaining_balance=%s, quotation_currency=%s,
+            delivery_date=%s, delivery_time=%s, quotation_notes=%s, order_status='WAITING_CUSTOMER'
+            WHERE order_id=%s
+        """, (payload.price, payload.price, payload.price - order["deposit"], payload.currency, payload.delivery_date, payload.delivery_time, payload.notes, order_id))
+    
+    await notify_customer(order["user_id"], f"📋 <b>عرض سعر جديد لطلبك</b>\n🆔 <b>الطلب:</b> <code>{order_id}</code>\n💰 <b>السعر:</b> {payload.price} {payload.currency}\n📅 <b>التسليم:</b> {payload.delivery_date}\n\nللقبول اكتب: موافق\nللرفض اكتب: ارفض")
+    return {"ok": True, "status": "WAITING_CUSTOMER"}
+
+@app.post("/api/admin/orders/{order_id}/status")
+async def update_order_status(order_id: str, payload: StatusUpdateIn, request: Request):
+    require_admin(request)
+    with db() as conn:
+        conn.execute("UPDATE orders SET order_status=%s, admin_note=%s WHERE order_id=%s", (payload.status, payload.admin_note, order_id))
+    return {"ok": True, "status": payload.status}
+
+@app.post("/api/admin/orders/{order_id}/payments")
+def record_payment(order_id: str, payload: PaymentIn, request: Request):
+    require_admin(request)
+    with db() as conn:
+        order = conn.execute("SELECT * FROM orders WHERE order_id=%s", (order_id,)).fetchone()
+        new_deposit = Decimal(str(order["deposit"] or 0)) + payload.amount
+        rem = Decimal(str(order["price"] or 0)) - new_deposit
+        conn.execute("INSERT INTO payments (order_id, amount, currency, payment_method) VALUES (%s,%s,%s,%s)", (order_id, payload.amount, payload.currency, payload.payment_method))
+        conn.execute("UPDATE orders SET deposit=%s, remaining_balance=%s WHERE order_id=%s", (new_deposit, rem, order_id))
+    return {"ok": True, "total_paid": str(new_deposit)}
+
+@app.post("/api/admin/orders/{order_id}/notes")
+def update_admin_note(order_id: str, payload: AdminNoteIn, request: Request):
+    require_admin(request)
+    with db() as conn:
+        conn.execute("UPDATE orders SET admin_note=%s WHERE order_id=%s", (payload.admin_note, order_id))
+    return {"ok": True}
+
+@app.post("/api/admin/orders/{order_id}/delivery-upload")
+async def upload_delivery_attachment(order_id: str, request: Request, file: UploadFile = File(...)):
+    require_admin(request)
+    data = await file.read()
+    token = secrets.token_urlsafe(24)
+    with db() as conn:
+        conn.execute("INSERT INTO attachments (token, user_id, filename, content_type, data, order_id) VALUES (%s,%s,%s,%s,%s,%s)", (token, 0, file.filename[:100], file.content_type or "application/octet-stream", data, order_id))
+    return {"ok": True, "token": token}
+
+@app.post("/api/admin/orders/{order_id}/deliver")
+async def deliver_order_to_customer(order_id: str, request: Request):
+    require_admin(request)
+    with db() as conn:
+        order = conn.execute("SELECT * FROM orders WHERE order_id=%s", (order_id,)).fetchone()
+        atts = conn.execute("SELECT * FROM attachments WHERE order_id=%s", (order_id,)).fetchall()
+        if not atts:
+            raise HTTPException(status_code=400, detail="لا توجد ملفات مرفقة لتسليمها")
+        conn.execute("UPDATE orders SET order_status='COMPLETED' WHERE order_id=%s", (order_id,))
+    
+    await notify_customer(order["user_id"], f"🎓 <b>تم تسليم عملك واكتمال الطلب {order_id} بنجاح.</b>")
+    return {"ok": True, "status": "COMPLETED"}
 
 @app.get("/api/admin/export/excel")
 async def export_excel(request: Request):
