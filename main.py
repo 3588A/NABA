@@ -107,11 +107,8 @@ DATABASE_URL = env("DATABASE_URL")
 # ADMIN SECURITY
 # =========================================================
 
-# هذا هو Telegram ID الوحيد المسموح له بلوحة التحكم.
-# لا تعتمد حماية لوحة التحكم على الواجهة الأمامية.
 ADMIN_TELEGRAM_ID = 6931187332
 
-# الإبقاء على المتغير القديم للتوافق مع بقية النظام.
 ADMIN_USER_ID = ADMIN_TELEGRAM_ID
 
 
@@ -240,12 +237,8 @@ SERVICES = {
     "autocad": "رسم وتصميم AutoCAD",
     "minitab": "تحليل البيانات Minitab",
     "formatting": "تنسيق PowerPoint / Word / PDF",
-
-    # الخدمات المهنية
     "cv": "سيرة ذاتية CV احترافية",
     "cv_ats": "سيرة ذاتية CV بنظام ATS",
-
-    # التصميم والهوية البصرية
     "logo": "تصميم Logo",
     "identity": "Logo + هوية بصرية",
 }
@@ -349,9 +342,6 @@ def init_db():
         )
         """,
 
-        # =================================================
-        # الإضافة الوحيدة الجديدة إلى جدول الطلبات
-        # =================================================
         """
         ALTER TABLE orders
         ADD COLUMN IF NOT EXISTS
@@ -382,6 +372,33 @@ def init_db():
         )
         """,
 
+        # =================================================
+        # ربط رسائل القناة بالزبائن
+        # =================================================
+        """
+        CREATE TABLE IF NOT EXISTS channel_message_links (
+            id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+
+            channel_chat_id BIGINT NOT NULL,
+
+            channel_message_id BIGINT NOT NULL,
+
+            user_id BIGINT NOT NULL,
+
+            order_id TEXT,
+
+            message_type TEXT NOT NULL DEFAULT 'customer',
+
+            created_at TIMESTAMPTZ NOT NULL
+                DEFAULT CURRENT_TIMESTAMP,
+
+            UNIQUE(
+                channel_chat_id,
+                channel_message_id
+            )
+        )
+        """,
+
         """
         CREATE INDEX IF NOT EXISTS orders_user_id_idx
         ON orders(user_id)
@@ -400,6 +417,21 @@ def init_db():
         """
         CREATE INDEX IF NOT EXISTS audit_logs_timestamp_idx
         ON audit_logs(timestamp)
+        """,
+
+        """
+        CREATE INDEX IF NOT EXISTS
+        channel_message_links_user_id_idx
+        ON channel_message_links(user_id)
+        """,
+
+        """
+        CREATE INDEX IF NOT EXISTS
+        channel_message_links_lookup_idx
+        ON channel_message_links(
+            channel_chat_id,
+            channel_message_id
+        )
         """,
     ]
 
@@ -449,6 +481,93 @@ async def init_db_with_retry(
 
 
 # =========================================================
+# Channel message link helpers
+# =========================================================
+
+def save_channel_message_link(
+    channel_chat_id: int,
+    channel_message_id: int,
+    user_id: int,
+    order_id: str | None = None,
+    message_type: str = "customer",
+):
+    """
+    حفظ العلاقة بين رسالة القناة والزبون.
+
+    هذه العلاقة هي التي تسمح للبوت بمعرفة:
+    "هذه الرسالة في القناة تخص أي زبون؟"
+    """
+
+    with db() as conn:
+
+        conn.execute(
+            """
+            INSERT INTO channel_message_links (
+                channel_chat_id,
+                channel_message_id,
+                user_id,
+                order_id,
+                message_type
+            )
+            VALUES (%s,%s,%s,%s,%s)
+
+            ON CONFLICT (
+                channel_chat_id,
+                channel_message_id
+            )
+            DO UPDATE SET
+                user_id = EXCLUDED.user_id,
+                order_id = EXCLUDED.order_id,
+                message_type = EXCLUDED.message_type
+            """,
+            (
+                channel_chat_id,
+                channel_message_id,
+                user_id,
+                order_id,
+                message_type,
+            ),
+        )
+
+
+def get_channel_message_link(
+    channel_chat_id: int,
+    channel_message_id: int,
+):
+    """
+    استرجاع الزبون المرتبط برسالة القناة.
+    """
+
+    with db() as conn:
+
+        row = conn.execute(
+            """
+            SELECT
+                id,
+                channel_chat_id,
+                channel_message_id,
+                user_id,
+                order_id,
+                message_type,
+                created_at
+
+            FROM channel_message_links
+
+            WHERE channel_chat_id=%s
+              AND channel_message_id=%s
+
+            LIMIT 1
+            """,
+            (
+                channel_chat_id,
+                channel_message_id,
+            ),
+        ).fetchone()
+
+    return row
+
+
+# =========================================================
 # Audit log helper
 # =========================================================
 
@@ -457,10 +576,6 @@ def add_audit_log(
     action: str,
     performed_by: str = "System",
 ):
-    """
-    تسجيل نشاط حقيقي للطلب داخل audit_logs.
-    لا ينشئ جدولًا جديدًا.
-    """
 
     with db() as conn:
 
@@ -1141,10 +1256,6 @@ def build_order_message(
             f"{e(order['autocad_type'])}\n"
         )
 
-    # =====================================================
-    # تفاصيل الخدمات الجديدة
-    # =====================================================
-
     service_details = (
         order.get("service_details")
         or {}
@@ -1205,6 +1316,10 @@ def build_order_message(
     return text
 
 
+# =========================================================
+# Send order to Telegram
+# =========================================================
+
 async def send_to_chat(
     chat_id,
     text: str,
@@ -1212,22 +1327,38 @@ async def send_to_chat(
     attachment,
 ):
 
-    # =====================================================
-    # 1. إرسال الطلب
-    # =====================================================
-
-    await telegram_app.bot.send_message(
+    sent_message = await telegram_app.bot.send_message(
         chat_id=chat_id,
         text=text,
         parse_mode="HTML",
     )
 
-    # =====================================================
-    # 2. لا يوجد مرفق
-    # =====================================================
+    # حفظ رسالة الطلب الأساسية في القناة
+    if (
+        chat_id == parse_channel_id()
+        and attachment is not None
+    ):
+        try:
+
+            await asyncio.to_thread(
+                save_channel_message_link,
+                int(chat_id),
+                int(sent_message.message_id),
+                int(attachment["user_id"]),
+                order_id,
+                "order",
+            )
+
+        except Exception:
+
+            logger.exception(
+                "Could not save channel link "
+                "for order %s",
+                order_id,
+            )
 
     if not attachment:
-        return
+        return sent_message
 
     data = bytes(
         attachment["data"]
@@ -1246,23 +1377,34 @@ async def send_to_chat(
         or ""
     )
 
-    # =====================================================
-    # 3. الصور
-    # =====================================================
-
     if content_type.startswith(
         "image/"
     ):
 
         try:
 
-            await telegram_app.bot.send_photo(
-                chat_id=chat_id,
-                photo=data,
-                caption=caption,
+            attachment_message = (
+                await telegram_app.bot.send_photo(
+                    chat_id=chat_id,
+                    photo=data,
+                    caption=caption,
+                )
             )
 
-            return
+            if chat_id == parse_channel_id():
+
+                await asyncio.to_thread(
+                    save_channel_message_link,
+                    int(chat_id),
+                    int(
+                        attachment_message.message_id
+                    ),
+                    int(attachment["user_id"]),
+                    order_id,
+                    "order_attachment",
+                )
+
+            return sent_message
 
         except TelegramError:
 
@@ -1272,16 +1414,39 @@ async def send_to_chat(
                 exc_info=True,
             )
 
-    # =====================================================
-    # 4. باقي الملفات
-    # =====================================================
-
-    await telegram_app.bot.send_document(
-        chat_id=chat_id,
-        document=data,
-        filename=filename,
-        caption=caption,
+    attachment_message = (
+        await telegram_app.bot.send_document(
+            chat_id=chat_id,
+            document=data,
+            filename=filename,
+            caption=caption,
+        )
     )
+
+    if chat_id == parse_channel_id():
+
+        try:
+
+            await asyncio.to_thread(
+                save_channel_message_link,
+                int(chat_id),
+                int(
+                    attachment_message.message_id
+                ),
+                int(attachment["user_id"]),
+                order_id,
+                "order_attachment",
+            )
+
+        except Exception:
+
+            logger.exception(
+                "Could not save attachment "
+                "channel link for order %s",
+                order_id,
+            )
+
+    return sent_message
 
 
 # =========================================================
@@ -1294,22 +1459,12 @@ async def deliver_order(
     attachment,
 ) -> bool:
 
-    """
-    إرسال الطلب الكامل والمرفق إلى قناة Telegram فقط.
-
-    لا يتم إرسال نسخة كاملة إلى الأدمن الخاص.
-    """
-
     message = build_order_message(
         order,
         user,
     )
 
     channel = parse_channel_id()
-
-    # =====================================================
-    # يجب أن تكون القناة مضبوطة
-    # =====================================================
 
     if not channel:
 
@@ -1319,10 +1474,6 @@ async def deliver_order(
 
         return False
 
-    # =====================================================
-    # إرسال الطلب إلى القناة فقط
-    # =====================================================
-
     try:
 
         await send_to_chat(
@@ -1331,6 +1482,47 @@ async def deliver_order(
             order["order_id"],
             attachment,
         )
+
+        # إذا كان هناك مرفق ولم تكن user_id موجودة فيه
+        # نربط الرسالة الأساسية هنا أيضًا.
+        try:
+
+            if attachment:
+
+                attachment_user_id = (
+                    attachment.get("user_id")
+                )
+
+                if attachment_user_id:
+
+                    with db() as conn:
+
+                        row = conn.execute(
+                            """
+                            SELECT
+                                channel_message_id
+                            FROM channel_message_links
+                            WHERE channel_chat_id=%s
+                              AND order_id=%s
+                              AND message_type='order'
+                            ORDER BY id DESC
+                            LIMIT 1
+                            """,
+                            (
+                                int(channel),
+                                order["order_id"],
+                            ),
+                        ).fetchone()
+
+                    if row:
+
+                        pass
+
+        except Exception:
+
+            logger.exception(
+                "Could not verify order channel link"
+            )
 
         logger.info(
             "Order %s delivered to channel %s",
@@ -1359,10 +1551,6 @@ async def deliver_order(
 
         return False
 
-    # =====================================================
-    # تسجيل النشاط الحقيقي
-    # =====================================================
-
     try:
 
         await asyncio.to_thread(
@@ -1374,8 +1562,6 @@ async def deliver_order(
 
     except Exception:
 
-        # فشل تسجيل النشاط لا يعني أن إرسال الطلب فشل.
-        # الطلب وصل إلى القناة بالفعل.
         logger.exception(
             "Could not write delivery audit log "
             "for order %s",
@@ -1383,6 +1569,714 @@ async def deliver_order(
         )
 
     return True
+
+
+# =========================================================
+# Customer message relay
+# =========================================================
+
+def customer_display_name(
+    user,
+) -> str:
+
+    if not user:
+        return "غير معروف"
+
+    full_name = (
+        " ".join(
+            part
+            for part in [
+                user.first_name,
+                user.last_name,
+            ]
+            if part
+        )
+        .strip()
+    )
+
+    return full_name or "غير معروف"
+
+
+def build_customer_header(
+    user,
+) -> str:
+
+    name = html.escape(
+        customer_display_name(user)
+    )
+
+    username = (
+        user.username
+        if user and user.username
+        else None
+    )
+
+    username_text = (
+        f"@{html.escape(username)}"
+        if username
+        else "بدون username"
+    )
+
+    user_id = (
+        str(user.id)
+        if user
+        else "غير معروف"
+    )
+
+    return (
+        "💬 <b>رسالة من زبون</b>\n\n"
+        f"👤 <b>الاسم:</b> {name}\n"
+        f"🔹 <b>Username:</b> {username_text}\n"
+        f"🆔 <b>Telegram ID:</b> "
+        f"<code>{user_id}</code>\n\n"
+    )
+
+
+async def save_customer_channel_link(
+    channel_message,
+    user,
+):
+
+    channel = parse_channel_id()
+
+    if not channel:
+        return
+
+    try:
+
+        await asyncio.to_thread(
+            save_channel_message_link,
+            int(channel),
+            int(channel_message.message_id),
+            int(user.id),
+            None,
+            "customer",
+        )
+
+    except Exception:
+
+        logger.exception(
+            "Failed to save customer channel message link"
+        )
+
+
+async def forward_customer_message_to_channel(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+
+    message = update.effective_message
+    user = update.effective_user
+
+    if not message or not user:
+        return
+
+    channel = parse_channel_id()
+
+    if not channel:
+
+        logger.error(
+            "Cannot forward customer message: "
+            "CHANNEL_ID is not configured"
+        )
+
+        try:
+
+            await message.reply_text(
+                "❌ تعذر إرسال رسالتك حاليًا. "
+                "تواصل مع الإدارة."
+            )
+
+        except TelegramError:
+            pass
+
+        return
+
+    header = build_customer_header(
+        user
+    )
+
+    try:
+
+        # =================================================
+        # النص
+        # =================================================
+
+        if message.text:
+
+            channel_message = (
+                await context.bot.send_message(
+                    chat_id=channel,
+                    text=(
+                        header
+                        + html.escape(
+                            message.text
+                        )
+                    ),
+                    parse_mode="HTML",
+                )
+            )
+
+        # =================================================
+        # صورة
+        # =================================================
+
+        elif message.photo:
+
+            photo = message.photo[-1]
+
+            caption = (
+                header
+                + html.escape(
+                    message.caption or ""
+                )
+            )
+
+            channel_message = (
+                await context.bot.send_photo(
+                    chat_id=channel,
+                    photo=photo.file_id,
+                    caption=caption[:1024],
+                    parse_mode="HTML",
+                )
+            )
+
+        # =================================================
+        # مستند / ملف
+        # =================================================
+
+        elif message.document:
+
+            caption = (
+                header
+                + html.escape(
+                    message.caption or ""
+                )
+            )
+
+            channel_message = (
+                await context.bot.send_document(
+                    chat_id=channel,
+                    document=message.document.file_id,
+                    caption=caption[:1024],
+                    parse_mode="HTML",
+                )
+            )
+
+        # =================================================
+        # فيديو
+        # =================================================
+
+        elif message.video:
+
+            caption = (
+                header
+                + html.escape(
+                    message.caption or ""
+                )
+            )
+
+            channel_message = (
+                await context.bot.send_video(
+                    chat_id=channel,
+                    video=message.video.file_id,
+                    caption=caption[:1024],
+                    parse_mode="HTML",
+                )
+            )
+
+        # =================================================
+        # Voice
+        # =================================================
+
+        elif message.voice:
+
+            channel_message = (
+                await context.bot.send_voice(
+                    chat_id=channel,
+                    voice=message.voice.file_id,
+                    caption=header[:1024],
+                    parse_mode="HTML",
+                )
+            )
+
+        # =================================================
+        # Audio
+        # =================================================
+
+        elif message.audio:
+
+            caption = (
+                header
+                + html.escape(
+                    message.caption or ""
+                )
+            )
+
+            channel_message = (
+                await context.bot.send_audio(
+                    chat_id=channel,
+                    audio=message.audio.file_id,
+                    caption=caption[:1024],
+                    parse_mode="HTML",
+                )
+            )
+
+        # =================================================
+        # Sticker
+        # =================================================
+
+        elif message.sticker:
+
+            channel_message = (
+                await context.bot.send_sticker(
+                    chat_id=channel,
+                    sticker=message.sticker.file_id,
+                )
+            )
+
+            # إرسال بيانات صاحب الستكر بشكل منفصل
+            info_message = (
+                await context.bot.send_message(
+                    chat_id=channel,
+                    text=header,
+                    parse_mode="HTML",
+                )
+            )
+
+            await save_customer_channel_link(
+                info_message,
+                user,
+            )
+
+            # حفظ الستكر أيضًا للربط
+            await save_customer_channel_link(
+                channel_message,
+                user,
+            )
+
+            await message.reply_text(
+                "✅ تم إرسال رسالتك إلى الكادر."
+            )
+
+            return
+
+        # =================================================
+        # نوع غير مدعوم
+        # =================================================
+
+        else:
+
+            await message.reply_text(
+                "⚠️ هذا النوع من الرسائل غير مدعوم حاليًا.\n"
+                "أرسل نصًا أو صورة أو ملفًا أو فيديو أو صوتًا."
+            )
+
+            return
+
+        # =================================================
+        # حفظ العلاقة في PostgreSQL
+        # =================================================
+
+        await save_customer_channel_link(
+            channel_message,
+            user,
+        )
+
+        logger.info(
+            "Customer message forwarded: "
+            "user=%s channel_message=%s",
+            user.id,
+            channel_message.message_id,
+        )
+
+        # =================================================
+        # إشعار الزبون
+        # =================================================
+
+        await message.reply_text(
+            "✅ تم إرسال رسالتك إلى الكادر."
+        )
+
+    except TelegramError:
+
+        logger.exception(
+            "Failed to forward customer message "
+            "from user %s",
+            user.id,
+        )
+
+        try:
+
+            await message.reply_text(
+                "❌ تعذر إرسال رسالتك حاليًا. "
+                "حاول مرة أخرى."
+            )
+
+        except TelegramError:
+            pass
+
+    except Exception:
+
+        logger.exception(
+            "Unexpected customer relay error "
+            "for user %s",
+            user.id,
+        )
+
+        try:
+
+            await message.reply_text(
+                "❌ حدث خطأ أثناء إرسال الرسالة."
+            )
+
+        except TelegramError:
+            pass
+
+
+# =========================================================
+# Find channel link for admin reply
+# =========================================================
+
+def find_link_for_replied_message(
+    message,
+):
+
+    if not message:
+        return None
+
+    replied = (
+        message.reply_to_message
+    )
+
+    if not replied:
+        return None
+
+    # =====================================================
+    # الطريقة الأولى:
+    # الرسالة نفسها في القناة
+    # =====================================================
+
+    chat = replied.chat
+
+    if chat:
+
+        try:
+
+            row = get_channel_message_link(
+                int(chat.id),
+                int(replied.message_id),
+            )
+
+            if row:
+                return row
+
+        except Exception:
+
+            logger.exception(
+                "Direct channel message link lookup failed"
+            )
+
+    # =====================================================
+    # الطريقة الثانية:
+    # الرسالة جاءت من Forward / Origin
+    # =====================================================
+
+    forward_origin = getattr(
+        replied,
+        "forward_origin",
+        None,
+    )
+
+    if forward_origin:
+
+        origin_chat = getattr(
+            forward_origin,
+            "chat",
+            None,
+        )
+
+        origin_message_id = getattr(
+            forward_origin,
+            "message_id",
+            None,
+        )
+
+        if (
+            origin_chat
+            and origin_message_id
+        ):
+
+            try:
+
+                row = get_channel_message_link(
+                    int(origin_chat.id),
+                    int(origin_message_id),
+                )
+
+                if row:
+                    return row
+
+            except Exception:
+
+                logger.exception(
+                    "Forward-origin channel link lookup failed"
+                )
+
+    return None
+
+
+# =========================================================
+# Forward admin reply to customer
+# =========================================================
+
+async def forward_admin_reply_to_customer(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+
+    message = update.effective_message
+
+    if not message:
+        return
+
+    # =====================================================
+    # هذه الدالة مخصصة فقط لردود الأدمن داخل القناة.
+    # في channel_post لا يوجد effective_user يمثل الأدمن
+    # البشري؛ Telegram ينسب المنشور إلى القناة نفسها.
+    # لذلك نتحقق من أن الرسالة جاءت من CHANNEL_ID.
+    # =====================================================
+
+    channel = parse_channel_id()
+
+    if channel is None or not message.chat:
+        return
+
+    if int(message.chat.id) != int(channel):
+        return
+
+    # =====================================================
+    # يجب أن تكون الرسالة Reply داخل القناة
+    # =====================================================
+
+    if not message.reply_to_message:
+
+        logger.info(
+            "Channel post received without reply_to_message: %s",
+            message.message_id,
+        )
+        return
+
+    logger.info(
+        "CHANNEL REPLY DETECTED: channel=%s message=%s replied_to=%s",
+        message.chat.id,
+        message.message_id,
+        message.reply_to_message.message_id,
+    )
+
+    link = await asyncio.to_thread(
+        find_link_for_replied_message,
+        message,
+    )
+
+    if not link:
+
+        logger.warning(
+            "Admin reply has no customer mapping. "
+            "channel=%s message=%s",
+            (
+                message.chat.id
+                if message.chat
+                else None
+            ),
+            message.message_id,
+        )
+
+        return
+
+    user_id = int(
+        link["user_id"]
+    )
+
+    try:
+
+        # =================================================
+        # النص
+        # =================================================
+
+        if message.text:
+
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=(
+                    "👨‍💼 <b>رسالة من الكادر:</b>\n\n"
+                    + html.escape(
+                        message.text
+                    )
+                ),
+                parse_mode="HTML",
+            )
+
+        # =================================================
+        # صورة
+        # =================================================
+
+        elif message.photo:
+
+            photo = message.photo[-1]
+
+            caption = (
+                message.caption or ""
+            )
+
+            await context.bot.send_photo(
+                chat_id=user_id,
+                photo=photo.file_id,
+                caption=(
+                    "👨‍💼 رسالة من الكادر\n\n"
+                    + caption
+                )[:1024],
+            )
+
+        # =================================================
+        # مستند
+        # =================================================
+
+        elif message.document:
+
+            caption = (
+                message.caption or ""
+            )
+
+            await context.bot.send_document(
+                chat_id=user_id,
+                document=message.document.file_id,
+                caption=(
+                    "👨‍💼 رسالة من الكادر\n\n"
+                    + caption
+                )[:1024],
+            )
+
+        # =================================================
+        # فيديو
+        # =================================================
+
+        elif message.video:
+
+            caption = (
+                message.caption or ""
+            )
+
+            await context.bot.send_video(
+                chat_id=user_id,
+                video=message.video.file_id,
+                caption=(
+                    "👨‍💼 رسالة من الكادر\n\n"
+                    + caption
+                )[:1024],
+            )
+
+        # =================================================
+        # Voice
+        # =================================================
+
+        elif message.voice:
+
+            await context.bot.send_voice(
+                chat_id=user_id,
+                voice=message.voice.file_id,
+            )
+
+        # =================================================
+        # Audio
+        # =================================================
+
+        elif message.audio:
+
+            await context.bot.send_audio(
+                chat_id=user_id,
+                audio=message.audio.file_id,
+                caption=(
+                    "👨‍💼 رسالة من الكادر"
+                ),
+            )
+
+        # =================================================
+        # Sticker
+        # =================================================
+
+        elif message.sticker:
+
+            await context.bot.send_sticker(
+                chat_id=user_id,
+                sticker=message.sticker.file_id,
+            )
+
+        # =================================================
+        # نوع غير مدعوم
+        # =================================================
+
+        else:
+
+            logger.warning(
+                "Unsupported admin reply type: %s",
+                message.message_id,
+            )
+
+            return
+
+        # =================================================
+        # تأكيد للأدمن
+        # =================================================
+
+        try:
+
+            await message.reply_text(
+                "✅ تم إرسال الرد إلى الزبون."
+            )
+
+        except TelegramError:
+
+            logger.warning(
+                "Could not send admin confirmation",
+                exc_info=True,
+            )
+
+        logger.info(
+            "Admin reply forwarded to user %s "
+            "from channel message %s",
+            user_id,
+            (
+                message.reply_to_message.message_id
+                if message.reply_to_message
+                else None
+            ),
+        )
+
+    except TelegramError:
+
+        logger.exception(
+            "Failed to send admin reply "
+            "to customer %s",
+            user_id,
+        )
+
+        try:
+
+            await message.reply_text(
+                "❌ تعذر إرسال الرد إلى الزبون."
+            )
+
+        except TelegramError:
+            pass
+
+    except Exception:
+
+        logger.exception(
+            "Unexpected admin reply relay error "
+            "for customer %s",
+            user_id,
+        )
 
 
 # =========================================================
@@ -1574,6 +2468,10 @@ telegram_app = (
 )
 
 
+# =========================================================
+# Commands
+# =========================================================
+
 telegram_app.add_handler(
     CommandHandler(
         "start",
@@ -1598,12 +2496,40 @@ telegram_app.add_handler(
 )
 
 
+# =========================================================
+# Customer private messages
+# =========================================================
+#
+# أي رسالة خاصة من الزبون:
+# Text / Photo / Document / Video /
+# Voice / Audio / Sticker
+#
+# تتحول إلى القناة.
+#
+# =========================================================
+
 telegram_app.add_handler(
     MessageHandler(
         filters.ChatType.PRIVATE
-        & filters.TEXT
         & ~filters.COMMAND,
-        start_command,
+        forward_customer_message_to_channel,
+    )
+)
+
+
+# =========================================================
+# Admin replies
+# =========================================================
+#
+# الأدمن يجب أن يعمل Reply على رسالة القناة.
+#
+# =========================================================
+
+telegram_app.add_handler(
+    MessageHandler(
+        filters.UpdateType.CHANNEL_POST
+        & filters.REPLY,
+        forward_admin_reply_to_customer,
     )
 )
 
@@ -1627,7 +2553,8 @@ async def lifespan(
             url=WEBHOOK_URL,
             secret_token=WEBHOOK_SECRET,
             allowed_updates=[
-                "message"
+                "message",
+                "channel_post",
             ],
         )
 
@@ -2179,19 +3106,11 @@ async def submit_order(
         request
     )
 
-    # =====================================================
-    # إنشاء الطلب
-    # =====================================================
-
     order, attachment = await asyncio.to_thread(
         create_order,
         user,
         payload,
     )
-
-    # =====================================================
-    # إرسال الطلب الكامل إلى القناة فقط
-    # =====================================================
 
     delivered = await deliver_order(
         order,
@@ -2206,8 +3125,6 @@ async def submit_order(
             order["order_id"],
         )
 
-        # لا نحذف المرفق.
-        # الطلب والمرفق يبقيان في DB.
         raise HTTPException(
             status_code=502,
             detail=(
@@ -2216,10 +3133,6 @@ async def submit_order(
                 "حاول مرة أخرى أو تواصل مع الإدارة."
             ),
         )
-
-    # =====================================================
-    # حذف المرفق بعد نجاح الإرسال
-    # =====================================================
 
     if payload.attachment_token:
 
@@ -2237,10 +3150,6 @@ async def submit_order(
                 "Could not delete attachment %s",
                 payload.attachment_token,
             )
-
-    # =====================================================
-    # إشعار المستخدم فقط
-    # =====================================================
 
     try:
 
@@ -2297,19 +3206,11 @@ def admin_dashboard(
     request: Request,
 ):
 
-    # =====================================================
-    # حماية الخادم
-    # =====================================================
-
     require_admin(
         request
     )
 
     with db() as conn:
-
-        # =================================================
-        # الإحصائيات العامة
-        # =================================================
 
         totals = conn.execute(
             """
@@ -2347,10 +3248,6 @@ def admin_dashboard(
             """
         ).fetchone()
 
-        # =================================================
-        # حالات الطلبات
-        # =================================================
-
         status_rows = conn.execute(
             """
             SELECT
@@ -2371,10 +3268,6 @@ def admin_dashboard(
             """
         ).fetchall()
 
-        # =================================================
-        # الخدمات
-        # =================================================
-
         service_rows = conn.execute(
             """
             SELECT
@@ -2393,10 +3286,6 @@ def admin_dashboard(
                 service_type ASC
             """
         ).fetchall()
-
-        # =================================================
-        # حالات الدفع
-        # =================================================
 
         payment_rows = conn.execute(
             """
@@ -2417,10 +3306,6 @@ def admin_dashboard(
                 status ASC
             """
         ).fetchall()
-
-        # =================================================
-        # آخر الطلبات
-        # =================================================
 
         recent_rows = conn.execute(
             """
@@ -2447,10 +3332,6 @@ def admin_dashboard(
             """
         ).fetchall()
 
-        # =================================================
-        # النشاطات الحقيقية
-        # =================================================
-
         activity_rows = conn.execute(
             """
             SELECT
@@ -2468,10 +3349,6 @@ def admin_dashboard(
             """
         ).fetchall()
 
-    # =====================================================
-    # أدوات التحويل
-    # =====================================================
-
     def money(value):
 
         try:
@@ -2486,10 +3363,6 @@ def admin_dashboard(
         ):
 
             return 0.0
-
-    # =====================================================
-    # حالات الطلبات
-    # =====================================================
 
     status_counts = {
         str(row["status"]):
@@ -2522,10 +3395,6 @@ def admin_dashboard(
             "CANCELLED",
         }
     )
-
-    # =====================================================
-    # آخر الطلبات
-    # =====================================================
 
     recent_orders = []
 
@@ -2586,10 +3455,6 @@ def admin_dashboard(
             }
         )
 
-    # =====================================================
-    # النشاطات
-    # =====================================================
-
     activities = []
 
     for row in activity_rows:
@@ -2616,10 +3481,6 @@ def admin_dashboard(
                     ),
             }
         )
-
-    # =====================================================
-    # النتيجة
-    # =====================================================
 
     return {
 
