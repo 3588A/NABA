@@ -33,7 +33,7 @@ from fastapi import (
     UploadFile,
 )
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from PIL import Image
 from psycopg.rows import dict_row
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -46,6 +46,7 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
+
 
 # =========================================================
 # NABA - Main Backend
@@ -60,12 +61,14 @@ logging.basicConfig(
 
 logger = logging.getLogger("NABA")
 
+
 # =========================================================
 # Environment
 # =========================================================
 
 def env(name: str, default: str = "") -> str:
     return os.getenv(name, default).strip().strip("'\"").strip()
+
 
 def env_int(name: str, default: int = 0) -> int:
     raw = env(name, str(default))
@@ -74,11 +77,15 @@ def env_int(name: str, default: int = 0) -> int:
     except ValueError:
         raise RuntimeError(f"{name} must be an integer")
 
+
 def origin_of(url: str) -> str:
     parsed = urlparse(url)
+
     if not parsed.scheme or not parsed.netloc:
         raise RuntimeError(f"Invalid URL: {url}")
+
     return f"{parsed.scheme}://{parsed.netloc}"
+
 
 # =========================================================
 # Configuration
@@ -86,42 +93,85 @@ def origin_of(url: str) -> str:
 
 BOT_TOKEN = env("BOT_TOKEN")
 CHANNEL_ID = env("CHANNEL_ID")
+
 WEB_APP_URL = env("WEB_APP_URL")
 BACKEND_URL = env("BACKEND_URL").rstrip("/")
+
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_URL = env("WEBHOOK_URL").rstrip("/")
+
 DATABASE_URL = env("DATABASE_URL")
 
-ADMIN_TELEGRAM_ID = env_int("ADMIN_TELEGRAM_ID", 6931187332)
+ADMIN_TELEGRAM_ID = env_int(
+    "ADMIN_TELEGRAM_ID",
+    6931187332,
+)
+
 ADMIN_USER_ID = ADMIN_TELEGRAM_ID
 
 MAX_ATTACHMENT_MB = env_int("MAX_ATTACHMENT_MB", 5)
 MAX_ATTACHMENT_BYTES = MAX_ATTACHMENT_MB * 1024 * 1024
-MAX_PENDING_ATTACHMENTS = env_int("MAX_PENDING_ATTACHMENTS", 5)
-INIT_DATA_MAX_AGE = env_int("INIT_DATA_MAX_AGE", 3600)
 
-CAMERA_URL = env("CAMERA_URL") or f"{WEB_APP_URL.rstrip('/')}/camera.html"
+MAX_PENDING_ATTACHMENTS = env_int(
+    "MAX_PENDING_ATTACHMENTS",
+    5,
+)
 
-if not BOT_TOKEN or not DATABASE_URL or not WEB_APP_URL or not BACKEND_URL:
-    raise RuntimeError("المتغيرات الأساسية للنظام غير مكتملة في ملف .env")
+INIT_DATA_MAX_AGE = env_int(
+    "INIT_DATA_MAX_AGE",
+    3600,
+)
+
+CAMERA_URL = (
+    env("CAMERA_URL")
+    or f"{WEB_APP_URL.rstrip('/')}/camera.html"
+)
+
+if not BOT_TOKEN:
+    raise RuntimeError("BOT_TOKEN is not configured")
+
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL is not configured")
+
+if not WEB_APP_URL or not WEB_APP_URL.startswith("https://"):
+    raise RuntimeError("WEB_APP_URL must use HTTPS")
+
+if not BACKEND_URL or not BACKEND_URL.startswith("https://"):
+    raise RuntimeError("BACKEND_URL must use HTTPS")
 
 if not WEBHOOK_URL:
     WEBHOOK_URL = f"{BACKEND_URL}{WEBHOOK_PATH}"
 
+if not WEBHOOK_URL.startswith("https://"):
+    raise RuntimeError("WEBHOOK_URL must use HTTPS")
+
 configured_webhook_secret = env("WEBHOOK_SECRET")
-if re.fullmatch(r"[A-Za-z0-9_-]{16,256}", configured_webhook_secret or ""):
+
+if re.fullmatch(
+    r"[A-Za-z0-9_-]{16,256}",
+    configured_webhook_secret or "",
+):
     WEBHOOK_SECRET = configured_webhook_secret
 else:
-    WEBHOOK_SECRET = hashlib.sha256(f"naba-webhook:{BOT_TOKEN}".encode()).hexdigest()
+    WEBHOOK_SECRET = hashlib.sha256(
+        f"naba-webhook:{BOT_TOKEN}".encode()
+    ).hexdigest()
 
 PHOTO_ALLOWED_IDS = {ADMIN_TELEGRAM_ID}
+
 for raw_id in env("PHOTO_ALLOWED_IDS").split(","):
     raw_id = raw_id.strip()
+
     if raw_id.lstrip("-").isdigit():
         PHOTO_ALLOWED_IDS.add(int(raw_id))
 
 BASE_DIR = Path(__file__).resolve().parent
 INDEX_FILE = BASE_DIR / "index.html"
+
+
+# =========================================================
+# Services
+# =========================================================
 
 SERVICES = {
     "research": "مشاريع • تقارير • بحوث",
@@ -148,24 +198,58 @@ SERVICE_DETAIL_LABELS = {
     "extra_notes": "تعليمات إضافية",
 }
 
+
+# =========================================================
+# Workflow
+# =========================================================
+
 VALID_STATUSES = [
-    "NEW", "UNDER_REVIEW", "WAITING_CUSTOMER", "ACCEPTED",
-    "READY_TO_START", "IN_PROGRESS", "READY_FOR_DELIVERY",
-    "COMPLETED", "REJECTED", "CANCELLED",
+    "NEW",
+    "UNDER_REVIEW",
+    "WAITING_CUSTOMER",
+    "ACCEPTED",
+    "READY_TO_START",
+    "IN_PROGRESS",
+    "READY_FOR_DELIVERY",
+    "COMPLETED",
+    "REJECTED",
+    "CANCELLED",
 ]
 
 ALLOWED_STATUS_TRANSITIONS = {
     "NEW": ["UNDER_REVIEW", "REJECTED", "CANCELLED"],
-    "UNDER_REVIEW": ["WAITING_CUSTOMER", "READY_TO_START", "REJECTED", "CANCELLED"],
-    "WAITING_CUSTOMER": ["ACCEPTED", "REJECTED", "CANCELLED"],
-    "ACCEPTED": ["READY_TO_START", "CANCELLED"],
-    "READY_TO_START": ["IN_PROGRESS", "CANCELLED"],
-    "IN_PROGRESS": ["UNDER_REVIEW", "READY_FOR_DELIVERY", "CANCELLED"],
-    "READY_FOR_DELIVERY": ["CANCELLED"],
+    "UNDER_REVIEW": [
+        "WAITING_CUSTOMER",
+        "READY_TO_START",
+        "REJECTED",
+        "CANCELLED",
+    ],
+    "WAITING_CUSTOMER": [
+        "ACCEPTED",
+        "REJECTED",
+        "CANCELLED",
+    ],
+    "ACCEPTED": [
+        "READY_TO_START",
+        "CANCELLED",
+    ],
+    "READY_TO_START": [
+        "IN_PROGRESS",
+        "CANCELLED",
+    ],
+    "IN_PROGRESS": [
+        "UNDER_REVIEW",
+        "READY_FOR_DELIVERY",
+        "CANCELLED",
+    ],
+    "READY_FOR_DELIVERY": [
+        "CANCELLED",
+    ],
     "COMPLETED": [],
     "REJECTED": [],
     "CANCELLED": [],
 }
+
 
 # =========================================================
 # Database
@@ -173,7 +257,12 @@ ALLOWED_STATUS_TRANSITIONS = {
 
 @contextmanager
 def db():
-    conn = psycopg.connect(DATABASE_URL, row_factory=dict_row, connect_timeout=10)
+    conn = psycopg.connect(
+        DATABASE_URL,
+        row_factory=dict_row,
+        connect_timeout=10,
+    )
+
     try:
         yield conn
         conn.commit()
@@ -183,9 +272,11 @@ def db():
     finally:
         conn.close()
 
+
 def init_db():
     with db() as conn:
-        conn.execute("""
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS orders (
                 order_id TEXT PRIMARY KEY,
                 user_id BIGINT NOT NULL,
@@ -220,38 +311,63 @@ def init_db():
                 channel_message_id BIGINT,
                 channel_attachment_message_id BIGINT
             )
-        """)
-        conn.execute("""
+            """
+        )
+
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS channel_customer_messages (
                 id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-                order_id TEXT REFERENCES orders(order_id) ON DELETE CASCADE,
+                order_id TEXT
+                    REFERENCES orders(order_id)
+                    ON DELETE CASCADE,
                 user_id BIGINT NOT NULL,
                 channel_message_id BIGINT NOT NULL UNIQUE,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
-        """)
-        conn.execute("""
+            """
+        )
+
+        conn.execute(
+            """
+            ALTER TABLE channel_customer_messages
+            ALTER COLUMN order_id DROP NOT NULL
+            """
+        )
+
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS payments (
                 id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-                order_id TEXT NOT NULL REFERENCES orders(order_id) ON DELETE CASCADE,
+                order_id TEXT NOT NULL
+                    REFERENCES orders(order_id)
+                    ON DELETE CASCADE,
                 amount NUMERIC(12,2) NOT NULL,
                 currency TEXT NOT NULL DEFAULT 'IQD',
                 payment_method TEXT NOT NULL DEFAULT 'CASH',
                 recorded_by TEXT NOT NULL DEFAULT 'Admin',
                 created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
-        """)
-        conn.execute("""
+            """
+        )
+
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS audit_logs (
                 id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-                order_id TEXT NOT NULL REFERENCES orders(order_id) ON DELETE CASCADE,
+                order_id TEXT NOT NULL
+                    REFERENCES orders(order_id)
+                    ON DELETE CASCADE,
                 action TEXT NOT NULL,
                 performed_by TEXT NOT NULL DEFAULT 'System',
                 details TEXT NOT NULL DEFAULT '',
                 timestamp TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
-        """)
-        conn.execute("""
+            """
+        )
+
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS attachments (
                 token TEXT PRIMARY KEY,
                 user_id BIGINT NOT NULL,
@@ -261,53 +377,173 @@ def init_db():
                 created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 order_id TEXT
             )
-        """)
+            """
+        )
 
-async def init_db_with_retry(attempts: int = 5, delay: int = 3):
+
+async def init_db_with_retry(
+    attempts: int = 5,
+    delay: int = 3,
+):
     for attempt in range(1, attempts + 1):
         try:
             await asyncio.to_thread(init_db)
             logger.info("Database initialized successfully")
             return
         except psycopg.OperationalError:
+            logger.warning(
+                "Database unavailable - attempt %s/%s",
+                attempt,
+                attempts,
+                exc_info=True,
+            )
+
             if attempt == attempts:
                 raise
+
             await asyncio.sleep(delay * attempt)
 
-def add_audit_log_conn(conn, order_id: str, action: str, performed_by: str = "System", details: str = ""):
-    conn.execute("""
-        INSERT INTO audit_logs(order_id, action, performed_by, details)
+
+def add_audit_log_conn(
+    conn,
+    order_id: str,
+    action: str,
+    performed_by: str = "System",
+    details: str = "",
+):
+    conn.execute(
+        """
+        INSERT INTO audit_logs(
+            order_id,
+            action,
+            performed_by,
+            details
+        )
         VALUES(%s, %s, %s, %s)
-    """, (order_id, action, performed_by, details))
+        """,
+        (
+            order_id,
+            action,
+            performed_by,
+            details,
+        ),
+    )
+
+
+def add_audit_log(
+    order_id: str,
+    action: str,
+    performed_by: str = "System",
+    details: str = "",
+):
+    with db() as conn:
+        add_audit_log_conn(
+            conn,
+            order_id,
+            action,
+            performed_by,
+            details,
+        )
+
 
 # =========================================================
-# Auth & Helpers
+# Telegram Mini App Authentication
 # =========================================================
 
 def verify_init_data(init_data: str) -> dict:
     if not init_data:
-        raise HTTPException(status_code=401, detail="افتح تطبيق النبع من داخل Telegram")
+        raise HTTPException(
+            status_code=401,
+            detail="افتح تطبيق النبع من داخل Telegram",
+        )
+
     try:
-        pairs = dict(parse_qsl(init_data, keep_blank_values=True))
+        pairs_list = parse_qsl(
+            init_data,
+            keep_blank_values=True,
+        )
+        pairs = dict(pairs_list)
     except Exception:
-        raise HTTPException(status_code=401, detail="بيانات Telegram غير صالحة")
+        raise HTTPException(
+            status_code=401,
+            detail="بيانات Telegram غير صالحة",
+        )
 
     received_hash = pairs.pop("hash", None)
+
     if not received_hash:
-        raise HTTPException(status_code=401, detail="تعذر التحقق من جلسة Telegram")
+        raise HTTPException(
+            status_code=401,
+            detail="تعذر التحقق من جلسة Telegram",
+        )
 
-    data_check_string = "\n".join(f"{key}={pairs[key]}" for key in sorted(pairs))
-    secret_key = hmac.new(b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256).digest()
-    expected_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+    data_check_string = "\n".join(
+        f"{key}={pairs[key]}"
+        for key in sorted(pairs)
+    )
 
-    if not hmac.compare_digest(expected_hash, received_hash):
-        raise HTTPException(status_code=401, detail="جلسة Telegram غير موثوقة")
+    secret_key = hmac.new(
+        b"WebAppData",
+        BOT_TOKEN.encode(),
+        hashlib.sha256,
+    ).digest()
+
+    expected_hash = hmac.new(
+        secret_key,
+        data_check_string.encode(),
+        hashlib.sha256,
+    ).hexdigest()
+
+    if not hmac.compare_digest(
+        expected_hash,
+        received_hash,
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="جلسة Telegram غير موثوقة",
+        )
 
     try:
-        user = json.loads(pairs.get("user", "{}"))
+        user = json.loads(
+            pairs.get("user", "{}")
+        )
+
         user_id = int(user["id"])
-    except Exception:
-        raise HTTPException(status_code=401, detail="بيانات مستخدم Telegram غير صالحة")
+
+        auth_date = int(
+            pairs.get("auth_date", "0")
+        )
+
+    except (
+        ValueError,
+        KeyError,
+        TypeError,
+        json.JSONDecodeError,
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="بيانات مستخدم Telegram غير صالحة",
+        )
+
+    if not auth_date:
+        raise HTTPException(
+            status_code=401,
+            detail="auth_date مفقود",
+        )
+
+    now = int(time.time())
+
+    if auth_date > now + 60:
+        raise HTTPException(
+            status_code=401,
+            detail="وقت جلسة Telegram غير صالح",
+        )
+
+    if now - auth_date > INIT_DATA_MAX_AGE:
+        raise HTTPException(
+            status_code=401,
+            detail="انتهت صلاحية جلسة Telegram، أعد فتح التطبيق",
+        )
 
     return {
         "id": user_id,
@@ -316,99 +552,252 @@ def verify_init_data(init_data: str) -> dict:
         "last_name": user.get("last_name", "") or "",
     }
 
+
 def init_user_from_header(request: Request) -> dict:
-    return verify_init_data(request.headers.get("X-Telegram-Init-Data", ""))
+    return verify_init_data(
+        request.headers.get(
+            "X-Telegram-Init-Data",
+            "",
+        )
+    )
+
 
 def require_admin(request: Request) -> dict:
     user = init_user_from_header(request)
+
     if user["id"] != ADMIN_TELEGRAM_ID:
-        raise HTTPException(status_code=403, detail="غير مصرح لك بالوصول إلى لوحة التحكم")
+        raise HTTPException(
+            status_code=403,
+            detail="غير مصرح لك بالوصول إلى لوحة التحكم",
+        )
+
     return user
+
 
 # =========================================================
 # Models
 # =========================================================
 
 class OrderIn(BaseModel):
-    model_config = ConfigDict(str_strip_whitespace=True, extra="ignore")
-    service_type: Literal["research", "autocad", "minitab", "formatting", "cv", "cv_ats", "logo", "identity"]
-    department: str = Field(min_length=1, max_length=200)
-    title: str = Field(min_length=1, max_length=300)
-    page_count: str = Field(default="", max_length=40)
-    language: str = Field(default="", max_length=80)
-    autocad_type: str = Field(default="", max_length=100)
-    deadline: str = Field(min_length=1, max_length=40)
-    notes: str = Field(default="", max_length=2000)
-    attachment_token: str = Field(default="", max_length=100)
-    service_details: dict[str, str] = Field(default_factory=dict)
+    model_config = ConfigDict(
+        str_strip_whitespace=True,
+        extra="ignore",
+    )
+
+    service_type: Literal[
+        "research",
+        "autocad",
+        "minitab",
+        "formatting",
+        "cv",
+        "cv_ats",
+        "logo",
+        "identity",
+    ]
+
+    department: str = Field(
+        min_length=1,
+        max_length=200,
+    )
+
+    title: str = Field(
+        min_length=1,
+        max_length=300,
+    )
+
+    page_count: str = Field(
+        default="",
+        max_length=40,
+    )
+
+    language: str = Field(
+        default="",
+        max_length=80,
+    )
+
+    autocad_type: str = Field(
+        default="",
+        max_length=100,
+    )
+
+    deadline: str = Field(
+        min_length=1,
+        max_length=40,
+    )
+
+    notes: str = Field(
+        default="",
+        max_length=2000,
+    )
+
+    attachment_token: str = Field(
+        default="",
+        max_length=100,
+    )
+
+    service_details: dict[str, str] = Field(
+        default_factory=dict
+    )
+
 
 class QuotationIn(BaseModel):
-    model_config = ConfigDict(str_strip_whitespace=True, extra="ignore")
-    price: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
-    currency: str = Field(default="IQD", max_length=10)
-    delivery_date: str = Field(min_length=1, max_length=40)
-    delivery_time: str = Field(default="", max_length=40)
-    notes: str = Field(default="", max_length=1000)
+    model_config = ConfigDict(
+        str_strip_whitespace=True,
+        extra="ignore",
+    )
+
+    price: Decimal = Field(
+        gt=0,
+        max_digits=12,
+        decimal_places=2,
+    )
+
+    currency: str = Field(
+        default="IQD",
+        max_length=10,
+    )
+
+    delivery_date: str = Field(
+        min_length=1,
+        max_length=40,
+    )
+
+    delivery_time: str = Field(
+        default="",
+        max_length=40,
+    )
+
+    notes: str = Field(
+        default="",
+        max_length=1000,
+    )
+
 
 class StatusUpdateIn(BaseModel):
-    model_config = ConfigDict(str_strip_whitespace=True, extra="ignore")
-    status: str = Field(min_length=1, max_length=50)
-    admin_note: str = Field(default="", max_length=1000)
+    model_config = ConfigDict(
+        str_strip_whitespace=True,
+        extra="ignore",
+    )
+
+    status: str = Field(
+        min_length=1,
+        max_length=50,
+    )
+
+    admin_note: str = Field(
+        default="",
+        max_length=1000,
+    )
+
 
 class PaymentIn(BaseModel):
-    model_config = ConfigDict(str_strip_whitespace=True, extra="ignore")
-    amount: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
-    currency: str = Field(default="IQD", max_length=10)
-    payment_method: str = Field(default="CASH", max_length=50)
+    model_config = ConfigDict(
+        str_strip_whitespace=True,
+        extra="ignore",
+    )
+
+    amount: Decimal = Field(
+        gt=0,
+        max_digits=12,
+        decimal_places=2,
+    )
+
+    currency: str = Field(
+        default="IQD",
+        max_length=10,
+    )
+
+    payment_method: str = Field(
+        default="CASH",
+        max_length=50,
+    )
+
 
 class AdminNoteIn(BaseModel):
-    model_config = ConfigDict(str_strip_whitespace=True, extra="ignore")
-    admin_note: str = Field(default="", max_length=2000)
+    model_config = ConfigDict(
+        str_strip_whitespace=True,
+        extra="ignore",
+    )
+
+    admin_note: str = Field(
+        default="",
+        max_length=2000,
+    )
+
 
 # =========================================================
-# Order Logic & Delivery
+# Order Creation & Sending (تم التعديل والتنسيق الفني)
 # =========================================================
 
 def new_order_id() -> str:
     return f"NB-{datetime.now().year}-{''.join(secrets.choice(string.digits) for _ in range(6))}"
 
-def create_order(user: dict, data: OrderIn, idempotency_key: Optional[str] = None):
+
+def create_order(
+    user: dict,
+    data: OrderIn,
+    idempotency_key: Optional[str] = None,
+):
     for _ in range(10):
         order_id = new_order_id()
         try:
             with db() as conn:
                 attachment = None
                 if data.attachment_token:
-                    attachment = conn.execute("SELECT * FROM attachments WHERE token=%s AND user_id=%s FOR UPDATE", (data.attachment_token, user["id"])).fetchone()
+                    attachment = conn.execute(
+                        "SELECT * FROM attachments WHERE token=%s AND user_id=%s FOR UPDATE",
+                        (data.attachment_token, user["id"]),
+                    ).fetchone()
 
-                order = conn.execute("""
+                order = conn.execute(
+                    """
                     INSERT INTO orders (
                         order_id, user_id, username, service_type, service_name,
                         department, title, page_count, language, autocad_type,
                         deadline, notes, service_details, idempotency_key
                     ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s)
                     RETURNING *
-                """, (
-                    order_id, user["id"], user["username"] or user["first_name"] or "",
-                    data.service_type, SERVICES[data.service_type], data.department, data.title,
-                    str(data.page_count or ""), str(data.language or ""), str(data.autocad_type or ""),
-                    data.deadline, data.notes or "", json.dumps(data.service_details, ensure_ascii=False),
-                    idempotency_key
-                )).fetchone()
+                    """,
+                    (
+                        order_id,
+                        user["id"],
+                        user["username"] or user["first_name"] or "",
+                        data.service_type,
+                        SERVICES[data.service_type],
+                        data.department,
+                        data.title,
+                        str(data.page_count or ""),
+                        str(data.language or ""),
+                        str(data.autocad_type or ""),
+                        data.deadline,
+                        data.notes or "",
+                        json.dumps(data.service_details, ensure_ascii=False),
+                        idempotency_key,
+                    ),
+                ).fetchone()
 
                 if attachment:
-                    conn.execute("UPDATE attachments SET order_id=%s WHERE token=%s", (order_id, attachment["token"]))
+                    conn.execute(
+                        "UPDATE attachments SET order_id=%s WHERE token=%s",
+                        (order_id, attachment["token"]),
+                    )
 
-                add_audit_log_conn(conn, order_id, "ORDER_CREATED", f"User_{user['id']}", "تم إنشاء الطلب")
+                add_audit_log_conn(
+                    conn, order_id, "ORDER_CREATED", f"User_{user['id']}", "تم إنشاء الطلب بنجاح"
+                )
+
             return order, attachment, False
         except psycopg.errors.UniqueViolation:
             continue
-    raise HTTPException(status_code=500, detail="تعذر إنشاء رقم الطلب")
+
+    raise HTTPException(status_code=500, detail="تعذر إنشاء رقم الطلب، حاول مرة أخرى")
+
 
 def parse_channel_id():
     if not CHANNEL_ID:
         return None
     return int(CHANNEL_ID) if CHANNEL_ID.lstrip("-").isdigit() else CHANNEL_ID
+
 
 def build_order_message(order: dict, user: dict) -> str:
     e = html.escape
@@ -425,13 +814,16 @@ def build_order_message(order: dict, user: dict) -> str:
         f"🌐 <b>اللغة:</b> {e(order['language'] or 'غير محدد')}\n"
         f"⏰ <b>الموعد:</b> {e(order['deadline'])}\n"
     )
+
     if order["service_type"] == "autocad":
         text += f"📐 <b>نوع الرسم:</b> {e(order['autocad_type'] or 'غير محدد')}\n"
 
     details = order.get("service_details") or {}
     if isinstance(details, str):
-        try: details = json.loads(details)
-        except Exception: details = {}
+        try:
+            details = json.loads(details)
+        except Exception:
+            details = {}
 
     if details:
         text += "\n🎯 <b>تفاصيل الخدمة:</b>\n"
@@ -442,74 +834,133 @@ def build_order_message(order: dict, user: dict) -> str:
     text += f"\n📝 <b>الملاحظات:</b> {e(notes[:500])}"
     return text
 
+
 async def notify_customer(user_id: int, text: str):
     try:
-        await telegram_app.bot.send_message(chat_id=user_id, text=text, parse_mode="HTML")
+        await telegram_app.bot.send_message(
+            chat_id=user_id, text=text, parse_mode="HTML"
+        )
         return True
     except Exception as exc:
         logger.error("Could not notify user %s: %s", user_id, exc)
         return False
 
+
 async def deliver_order(order: dict, user: dict, attachment) -> bool:
     channel = parse_channel_id()
     if not channel:
         return False
+
     try:
-        msg = await telegram_app.bot.send_message(chat_id=channel, text=build_order_message(order, user), parse_mode="HTML")
+        msg = await telegram_app.bot.send_message(
+            chat_id=channel,
+            text=build_order_message(order, user),
+            parse_mode="HTML",
+        )
         att_msg = None
         if attachment:
             data = bytes(attachment["data"])
             caption = f"📎 مرفق الطلب {order['order_id']}"
             if (attachment["content_type"] or "").startswith("image/"):
-                att_msg = await telegram_app.bot.send_photo(chat_id=channel, photo=data, caption=caption)
+                att_msg = await telegram_app.bot.send_photo(
+                    chat_id=channel, photo=data, caption=caption
+                )
             else:
-                att_msg = await telegram_app.bot.send_document(chat_id=channel, document=data, filename=attachment["filename"], caption=caption)
+                att_msg = await telegram_app.bot.send_document(
+                    chat_id=channel,
+                    document=data,
+                    filename=attachment["filename"],
+                    caption=caption,
+                )
 
         with db() as conn:
-            conn.execute("""
-                UPDATE orders SET delivery_channel_status='DELIVERED', channel_message_id=%s, channel_attachment_message_id=%s WHERE order_id=%s
-            """, (msg.message_id, att_msg.message_id if att_msg else None, order['order_id']))
+            conn.execute(
+                """
+                UPDATE orders 
+                SET delivery_channel_status='DELIVERED', 
+                    channel_message_id=%s, 
+                    channel_attachment_message_id=%s 
+                WHERE order_id=%s
+                """,
+                (
+                    msg.message_id,
+                    att_msg.message_id if att_msg else None,
+                    order["order_id"],
+                ),
+            )
         return True
     except Exception:
         logger.exception("Failed to deliver order to channel")
         return False
 
+
 # =========================================================
-# Telegram Handlers (توجيه الرسائل وإدارة الموافقة)
+# Telegram Handlers (توجيه رسائل الزبون والقناة)
 # =========================================================
 
-async def customer_private_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def customer_private_message_handler(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+):
     if not update.effective_user or not update.effective_message:
         return
     user = update.effective_user
     if user.id == ADMIN_TELEGRAM_ID:
         return
 
-    raw_text = (update.effective_message.text or update.effective_message.caption or "مرفق غير نصي").strip()
+    raw_text = (
+        update.effective_message.text
+        or update.effective_message.caption
+        or "مرفق غير نصي"
+    ).strip()
     norm = raw_text.lower().replace("أ", "ا").replace("إ", "ا")
 
-    # التعامل مع الرد على عرض السعر
+    # الرد المباشر على قرارات عروض الأسعار
     if norm in {"موافق", "موافقة", "اوافق", "نعم", "yes"}:
         with db() as conn:
-            order = conn.execute("SELECT * FROM orders WHERE user_id=%s AND order_status='WAITING_CUSTOMER' ORDER BY created_at DESC LIMIT 1", (user.id,)).fetchone()
+            order = conn.execute(
+                "SELECT * FROM orders WHERE user_id=%s AND order_status='WAITING_CUSTOMER' ORDER BY created_at DESC LIMIT 1",
+                (user.id,),
+            ).fetchone()
             if order:
-                conn.execute("UPDATE orders SET customer_decision='ACCEPTED', order_status='ACCEPTED' WHERE order_id=%s", (order['order_id'],))
-                await telegram_app.bot.send_message(chat_id=parse_channel_id(), text=f"✅ الزبون وافق على عرض السعر للطلب <code>{order['order_id']}</code>", parse_mode="HTML")
-                await notify_customer(user.id, "✅ تم تسجيل موافقتك على عرض السعر بنجاح.")
+                conn.execute(
+                    "UPDATE orders SET customer_decision='ACCEPTED', order_status='ACCEPTED' WHERE order_id=%s",
+                    (order["order_id"],),
+                )
+                await telegram_app.bot.send_message(
+                    chat_id=parse_channel_id(),
+                    text=f"✅ الزبون وافق على عرض السعر للطلب <code>{order['order_id']}</code>",
+                    parse_mode="HTML",
+                )
+                await notify_customer(
+                    user.id, "✅ تم تسجيل موافقتك على عرض السعر بنجاح."
+                )
                 return
 
     if norm in {"ارفض", "رفض", "أرفض", "لا", "no"}:
         with db() as conn:
-            order = conn.execute("SELECT * FROM orders WHERE user_id=%s AND order_status='WAITING_CUSTOMER' ORDER BY created_at DESC LIMIT 1", (user.id,)).fetchone()
+            order = conn.execute(
+                "SELECT * FROM orders WHERE user_id=%s AND order_status='WAITING_CUSTOMER' ORDER BY created_at DESC LIMIT 1",
+                (user.id,),
+            ).fetchone()
             if order:
-                conn.execute("UPDATE orders SET customer_decision='REJECTED', order_status='REJECTED' WHERE order_id=%s", (order['order_id'],))
-                await telegram_app.bot.send_message(chat_id=parse_channel_id(), text=f"❌ الزبون رفض عرض السعر للطلب <code>{order['order_id']}</code>", parse_mode="HTML")
+                conn.execute(
+                    "UPDATE orders SET customer_decision='REJECTED', order_status='REJECTED' WHERE order_id=%s",
+                    (order["order_id"],),
+                )
+                await telegram_app.bot.send_message(
+                    chat_id=parse_channel_id(),
+                    text=f"❌ الزبون رفض عرض السعر للطلب <code>{order['order_id']}</code>",
+                    parse_mode="HTML",
+                )
                 await notify_customer(user.id, "❌ تم تسجيل رفضك لعرض السعر.")
                 return
 
-    # توجيه رسائل الخاص إلى القناة
+    # توجيه رسالة الزبون المباشرة للقناة
     with db() as conn:
-        order = conn.execute("SELECT order_id FROM orders WHERE user_id=%s ORDER BY created_at DESC LIMIT 1", (user.id,)).fetchone()
+        order = conn.execute(
+            "SELECT order_id FROM orders WHERE user_id=%s ORDER BY created_at DESC LIMIT 1",
+            (user.id,),
+        ).fetchone()
 
     order_id = order["order_id"] if order else "بدون طلب"
     channel_msg = (
@@ -521,13 +972,21 @@ async def customer_private_message_handler(update: Update, context: ContextTypes
 
     channel = parse_channel_id()
     if channel:
-        sent = await telegram_app.bot.send_message(chat_id=channel, text=channel_msg, parse_mode="HTML")
+        sent = await telegram_app.bot.send_message(
+            chat_id=channel, text=channel_msg, parse_mode="HTML"
+        )
         if sent:
             with db() as conn:
-                conn.execute("INSERT INTO channel_customer_messages (order_id, user_id, channel_message_id) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING", (order["order_id"] if order else None, user.id, sent.message_id))
+                conn.execute(
+                    "INSERT INTO channel_customer_messages (order_id, user_id, channel_message_id) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
+                    (order["order_id"] if order else None, user.id, sent.message_id),
+                )
             await notify_customer(user.id, "✅ تم إرسال رسالتك إلى الكادر.")
 
-async def channel_post_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+async def channel_post_handler(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+):
     post = update.channel_post
     if not post or not post.reply_to_message:
         return
@@ -537,23 +996,40 @@ async def channel_post_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
     replied_id = post.reply_to_message.message_id
     with db() as conn:
-        record = conn.execute("SELECT user_id, order_id FROM channel_customer_messages WHERE channel_message_id=%s", (replied_id,)).fetchone()
+        record = conn.execute(
+            "SELECT user_id, order_id FROM channel_customer_messages WHERE channel_message_id=%s",
+            (replied_id,),
+        ).fetchone()
         if not record:
-            record = conn.execute("SELECT user_id, order_id FROM orders WHERE channel_message_id=%s OR channel_attachment_message_id=%s", (replied_id, replied_id)).fetchone()
+            record = conn.execute(
+                "SELECT user_id, order_id FROM orders WHERE channel_message_id=%s OR channel_attachment_message_id=%s",
+                (replied_id, replied_id),
+            ).fetchone()
 
     if record:
         oid = record["order_id"] or "عام"
-        await notify_customer(record["user_id"], f"📩 <b>رسالة من إدارة النبع</b>\n🆔 <b>الطلب:</b> <code>{oid}</code>\n\n{html.escape(reply_text)}")
+        await notify_customer(
+            record["user_id"],
+            f"📩 <b>رسالة من إدارة النبع</b>\n🆔 <b>الطلب:</b> <code>{oid}</code>\n\n{html.escape(reply_text)}",
+        )
+
 
 # =========================================================
-# Excel Report Generation
+# Excel Generation
 # =========================================================
 
 def build_excel_report() -> bytes:
     wb = openpyxl.Workbook()
-    header_fill = PatternFill(start_color="087FC1", end_color="087FC1", fill_type="solid")
+    header_fill = PatternFill(
+        start_color="087FC1", end_color="087FC1", fill_type="solid"
+    )
     header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
-    thin_border = Border(left=Side(style="thin", color="CCCCCC"), right=Side(style="thin", color="CCCCCC"), top=Side(style="thin", color="CCCCCC"), bottom=Side(style="thin", color="CCCCCC"))
+    thin_border = Border(
+        left=Side(style="thin", color="CCCCCC"),
+        right=Side(style="thin", color="CCCCCC"),
+        top=Side(style="thin", color="CCCCCC"),
+        bottom=Side(style="thin", color="CCCCCC"),
+    )
 
     def style_sheet(ws):
         ws.views.sheetView[0].rightToLeft = True
@@ -567,58 +1043,152 @@ def build_excel_report() -> bytes:
             for col in range(1, ws.max_column + 1):
                 cell = ws.cell(row=row, column=col)
                 cell.border = thin_border
-                cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+                cell.alignment = Alignment(
+                    horizontal="center", vertical="center", wrap_text=True
+                )
 
     with db() as conn:
-        orders = conn.execute("SELECT * FROM orders ORDER BY created_at DESC").fetchall()
-        payments = conn.execute("SELECT * FROM payments ORDER BY created_at DESC").fetchall()
-        logs = conn.execute("SELECT * FROM audit_logs ORDER BY timestamp DESC").fetchall()
+        orders = conn.execute(
+            "SELECT * FROM orders ORDER BY created_at DESC"
+        ).fetchall()
+        payments = conn.execute(
+            "SELECT * FROM payments ORDER BY created_at DESC"
+        ).fetchall()
+        logs = conn.execute(
+            "SELECT * FROM audit_logs ORDER BY timestamp DESC"
+        ).fetchall()
 
     ws1 = wb.active
     ws1.title = "Orders"
-    ws1.append(["رقم الطلب", "المستخدم ID", "اسم المستخدم", "الخدمة", "التخصص", "العنوان", "الحالة", "السعر", "المدفوع", "المتبقي", "تاريخ الإنشاء"])
+    ws1.append(
+        [
+            "رقم الطلب",
+            "المستخدم ID",
+            "اسم المستخدم",
+            "الخدمة",
+            "التخصص",
+            "العنوان",
+            "الحالة",
+            "السعر",
+            "المدفوع",
+            "المتبقي",
+            "تاريخ الإنشاء",
+        ]
+    )
     for o in orders:
-        ws1.append([o["order_id"], o["user_id"], o["username"], o["service_name"], o["department"], o["title"], o["order_status"], float(o["price"] or 0), float(o["deposit"] or 0), float(o["remaining_balance"] or 0), o["created_at"].strftime("%Y-%m-%d %H:%M") if o["created_at"] else ""])
+        ws1.append(
+            [
+                o["order_id"],
+                o["user_id"],
+                o["username"],
+                o["service_name"],
+                o["department"],
+                o["title"],
+                o["order_status"],
+                float(o["price"] or 0),
+                float(o["deposit"] or 0),
+                float(o["remaining_balance"] or 0),
+                (
+                    o["created_at"].strftime("%Y-%m-%d %H:%M")
+                    if o["created_at"]
+                    else ""
+                ),
+            ]
+        )
     style_sheet(ws1)
 
     ws2 = wb.create_sheet("Payments")
-    ws2.append(["رقم المعاملة", "رقم الطلب", "المبلغ", "العملة", "طريقة الدفع", "التاريخ"])
+    ws2.append(
+        ["رقم المعاملة", "رقم الطلب", "المبلغ", "العملة", "طريقة الدفع", "التاريخ"]
+    )
     for p in payments:
-        ws2.append([p["id"], p["order_id"], float(p["amount"] or 0), p["currency"], p["payment_method"], p["created_at"].strftime("%Y-%m-%d %H:%M") if p["created_at"] else ""])
+        ws2.append(
+            [
+                p["id"],
+                p["order_id"],
+                float(p["amount"] or 0),
+                p["currency"],
+                p["payment_method"],
+                (
+                    p["created_at"].strftime("%Y-%m-%d %H:%M")
+                    if p["created_at"]
+                    else ""
+                ),
+            ]
+        )
     style_sheet(ws2)
 
     ws3 = wb.create_sheet("Activity")
     ws3.append(["ID", "رقم الطلب", "الحدث", "بواسطة", "التفاصيل", "التاريخ"])
     for l in logs:
-        ws3.append([l["id"], l["order_id"], l["action"], l["performed_by"], l["details"], l["timestamp"].strftime("%Y-%m-%d %H:%M") if l["timestamp"] else ""])
+        ws3.append(
+            [
+                l["id"],
+                l["order_id"],
+                l["action"],
+                l["performed_by"],
+                l["details"],
+                (
+                    l["timestamp"].strftime("%Y-%m-%d %H:%M")
+                    if l["timestamp"]
+                    else ""
+                ),
+            ]
+        )
     style_sheet(ws3)
 
     out = io.BytesIO()
     wb.save(out)
     return out.getvalue()
 
+
 # =========================================================
-# Application Routes & Endpoints
+# FastAPI Setup & Routes
 # =========================================================
 
 telegram_app = ApplicationBuilder().token(BOT_TOKEN).build()
-telegram_app.add_handler(CommandHandler("start", lambda u, c: u.message.reply_text("أهلاً بك في النبع للخدمات الجامعية 🎓")))
-telegram_app.add_handler(MessageHandler(filters.ChatType.CHANNEL, channel_post_handler))
-telegram_app.add_handler(MessageHandler(filters.ChatType.PRIVATE & ~filters.COMMAND, customer_private_message_handler))
+telegram_app.add_handler(
+    CommandHandler(
+        "start",
+        lambda u, c: u.message.reply_text("أهلاً بك في النبع للخدمات الجامعية 🎓"),
+    )
+)
+telegram_app.add_handler(
+    MessageHandler(filters.ChatType.CHANNEL, channel_post_handler)
+)
+telegram_app.add_handler(
+    MessageHandler(
+        filters.ChatType.PRIVATE & ~filters.COMMAND,
+        customer_private_message_handler,
+    )
+)
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     await init_db_with_retry()
     await telegram_app.initialize()
     try:
-        await telegram_app.bot.set_webhook(url=WEBHOOK_URL, secret_token=WEBHOOK_SECRET, allowed_updates=["message", "channel_post"])
+        await telegram_app.bot.set_webhook(
+            url=WEBHOOK_URL,
+            secret_token=WEBHOOK_SECRET,
+            allowed_updates=["message", "channel_post"],
+        )
     except Exception:
         logger.exception("Webhook configuration failed")
     yield
     await telegram_app.shutdown()
 
-app = FastAPI(title="النبع API", version="8.8.0", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
+app = FastAPI(title="النبع API", version="8.9.0", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 @app.get("/")
 def root():
@@ -626,17 +1196,23 @@ def root():
         return FileResponse(INDEX_FILE, media_type="text/html")
     return {"status": "online"}
 
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
+
 @app.post(WEBHOOK_PATH)
 async def webhook(request: Request):
-    if not hmac.compare_digest(request.headers.get("X-Telegram-Bot-Api-Secret-Token", ""), WEBHOOK_SECRET):
+    if not hmac.compare_digest(
+        request.headers.get("X-Telegram-Bot-Api-Secret-Token", ""),
+        WEBHOOK_SECRET,
+    ):
         raise HTTPException(status_code=403, detail="Forbidden")
     data = await request.json()
     await telegram_app.process_update(Update.de_json(data, telegram_app.bot))
     return {"ok": True}
+
 
 @app.post("/api/upload")
 async def upload(request: Request, file: UploadFile = File(...)):
@@ -644,8 +1220,18 @@ async def upload(request: Request, file: UploadFile = File(...)):
     data = await file.read()
     token = secrets.token_urlsafe(24)
     with db() as conn:
-        conn.execute("INSERT INTO attachments (token, user_id, filename, content_type, data) VALUES (%s,%s,%s,%s,%s)", (token, user["id"], file.filename[:100], file.content_type or "application/octet-stream", data))
+        conn.execute(
+            "INSERT INTO attachments (token, user_id, filename, content_type, data) VALUES (%s,%s,%s,%s,%s)",
+            (
+                token,
+                user["id"],
+                file.filename[:100],
+                file.content_type or "application/octet-stream",
+                data,
+            ),
+        )
     return {"token": token, "filename": file.filename}
+
 
 @app.post("/api/orders")
 async def submit_order_api(payload: OrderIn, request: Request):
@@ -654,14 +1240,19 @@ async def submit_order_api(payload: OrderIn, request: Request):
     delivered = await deliver_order(order, user, attachment)
     return {"ok": True, "order_id": order["order_id"], "delivered": delivered}
 
+
 @app.get("/api/orders/{order_id}")
 def get_order_status(order_id: str, request: Request):
     user = init_user_from_header(request)
     with db() as conn:
-        row = conn.execute("SELECT * FROM orders WHERE order_id=%s AND user_id=%s", (order_id, user["id"])).fetchone()
+        row = conn.execute(
+            "SELECT * FROM orders WHERE order_id=%s AND user_id=%s",
+            (order_id, user["id"]),
+        ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="الطلب غير موجود")
     return row
+
 
 # ---------- ADMIN ENDPOINTS ----------
 
@@ -670,16 +1261,26 @@ def admin_access(request: Request):
     user = require_admin(request)
     return {"ok": True, "is_admin": True, "telegram_id": user["id"]}
 
+
 @app.get("/api/admin/dashboard")
 def admin_dashboard(request: Request):
     require_admin(request)
     with db() as conn:
-        totals = conn.execute("SELECT COUNT(*) AS total_orders, COALESCE(SUM(price),0) AS total_price FROM orders").fetchone()
-        recent = conn.execute("SELECT * FROM orders ORDER BY created_at DESC LIMIT 20").fetchall()
+        totals = conn.execute(
+            "SELECT COUNT(*) AS total_orders, COALESCE(SUM(price),0) AS total_price FROM orders"
+        ).fetchone()
+        recent = conn.execute(
+            "SELECT * FROM orders ORDER BY created_at DESC LIMIT 20"
+        ).fetchall()
     return {"ok": True, "summary": totals, "recent_orders": recent}
 
+
 @app.get("/api/admin/orders")
-def list_orders(request: Request, q: Optional[str] = Query(None), status: Optional[str] = Query(None)):
+def list_orders(
+    request: Request,
+    q: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+):
     require_admin(request)
     with db() as conn:
         query = "SELECT * FROM orders WHERE 1=1"
@@ -694,77 +1295,147 @@ def list_orders(request: Request, q: Optional[str] = Query(None), status: Option
         orders = conn.execute(query, params).fetchall()
     return {"ok": True, "orders": orders}
 
+
 @app.get("/api/admin/orders/{order_id}")
 def get_order_details_admin(order_id: str, request: Request):
     require_admin(request)
     with db() as conn:
-        order = conn.execute("SELECT * FROM orders WHERE order_id=%s", (order_id,)).fetchone()
-        payments = conn.execute("SELECT * FROM payments WHERE order_id=%s", (order_id,)).fetchall()
-        logs = conn.execute("SELECT * FROM audit_logs WHERE order_id=%s ORDER BY timestamp DESC", (order_id,)).fetchall()
+        order = conn.execute(
+            "SELECT * FROM orders WHERE order_id=%s", (order_id,)
+        ).fetchone()
+        payments = conn.execute(
+            "SELECT * FROM payments WHERE order_id=%s", (order_id,)
+        ).fetchall()
+        logs = conn.execute(
+            "SELECT * FROM audit_logs WHERE order_id=%s ORDER BY timestamp DESC",
+            (order_id,),
+        ).fetchall()
     return {"ok": True, "order": order, "payments": payments, "audit_logs": logs}
+
 
 @app.post("/api/admin/orders/{order_id}/quotation")
 async def set_quotation(order_id: str, payload: QuotationIn, request: Request):
     require_admin(request)
     with db() as conn:
-        order = conn.execute("SELECT * FROM orders WHERE order_id=%s", (order_id,)).fetchone()
+        order = conn.execute(
+            "SELECT * FROM orders WHERE order_id=%s", (order_id,)
+        ).fetchone()
         if not order:
             raise HTTPException(status_code=404, detail="الطلب غير موجود")
-        conn.execute("""
+        conn.execute(
+            """
             UPDATE orders SET quotation_price=%s, price=%s, remaining_balance=%s, quotation_currency=%s,
             delivery_date=%s, delivery_time=%s, quotation_notes=%s, order_status='WAITING_CUSTOMER'
             WHERE order_id=%s
-        """, (payload.price, payload.price, payload.price - order["deposit"], payload.currency, payload.delivery_date, payload.delivery_time, payload.notes, order_id))
-    
-    await notify_customer(order["user_id"], f"📋 <b>عرض سعر جديد لطلبك</b>\n🆔 <b>الطلب:</b> <code>{order_id}</code>\n💰 <b>السعر:</b> {payload.price} {payload.currency}\n📅 <b>التسليم:</b> {payload.delivery_date}\n\nللقبول اكتب: موافق\nللرفض اكتب: ارفض")
+        """,
+            (
+                payload.price,
+                payload.price,
+                payload.price - order["deposit"],
+                payload.currency,
+                payload.delivery_date,
+                payload.delivery_time,
+                payload.notes,
+                order_id,
+            ),
+        )
+
+    await notify_customer(
+        order["user_id"],
+        f"📋 <b>عرض سعر جديد لطلبك</b>\n🆔 <b>الطلب:</b> <code>{order_id}</code>\n💰 <b>السعر:</b> {payload.price} {payload.currency}\n📅 <b>التسليم:</b> {payload.delivery_date}\n\nللقبول اكتب: موافق\nللرفض اكتب: ارفض",
+    )
     return {"ok": True, "status": "WAITING_CUSTOMER"}
 
+
 @app.post("/api/admin/orders/{order_id}/status")
-async def update_order_status(order_id: str, payload: StatusUpdateIn, request: Request):
+async def update_order_status(
+    order_id: str, payload: StatusUpdateIn, request: Request
+):
     require_admin(request)
     with db() as conn:
-        conn.execute("UPDATE orders SET order_status=%s, admin_note=%s WHERE order_id=%s", (payload.status, payload.admin_note, order_id))
+        conn.execute(
+            "UPDATE orders SET order_status=%s, admin_note=%s WHERE order_id=%s",
+            (payload.status, payload.admin_note, order_id),
+        )
     return {"ok": True, "status": payload.status}
+
 
 @app.post("/api/admin/orders/{order_id}/payments")
 def record_payment(order_id: str, payload: PaymentIn, request: Request):
     require_admin(request)
     with db() as conn:
-        order = conn.execute("SELECT * FROM orders WHERE order_id=%s", (order_id,)).fetchone()
+        order = conn.execute(
+            "SELECT * FROM orders WHERE order_id=%s", (order_id,)
+        ).fetchone()
         new_deposit = Decimal(str(order["deposit"] or 0)) + payload.amount
         rem = Decimal(str(order["price"] or 0)) - new_deposit
-        conn.execute("INSERT INTO payments (order_id, amount, currency, payment_method) VALUES (%s,%s,%s,%s)", (order_id, payload.amount, payload.currency, payload.payment_method))
-        conn.execute("UPDATE orders SET deposit=%s, remaining_balance=%s WHERE order_id=%s", (new_deposit, rem, order_id))
+        conn.execute(
+            "INSERT INTO payments (order_id, amount, currency, payment_method) VALUES (%s,%s,%s,%s)",
+            (order_id, payload.amount, payload.currency, payload.payment_method),
+        )
+        conn.execute(
+            "UPDATE orders SET deposit=%s, remaining_balance=%s WHERE order_id=%s",
+            (new_deposit, rem, order_id),
+        )
     return {"ok": True, "total_paid": str(new_deposit)}
+
 
 @app.post("/api/admin/orders/{order_id}/notes")
 def update_admin_note(order_id: str, payload: AdminNoteIn, request: Request):
     require_admin(request)
     with db() as conn:
-        conn.execute("UPDATE orders SET admin_note=%s WHERE order_id=%s", (payload.admin_note, order_id))
+        conn.execute(
+            "UPDATE orders SET admin_note=%s WHERE order_id=%s",
+            (payload.admin_note, order_id),
+        )
     return {"ok": True}
 
+
 @app.post("/api/admin/orders/{order_id}/delivery-upload")
-async def upload_delivery_attachment(order_id: str, request: Request, file: UploadFile = File(...)):
+async def upload_delivery_attachment(
+    order_id: str, request: Request, file: UploadFile = File(...)
+):
     require_admin(request)
     data = await file.read()
     token = secrets.token_urlsafe(24)
     with db() as conn:
-        conn.execute("INSERT INTO attachments (token, user_id, filename, content_type, data, order_id) VALUES (%s,%s,%s,%s,%s,%s)", (token, 0, file.filename[:100], file.content_type or "application/octet-stream", data, order_id))
+        conn.execute(
+            "INSERT INTO attachments (token, user_id, filename, content_type, data, order_id) VALUES (%s,%s,%s,%s,%s,%s)",
+            (
+                token,
+                0,
+                file.filename[:100],
+                file.content_type or "application/octet-stream",
+                data,
+                order_id,
+            ),
+        )
     return {"ok": True, "token": token}
+
 
 @app.post("/api/admin/orders/{order_id}/deliver")
 async def deliver_order_to_customer(order_id: str, request: Request):
     require_admin(request)
     with db() as conn:
-        order = conn.execute("SELECT * FROM orders WHERE order_id=%s", (order_id,)).fetchone()
-        atts = conn.execute("SELECT * FROM attachments WHERE order_id=%s", (order_id,)).fetchall()
+        order = conn.execute(
+            "SELECT * FROM orders WHERE order_id=%s", (order_id,)
+        ).fetchone()
+        atts = conn.execute(
+            "SELECT * FROM attachments WHERE order_id=%s", (order_id,)
+        ).fetchall()
         if not atts:
             raise HTTPException(status_code=400, detail="لا توجد ملفات مرفقة لتسليمها")
-        conn.execute("UPDATE orders SET order_status='COMPLETED' WHERE order_id=%s", (order_id,))
-    
-    await notify_customer(order["user_id"], f"🎓 <b>تم تسليم عملك واكتمال الطلب {order_id} بنجاح.</b>")
+        conn.execute(
+            "UPDATE orders SET order_status='COMPLETED' WHERE order_id=%s",
+            (order_id,),
+        )
+
+    await notify_customer(
+        order["user_id"],
+        f"🎓 <b>تم تسليم عملك واكتمال الطلب {order_id} بنجاح.</b>",
+    )
     return {"ok": True, "status": "COMPLETED"}
+
 
 @app.get("/api/admin/export/excel")
 async def export_excel(request: Request):
@@ -779,6 +1450,8 @@ async def export_excel(request: Request):
         },
     )
 
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run("main:app", host="0.0.0.0", port=env_int("PORT", 8000))
