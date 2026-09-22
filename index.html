@@ -2671,127 +2671,69 @@
 
   async function apiDownload(url) {
 
-    const initData =
-      ensureTelegramAuth();
+    const initData = ensureTelegramAuth();
 
-    let lastError = null;
-
-    for (let attempt = 1; attempt <= 2; attempt++) {
-
-      let response;
-
-      try {
-
-        response =
-          await fetch(
-            API_BASE + url,
-            {
-              method: "GET",
-
-              headers: {
-                "X-Telegram-Init-Data":
-                  initData
-              },
-
-              cache: "no-store",
-
-              credentials: "omit"
-            }
-          );
-
-      } catch (error) {
-
-        lastError = error;
-
-        if (attempt < 2) {
-
-          await new Promise(
-            resolve =>
-              setTimeout(
-                resolve,
-                700
-              )
-          );
-
-          continue;
-
-        }
-
-        throw new Error(
-          "تعذر الاتصال بالخادم. تحقق من اتصال الإنترنت وافتح التطبيق من داخل Telegram ثم حاول مرة أخرى."
-        );
-
-      }
-
-      if (!response.ok) {
-
-        const contentType =
-          response.headers.get(
-            "content-type"
-          ) || "";
-
-        let message =
-          "فشل تحميل ملف Excel.";
-
-        if (
-          contentType.includes(
-            "application/json"
-          )
-        ) {
-
-          const data =
-            await response
-              .json()
-              .catch(
-                () => ({})
-              );
-
-          if (
-            typeof data.detail ===
-            "string"
-          ) {
-
-            message =
-              data.detail;
-
-          }
-
-        } else {
-
-          const text =
-            await response
-              .text()
-              .catch(
-                () => ""
-              );
-
-          if (text) {
-
-            message =
-              text.slice(
-                0,
-                500
-              );
-
-          }
-
-        }
-
-        throw new Error(
-          message
-        );
-
-      }
-
-      return response;
-
+    if (!initData) {
+      throw new Error(
+        "تعذر الحصول على بيانات جلسة Telegram. أعد فتح التطبيق من داخل البوت."
+      );
     }
 
-    throw lastError ||
-      new Error(
-        "تعذر تحميل ملف Excel."
-      );
+    let response;
 
+    try {
+      response = await fetch(
+        API_BASE.replace(/\/$/, "") + url,
+        {
+          method: "GET",
+          headers: {
+            "X-Telegram-Init-Data": initData,
+            "Accept": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/json"
+          },
+          cache: "no-store",
+          credentials: "omit"
+        }
+      );
+    } catch (error) {
+      console.error("Excel download network error:", error);
+      throw new Error(
+        "تعذر الاتصال بالخادم. تحقق من اتصال الإنترنت ثم أعد المحاولة."
+      );
+    }
+
+    if (!response.ok) {
+      const contentType =
+        response.headers.get("content-type") || "";
+
+      let message = `فشل تحميل الملف (HTTP ${response.status}).`;
+
+      try {
+        if (contentType.includes("application/json")) {
+          const data = await response.json();
+          if (typeof data.detail === "string") {
+            message = data.detail;
+          } else if (typeof data.message === "string") {
+            message = data.message;
+          }
+        } else {
+          const text = await response.text();
+          if (text) {
+            message = text.slice(0, 500);
+          }
+        }
+      } catch (error) {
+        console.warn("Could not read download error response:", error);
+      }
+
+      throw new Error(message);
+    }
+
+    const contentLength = response.headers.get("content-length");
+    if (contentLength === "0") {
+      throw new Error("تم استلام ملف Excel فارغ.");
+    }
+
+    return response;
   }
 
 
