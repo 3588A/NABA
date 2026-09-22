@@ -365,6 +365,25 @@ def init_db():
             """
         )
 
+        # Telegram message-to-customer mapping.
+        # Each message sent from a customer to the channel gets its own row,
+        # so an administrator can reply to that exact message and the bot
+        # can route the reply back to the same customer without overwriting
+        # the order's original channel_message_id.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS telegram_message_links (
+                id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                channel_message_id BIGINT NOT NULL UNIQUE,
+                order_id TEXT NOT NULL
+                    REFERENCES orders(order_id)
+                    ON DELETE CASCADE,
+                user_id BIGINT NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+
         # -----------------------------
         # Orders migrations
         # -----------------------------
@@ -630,6 +649,14 @@ def init_db():
             """
             CREATE INDEX IF NOT EXISTS orders_channel_message_idx
             ON orders(channel_message_id)
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS telegram_message_links_order_idx
+            ON telegram_message_links(order_id)
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS telegram_message_links_user_idx
+            ON telegram_message_links(user_id)
             """,
             """
             CREATE INDEX IF NOT EXISTS attachments_order_id_idx
@@ -1908,39 +1935,35 @@ async def customer_private_message_handler(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
 ):
-    if not update.effective_user:
-        return
-
-    if not update.effective_message:
+    """
+    Send a customer's private-bot message to the channel and persist the
+    exact channel message id. This makes an administrator's Reply action
+    deterministic: replying to that channel message routes back to the same
+    customer, not merely to the customer's latest order.
+    """
+    if not update.effective_user or not update.effective_message:
         return
 
     user = update.effective_user
+    message = update.effective_message
 
     if user.id == ADMIN_TELEGRAM_ID:
         return
 
     raw_text = (
-        update.effective_message.text
+        getattr(message, "text", None)
+        or getattr(message, "caption", None)
         or ""
     ).strip()
 
-    if not raw_text:
-        return
+    normalized = normalize_private_text(raw_text) if raw_text else ""
 
-    normalized = normalize_private_text(
-        raw_text
-    )
-
-    # ---------------------------------------------
-    # 1. Quotation decision
-    # ---------------------------------------------
-
+    # Quotation decisions are handled before ordinary customer messages.
     if normalized in ACCEPT_WORDS:
         handled = await handle_customer_quotation_decision(
             user.id,
             True,
         )
-
         if handled:
             return
 
@@ -1949,13 +1972,8 @@ async def customer_private_message_handler(
             user.id,
             False,
         )
-
         if handled:
             return
-
-    # ---------------------------------------------
-    # 2. Ordinary customer message
-    # ---------------------------------------------
 
     order = await asyncio.to_thread(
         get_latest_active_order,
@@ -1973,49 +1991,119 @@ async def customer_private_message_handler(
         return
 
     order_id = order["order_id"]
-
-    channel_message = (
-        "💬 <b>رسالة جديدة من الزبون</b>\n\n"
-        f"🆔 <b>رقم الطلب:</b> "
-        f"<code>{html.escape(order_id)}</code>\n"
-        f"👤 <b>Telegram ID:</b> "
-        f"<code>{user.id}</code>\n"
-        f"👤 <b>Username:</b> "
-        f"@{html.escape(user.username or 'بدون_يوزر')}\n\n"
-        f"📝 <b>الرسالة:</b>\n"
-        f"{html.escape(raw_text)}\n\n"
-        "💡 <b>للرد على الزبون:</b>\n"
-        f"<code>/reply {html.escape(order_id)} نص الرد</code>"
-    )
-
-    sent = await send_channel_text(
-        channel_message
-    )
-
-    if sent:
+    channel = parse_channel_id()
+    if not channel:
         await notify_customer(
             user.id,
-            "✅ تم إرسال رسالتك إلى الكادر.",
+            "❌ القناة غير مهيأة حاليًا، حاول مرة أخرى لاحقًا.",
         )
+        return
+
+    username = html.escape(user.username or "بدون_يوزر")
+    order_code = html.escape(order_id)
+
+    # Text/caption messages are posted as a normal channel message so the
+    # administrator can directly Reply to it.
+    if raw_text:
+        channel_message = (
+            "💬 <b>رسالة جديدة من الزبون</b>\n\n"
+            f"🆔 <b>رقم الطلب:</b> <code>{order_code}</code>\n"
+            f"👤 <b>Telegram ID:</b> <code>{user.id}</code>\n"
+            f"👤 <b>Username:</b> @{username}\n\n"
+            f"📝 <b>الرسالة:</b>\n{html.escape(raw_text)}"
+        )
+
+        sent = await send_channel_text(channel_message)
+        if not sent:
+            await notify_customer(
+                user.id,
+                "❌ تعذر إرسال رسالتك حاليًا، حاول مرة أخرى.",
+            )
+            return
+
+        sent_message_ids = [sent.message_id]
+
+    else:
+        # For media/non-text messages, post a context message and then copy
+        # the original media into the channel. Both messages are mapped so
+        # replying to either one reaches the same customer.
+        context_message = await send_channel_text(
+            (
+                "📎 <b>مرفق جديد من الزبون</b>\n\n"
+                f"🆔 <b>رقم الطلب:</b> <code>{order_code}</code>\n"
+                f"👤 <b>Telegram ID:</b> <code>{user.id}</code>\n"
+                f"👤 <b>Username:</b> @{username}\n\n"
+                "💡 يمكن الرد مباشرة على المرفق."
+            )
+        )
+
+        if not context_message:
+            await notify_customer(
+                user.id,
+                "❌ تعذر إرسال رسالتك حاليًا، حاول مرة أخرى.",
+            )
+            return
 
         try:
-            with db() as conn:
-                add_audit_log_conn(
-                    conn,
-                    order_id,
-                    "CUSTOMER_MESSAGE_TO_CHANNEL",
-                    f"User_{user.id}",
-                    raw_text[:2000],
-                )
-        except Exception:
-            logger.exception(
-                "Could not write customer message audit"
+            copied = await telegram_app.bot.copy_message(
+                chat_id=channel,
+                from_chat_id=user.id,
+                message_id=message.message_id,
             )
-    else:
+        except TelegramError:
+            logger.exception(
+                "Could not copy customer message to channel"
+            )
+            await notify_customer(
+                user.id,
+                "❌ تعذر إرسال المرفق حاليًا، حاول مرة أخرى.",
+            )
+            return
+
+        sent_message_ids = [
+            context_message.message_id,
+            copied.message_id,
+        ]
+
+    # Persist every channel message id separately. Never overwrite the
+    # original order delivery ids stored in `orders`.
+    try:
+        with db() as conn:
+            for channel_message_id in sent_message_ids:
+                conn.execute(
+                    """
+                    INSERT INTO telegram_message_links
+                        (channel_message_id, order_id, user_id)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (channel_message_id)
+                    DO UPDATE SET
+                        order_id=EXCLUDED.order_id,
+                        user_id=EXCLUDED.user_id
+                    """,
+                    (channel_message_id, order_id, user.id),
+                )
+
+            add_audit_log_conn(
+                conn,
+                order_id,
+                "CUSTOMER_MESSAGE_TO_CHANNEL",
+                f"User_{user.id}",
+                raw_text[:2000] if raw_text else "مرفق",
+            )
+    except Exception:
+        logger.exception(
+            "Could not persist customer channel message mapping"
+        )
         await notify_customer(
             user.id,
-            "❌ تعذر إرسال رسالتك حاليًا، حاول مرة أخرى.",
+            "❌ تعذر حفظ ربط الرسالة بالقناة. لم يتم اعتماد الإرسال.",
         )
+        return
+
+    await notify_customer(
+        user.id,
+        "✅ تم إرسال رسالتك إلى الكادر ويمكنك متابعة الرد من خلال البوت.",
+    )
 
 
 # =========================================================
@@ -2116,136 +2204,132 @@ async def channel_post_handler(
     context: ContextTypes.DEFAULT_TYPE,
 ):
     """
-    يحول رد الأدمن على رسالة الطلب في القناة إلى محادثة الزبون.
+    Route an administrator reply from either:
+      1) the channel itself, or
+      2) the channel's linked discussion group
+    back to the customer who owns the original order.
 
-    يدعم حالتين:
-    1) الرد المباشر داخل القناة (channel_post).
-    2) الرد من مجموعة المناقشة المرتبطة بالقناة، حيث تكون
-       الرسالة الأصلية forwarded/automatic-forwarded من القناة.
+    Telegram normally delivers replies made in a channel's discussion
+    thread as ordinary `message` updates in the linked group. The
+    replied-to message is an automatic forward of the channel post, so
+    the original channel message id must be taken from `forward_origin`
+    rather than the discussion group's message id.
     """
+    message = update.channel_post or update.message
+
+    if not message:
+        return
 
     channel = parse_channel_id()
     if not channel:
         return
 
-    post = update.channel_post
-    message = update.message
+    # A direct channel post/reply must originate from the configured channel.
+    # A discussion-group message is accepted only when it contains a
+    # forward-origin pointing back to the configured channel.
+    is_channel_message = (
+        update.channel_post is not None
+        and str(message.chat.id) == str(channel)
+    )
+    is_group_message = (
+        update.message is not None
+        and getattr(message.chat, "type", None) in ("group", "supergroup")
+    )
 
-    # ---------------------------------------------------------
-    # تحديد الرسالة الواردة والقناة التي جاءت منها
-    # ---------------------------------------------------------
-    incoming = post or message
-    if not incoming:
+    if not (is_channel_message or is_group_message):
         return
 
-    # رسائل الزبائن الخاصة لا تدخل هنا؛ نريد فقط القناة أو
-    # مجموعة المناقشة المرتبطة بها.
-    if post:
-        if str(post.chat.id) != str(channel):
-            return
-    else:
-        if not message.chat.type in ("group", "supergroup"):
-            return
-
-    replied_to = incoming.reply_to_message
+    replied_to = getattr(message, "reply_to_message", None)
     if not replied_to:
         return
 
     reply_text = (
-        incoming.text
-        or incoming.caption
+        getattr(message, "text", None)
+        or getattr(message, "caption", None)
         or ""
     ).strip()
 
     if not reply_text:
+        # Do not silently forward arbitrary media from the discussion group.
+        # The requested workflow is an administrator text reply.
         return
 
-    # ---------------------------------------------------------
-    # الرسالة الهدف قد تكون:
-    # - رسالة القناة نفسها.
-    # - رسالة forwarded/automatic-forwarded في مجموعة المناقشة.
-    # ---------------------------------------------------------
-    candidate_message_ids = {
-        replied_to.message_id
-    }
+    candidate_ids = []
 
-    forward_origin = getattr(
-        replied_to,
-        "forward_origin",
-        None,
-    )
+    # Case 1: true reply inside the channel itself.
+    if str(getattr(replied_to.chat, "id", "")) == str(channel):
+        candidate_ids.append(replied_to.message_id)
 
-    if forward_origin is not None:
-        origin_chat = getattr(
-            forward_origin,
-            "chat",
-            None,
-        )
-        origin_message_id = getattr(
-            forward_origin,
-            "message_id",
-            None,
-        )
-
+    # Case 2: reply inside the linked discussion group. Telegram represents
+    # the original channel post as an automatic forward.
+    origin = getattr(replied_to, "forward_origin", None)
+    if origin is not None:
+        origin_chat = getattr(origin, "chat", None)
+        origin_chat_id = getattr(origin_chat, "id", None)
+        origin_message_id = getattr(origin, "message_id", None)
         if (
-            origin_chat is not None
-            and str(origin_chat.id) == str(channel)
-            and origin_message_id
+            origin_message_id is not None
+            and origin_chat_id is not None
+            and str(origin_chat_id) == str(channel)
         ):
-            candidate_message_ids.add(
-                origin_message_id
-            )
+            candidate_ids.append(origin_message_id)
 
-    # توافق مع بعض إصدارات python-telegram-bot القديمة
-    forward_from_chat = getattr(
-        replied_to,
-        "forward_from_chat",
-        None,
-    )
-    forward_from_message_id = getattr(
+    # Backward compatibility with older python-telegram-bot objects.
+    legacy_chat = getattr(replied_to, "forward_from_chat", None)
+    legacy_chat_id = getattr(legacy_chat, "id", None)
+    legacy_message_id = getattr(
         replied_to,
         "forward_from_message_id",
         None,
     )
-
     if (
-        forward_from_chat is not None
-        and str(forward_from_chat.id) == str(channel)
-        and forward_from_message_id
+        legacy_message_id is not None
+        and legacy_chat_id is not None
+        and str(legacy_chat_id) == str(channel)
     ):
-        candidate_message_ids.add(
-            forward_from_message_id
-        )
+        candidate_ids.append(legacy_message_id)
 
-    logger.info(
-        "Channel/discussion reply received: "
-        "chat=%s message_id=%s target_ids=%s",
-        incoming.chat.id,
-        incoming.message_id,
-        sorted(candidate_message_ids),
-    )
+    # Remove duplicates while preserving order.
+    candidate_ids = list(dict.fromkeys(candidate_ids))
+
+    if not candidate_ids:
+        logger.info(
+            "Administrator reply could not be mapped: chat=%s message_id=%s",
+            message.chat.id,
+            message.message_id,
+        )
+        return
 
     try:
         with db() as conn:
             order = conn.execute(
                 """
                 SELECT order_id, user_id
-                FROM orders
+                FROM telegram_message_links
                 WHERE channel_message_id = ANY(%s)
-                   OR channel_attachment_message_id = ANY(%s)
                 ORDER BY created_at DESC
                 LIMIT 1
                 """,
-                (
-                    list(candidate_message_ids),
-                    list(candidate_message_ids),
-                ),
+                (candidate_ids,),
             ).fetchone()
 
+            if not order:
+                order = conn.execute(
+                    """
+                    SELECT order_id, user_id
+                    FROM orders
+                    WHERE channel_message_id = ANY(%s)
+                       OR channel_attachment_message_id = ANY(%s)
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                    """,
+                    (candidate_ids, candidate_ids),
+                ).fetchone()
+
         if not order:
-            logger.info(
-                "Channel reply target %s is not linked to an order",
-                sorted(candidate_message_ids),
+            logger.warning(
+                "No order found for channel message ids=%s",
+                candidate_ids,
             )
             return
 
@@ -2273,17 +2357,16 @@ async def channel_post_handler(
             )
 
         logger.info(
-            "Channel/discussion reply mapped to order=%s "
-            "user=%s success=%s",
+            "Admin reply routed: order=%s user=%s success=%s source_chat=%s",
             order["order_id"],
             order["user_id"],
             success,
+            message.chat.id,
         )
 
     except Exception:
         logger.exception(
-            "Failed to forward channel/discussion reply "
-            "to customer"
+            "Failed to forward administrator reply to customer"
         )
 
 
@@ -2520,8 +2603,8 @@ telegram_app.add_handler(
     )
 )
 
-# ردود الأدمن على منشورات القناة قد تصل من مجموعة
-# المناقشة المرتبطة بالقناة، وليس كـ channel_post.
+# Replies to channel posts are normally delivered by Telegram as messages
+# inside the linked discussion group. Route those through the same handler.
 telegram_app.add_handler(
     MessageHandler(
         filters.ChatType.GROUPS
@@ -2535,7 +2618,6 @@ telegram_app.add_handler(
 telegram_app.add_handler(
     MessageHandler(
         filters.ChatType.PRIVATE
-        & filters.TEXT
         & ~filters.COMMAND,
         customer_private_message_handler,
     )
@@ -4823,10 +4905,12 @@ async def export_excel_report(
     if send_telegram:
 
         try:
-
+            # Use an in-memory file object so python-telegram-bot receives
+            # a proper document payload. Telegram delivery is deliberately
+            # independent from the HTTP download below.
             await telegram_app.bot.send_document(
                 chat_id=ADMIN_TELEGRAM_ID,
-                document=excel_bytes,
+                document=io.BytesIO(excel_bytes),
                 filename="NABA_Orders.xlsx",
                 caption=(
                     "📊 تقرير طلبات وسجلات "
@@ -4835,9 +4919,10 @@ async def export_excel_report(
             )
 
         except TelegramError:
-            # فشل إرسال نسخة التليجرام لا يمنع تنزيل ملف Excel.
+            # A Telegram-side failure must never turn a valid Excel export
+            # into an HTTP 502. Log it and still return the generated file.
             logger.exception(
-                "Could not send Excel report to admin via Telegram"
+                "Excel generated successfully, but Telegram copy failed"
             )
 
     # Return the XLSX bytes directly. This avoids proxy/client
