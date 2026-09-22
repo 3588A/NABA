@@ -2134,6 +2134,85 @@ async def channel_post_handler(
         post.message_id,
     )
 
+    # -----------------------------------------------------
+    # Admin reply from the channel -> customer's private chat
+    #
+    # The bot is an administrator in the channel and there is
+    # no linked discussion group. Therefore a channel reply can
+    # be mapped back to the customer through the original order
+    # message ID stored in orders.channel_message_id.
+    # -----------------------------------------------------
+    replied_to = post.reply_to_message
+
+    if not replied_to:
+        return
+
+    reply_text = (post.text or post.caption or "").strip()
+
+    if not reply_text:
+        return
+
+    replied_message_id = replied_to.message_id
+
+    try:
+        with db() as conn:
+            order = conn.execute(
+                """
+                SELECT order_id, user_id
+                FROM orders
+                WHERE channel_message_id=%s
+                   OR channel_attachment_message_id=%s
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (
+                    replied_message_id,
+                    replied_message_id,
+                ),
+            ).fetchone()
+
+        if not order:
+            logger.info(
+                "Channel reply %s is not linked to an order",
+                replied_message_id,
+            )
+            return
+
+        success = await notify_customer(
+            order["user_id"],
+            (
+                "📩 <b>رسالة من إدارة النبع</b>\n\n"
+                f"🆔 <b>رقم الطلب:</b> "
+                f"<code>{html.escape(order['order_id'])}</code>\n\n"
+                f"{html.escape(reply_text)}"
+            ),
+        )
+
+        with db() as conn:
+            add_audit_log_conn(
+                conn,
+                order["order_id"],
+                (
+                    "ADMIN_CHANNEL_REPLY_TO_CUSTOMER"
+                    if success
+                    else "ADMIN_CHANNEL_REPLY_FAILED"
+                ),
+                "Admin",
+                reply_text[:2000],
+            )
+
+        logger.info(
+            "Channel reply mapped to order=%s user=%s success=%s",
+            order["order_id"],
+            order["user_id"],
+            success,
+        )
+
+    except Exception:
+        logger.exception(
+            "Failed to forward channel reply to customer"
+        )
+
 
 # =========================================================
 # Bot Commands
@@ -2467,6 +2546,10 @@ app.add_middleware(
         "Content-Type",
         "X-Telegram-Init-Data",
         "Idempotency-Key",
+    ],
+    expose_headers=[
+        "Content-Disposition",
+        "Content-Length",
     ],
 )
 
@@ -4678,15 +4761,22 @@ async def export_excel_report(
                 ),
             )
 
-    return StreamingResponse(
-        io.BytesIO(excel_bytes),
+    # Return the XLSX bytes directly. This avoids proxy/client
+    # issues that can occur with a streaming response for a
+    # generated in-memory Excel file.
+    from fastapi.responses import Response
+
+    return Response(
+        content=excel_bytes,
         media_type=(
             "application/vnd.openxmlformats-"
             "officedocument.spreadsheetml.sheet"
         ),
         headers={
             "Content-Disposition":
-                'attachment; filename="NABA_Orders.xlsx"'
+                'attachment; filename="NABA_Orders.xlsx"',
+            "Content-Length": str(len(excel_bytes)),
+            "Cache-Control": "no-store",
         },
     )
 
