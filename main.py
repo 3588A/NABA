@@ -12,8 +12,6 @@ import string
 import time
 from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timezone
-from decimal import Decimal, InvalidOperation
-import tempfile
 from pathlib import Path
 from typing import Literal
 from urllib.parse import parse_qsl, urlparse
@@ -30,7 +28,6 @@ from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Update,
-    CallbackQuery,
     WebAppInfo,
 )
 from telegram.error import TelegramError
@@ -39,7 +36,6 @@ from telegram.ext import (
     CommandHandler,
     ContextTypes,
     MessageHandler,
-    CallbackQueryHandler,
     filters,
 )
 
@@ -58,18 +54,6 @@ logging.basicConfig(
 logger = logging.getLogger("NABA")
 
 
-def money_decimal(value) -> Decimal:
-    try:
-        return Decimal(str(value or 0)).quantize(Decimal("0.01"))
-    except (InvalidOperation, ValueError, TypeError):
-        return Decimal("0.00")
-
-
-def money_float(value) -> float:
-    return float(money_decimal(value))
-
-
-
 # =========================================================
 # Environment helpers
 # =========================================================
@@ -84,6 +68,7 @@ def env_int(name: str, default: int) -> int:
 
     try:
         return int(raw)
+
     except ValueError:
         raise RuntimeError(
             f"{name} must be an integer"
@@ -112,6 +97,7 @@ WEB_APP_URL = env("WEB_APP_URL")
 BACKEND_URL = env("BACKEND_URL").rstrip("/")
 
 WEBHOOK_PATH = "/webhook"
+
 WEBHOOK_URL = env("WEBHOOK_URL").rstrip("/")
 
 DATABASE_URL = env("DATABASE_URL")
@@ -121,9 +107,11 @@ DATABASE_URL = env("DATABASE_URL")
 # ADMIN SECURITY
 # =========================================================
 
+# هذا هو Telegram ID الوحيد المسموح له بلوحة التحكم.
+# لا تعتمد حماية لوحة التحكم على الواجهة الأمامية.
 ADMIN_TELEGRAM_ID = 6931187332
 
-# compatibility
+# الإبقاء على المتغير القديم للتوافق مع بقية النظام.
 ADMIN_USER_ID = ADMIN_TELEGRAM_ID
 
 
@@ -179,10 +167,12 @@ if not BACKEND_URL.startswith("https://"):
         "BACKEND_URL must use HTTPS"
     )
 
+
 if not WEBHOOK_URL:
     WEBHOOK_URL = (
         f"{BACKEND_URL}{WEBHOOK_PATH}"
     )
+
 
 if not WEBHOOK_URL.startswith("https://"):
     raise RuntimeError(
@@ -205,6 +195,7 @@ if re.fullmatch(
     WEBHOOK_SECRET = (
         configured_webhook_secret
     )
+
 else:
     WEBHOOK_SECRET = hashlib.sha256(
         f"naba-webhook:{BOT_TOKEN}".encode()
@@ -238,7 +229,6 @@ for raw_id in env(
 BASE_DIR = Path(__file__).resolve().parent
 
 INDEX_FILE = BASE_DIR / "index.html"
-MIGRATIONS_DIR = BASE_DIR / "migrations"
 
 
 # =========================================================
@@ -251,9 +241,11 @@ SERVICES = {
     "minitab": "تحليل البيانات Minitab",
     "formatting": "تنسيق PowerPoint / Word / PDF",
 
+    # الخدمات المهنية
     "cv": "سيرة ذاتية CV احترافية",
     "cv_ats": "سيرة ذاتية CV بنظام ATS",
 
+    # التصميم والهوية البصرية
     "logo": "تصميم Logo",
     "identity": "Logo + هوية بصرية",
 }
@@ -264,17 +256,39 @@ SERVICES = {
 # =========================================================
 
 SERVICE_DETAIL_LABELS = {
-    "cv_type": "نوع السيرة الذاتية",
-    "photo": "الصورة",
-    "language": "لغة السيرة الذاتية",
-    "target_job": "الوظيفة / المجال المستهدف",
-    "design_type": "نوع التصميم",
-    "brand_name": "اسم المشروع / العلامة",
-    "business_field": "مجال النشاط",
-    "design_idea": "فكرة التصميم والتفاصيل المطلوبة",
-    "preferred_colors": "الألوان / النمط المفضل",
-    "usage": "أماكن استخدام التصميم",
-    "extra_notes": "تعليمات إضافية",
+
+    "cv_type":
+        "نوع السيرة الذاتية",
+
+    "photo":
+        "الصورة",
+
+    "language":
+        "لغة السيرة الذاتية",
+
+    "target_job":
+        "الوظيفة / المجال المستهدف",
+
+    "design_type":
+        "نوع التصميم",
+
+    "brand_name":
+        "اسم المشروع / العلامة",
+
+    "business_field":
+        "مجال النشاط",
+
+    "design_idea":
+        "فكرة التصميم والتفاصيل المطلوبة",
+
+    "preferred_colors":
+        "الألوان / النمط المفضل",
+
+    "usage":
+        "أماكن استخدام التصميم",
+
+    "extra_notes":
+        "تعليمات إضافية",
 }
 
 
@@ -292,20 +306,26 @@ def db():
     )
 
     try:
+
         yield conn
+
         conn.commit()
 
     except Exception:
+
         conn.rollback()
+
         raise
 
     finally:
+
         conn.close()
 
 
 def init_db():
 
     statements = [
+
         """
         CREATE TABLE IF NOT EXISTS orders (
             order_id TEXT PRIMARY KEY,
@@ -329,6 +349,9 @@ def init_db():
         )
         """,
 
+        # =================================================
+        # الإضافة الوحيدة الجديدة إلى جدول الطلبات
+        # =================================================
         """
         ALTER TABLE orders
         ADD COLUMN IF NOT EXISTS
@@ -385,79 +408,6 @@ def init_db():
         for statement in statements:
             conn.execute(statement)
 
-        # =================================================
-        # Safe workflow / payment schema extensions
-        # =================================================
-        workflow_columns = [
-            ("customer_decision", "TEXT NOT NULL DEFAULT 'WAITING'"),
-            ("delivery_at", "TEXT NOT NULL DEFAULT ''"),
-            ("admin_note", "TEXT NOT NULL DEFAULT ''"),
-            ("quote_sent_at", "TIMESTAMPTZ"),
-            ("customer_decided_at", "TIMESTAMPTZ"),
-            ("cancelled_at", "TIMESTAMPTZ"),
-            ("cancelled_by", "TEXT NOT NULL DEFAULT ''"),
-            ("cancellation_reason", "TEXT NOT NULL DEFAULT ''"),
-            ("updated_at", "TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP"),
-            ("idempotency_key", "TEXT"),
-            ("idempotency_fingerprint", "TEXT"),
-            ("channel_delivery_status", "TEXT NOT NULL DEFAULT 'PENDING'"),
-        ]
-        for column, definition in workflow_columns:
-            conn.execute(f"ALTER TABLE orders ADD COLUMN IF NOT EXISTS {column} {definition}")
-
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS payments (
-                payment_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-                order_id TEXT NOT NULL REFERENCES orders(order_id) ON DELETE RESTRICT,
-                amount NUMERIC(12,2) NOT NULL,
-                currency TEXT NOT NULL DEFAULT 'IQD',
-                payment_method TEXT NOT NULL DEFAULT 'MANUAL',
-                note TEXT NOT NULL DEFAULT '',
-                performed_by TEXT NOT NULL DEFAULT 'System',
-                request_key TEXT,
-                created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        conn.execute("ALTER TABLE payments ADD COLUMN IF NOT EXISTS request_key TEXT")
-        conn.execute("""
-            CREATE UNIQUE INDEX IF NOT EXISTS payments_order_request_key_uniq
-            ON payments(order_id, request_key)
-            WHERE request_key IS NOT NULL
-        """)
-        conn.execute("ALTER TABLE attachments ADD COLUMN IF NOT EXISTS order_id TEXT REFERENCES orders(order_id) ON DELETE SET NULL")
-        conn.execute("ALTER TABLE attachments ADD COLUMN IF NOT EXISTS attached_at TIMESTAMPTZ")
-        conn.execute("CREATE INDEX IF NOT EXISTS orders_status_idx ON orders(order_status)")
-        conn.execute("CREATE INDEX IF NOT EXISTS orders_customer_decision_idx ON orders(customer_decision)")
-        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS orders_user_id_idempotency_key_uniq ON orders(user_id, idempotency_key) WHERE idempotency_key IS NOT NULL")
-
-        # =================================================
-        # Phase 1 migration
-        # =================================================
-
-        migration_file = (
-            MIGRATIONS_DIR
-            / "001_phase1_foundation.sql"
-        )
-
-        if migration_file.exists():
-
-            migration_sql = "\n".join(
-                line
-                for line in migration_file
-                .read_text(
-                    encoding="utf-8"
-                )
-                .splitlines()
-                if not line.lstrip().startswith("--")
-            )
-
-            for statement in migration_sql.split(";"):
-
-                statement = statement.strip()
-
-                if statement:
-                    conn.execute(statement)
-
 
 async def init_db_with_retry(
     attempts: int = 5,
@@ -499,7 +449,7 @@ async def init_db_with_retry(
 
 
 # =========================================================
-# Safe audit helpers
+# Audit log helper
 # =========================================================
 
 def add_audit_log(
@@ -507,6 +457,11 @@ def add_audit_log(
     action: str,
     performed_by: str = "System",
 ):
+    """
+    تسجيل نشاط حقيقي للطلب داخل audit_logs.
+    لا ينشئ جدولًا جديدًا.
+    """
+
     with db() as conn:
 
         conn.execute(
@@ -523,359 +478,6 @@ def add_audit_log(
                 action,
                 performed_by,
             ),
-        )
-
-
-def log_audit_safely(
-    conn,
-    order_id: str,
-    action: str,
-    performed_by: str,
-):
-    try:
-
-        conn.execute(
-            "SAVEPOINT naba_audit"
-        )
-
-        conn.execute(
-            """
-            INSERT INTO audit_logs(
-                order_id,
-                action,
-                performed_by
-            )
-            VALUES(%s,%s,%s)
-            """,
-            (
-                order_id,
-                action,
-                performed_by,
-            ),
-        )
-
-        conn.execute(
-            "RELEASE SAVEPOINT naba_audit"
-        )
-
-    except Exception:
-
-        try:
-            conn.execute(
-                "ROLLBACK TO SAVEPOINT naba_audit"
-            )
-            conn.execute(
-                "RELEASE SAVEPOINT naba_audit"
-            )
-
-        except Exception:
-
-            logger.exception(
-                "Could not recover audit savepoint for %s",
-                order_id,
-            )
-
-        logger.exception(
-            "Audit logging failed for %s (%s)",
-            order_id,
-            action,
-        )
-
-
-def log_audit_for_order_safely(
-    order_id: str,
-    action: str,
-    performed_by: str,
-):
-
-    try:
-
-        with db() as conn:
-
-            log_audit_safely(
-                conn,
-                order_id,
-                action,
-                performed_by,
-            )
-
-    except Exception:
-
-        logger.exception(
-            "Could not open database for audit event %s",
-            action,
-        )
-
-
-# =========================================================
-# Order status / state machine
-# =========================================================
-
-ORDER_STATUSES = {
-    "NEW",
-    "UNDER_REVIEW",
-    "WAITING_CUSTOMER",
-    "READY_TO_START",
-    "IN_PROGRESS",
-    "QUALITY_REVIEW",
-    "READY_FOR_DELIVERY",
-    "COMPLETED",
-    "CANCELLED",
-}
-
-
-ORDER_TRANSITIONS = {
-    "NEW": {
-        "UNDER_REVIEW",
-        "CANCELLED",
-    },
-
-    "UNDER_REVIEW": {
-        "WAITING_CUSTOMER",
-        "CANCELLED",
-    },
-
-    "WAITING_CUSTOMER": {
-        "READY_TO_START",
-        "CANCELLED",
-    },
-
-    "READY_TO_START": {
-        "IN_PROGRESS",
-        "CANCELLED",
-    },
-
-    "IN_PROGRESS": {
-        "QUALITY_REVIEW",
-        "CANCELLED",
-    },
-
-    "QUALITY_REVIEW": {
-        "READY_FOR_DELIVERY",
-        "IN_PROGRESS",
-        "CANCELLED",
-    },
-
-    "READY_FOR_DELIVERY": {
-        "COMPLETED",
-        "IN_PROGRESS",
-        "CANCELLED",
-    },
-
-    "COMPLETED": set(),
-    "CANCELLED": set(),
-}
-
-
-def validate_order_transition(
-    current_status: str,
-    next_status: str,
-):
-
-    if current_status not in ORDER_STATUSES:
-        raise HTTPException(
-            status_code=409,
-            detail="حالة الطلب الحالية غير صالحة",
-        )
-
-    if next_status not in ORDER_STATUSES:
-        raise HTTPException(
-            status_code=409,
-            detail="حالة الطلب الجديدة غير صالحة",
-        )
-
-    if next_status not in ORDER_TRANSITIONS[
-        current_status
-    ]:
-
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                f"لا يمكن نقل الطلب من "
-                f"{current_status} إلى "
-                f"{next_status}"
-            ),
-        )
-
-
-def touch_order(
-    conn,
-    order_id: str,
-):
-
-    conn.execute(
-        """
-        UPDATE orders
-        SET updated_at=CURRENT_TIMESTAMP
-        WHERE order_id=%s
-        """,
-        (order_id,),
-    )
-
-
-# =========================================================
-# Payment helpers
-# =========================================================
-
-def payment_totals(
-    conn,
-    order_id: str,
-) -> dict:
-
-    row = conn.execute(
-        """
-        SELECT
-            COALESCE(
-                SUM(
-                    CASE
-                        WHEN amount > 0
-                        THEN amount
-                        ELSE 0
-                    END
-                ),
-                0
-            ) AS paid,
-
-            COALESCE(
-                SUM(
-                    CASE
-                        WHEN amount < 0
-                        THEN -amount
-                        ELSE 0
-                    END
-                ),
-                0
-            ) AS refunded
-
-        FROM payments
-
-        WHERE order_id=%s
-        """,
-        (order_id,),
-    ).fetchone()
-
-    return {
-        "paid": row["paid"],
-        "refunded": row["refunded"],
-    }
-
-
-def derive_payment_status(
-    price,
-    paid,
-    refunded,
-) -> str:
-
-    net_paid = paid - refunded
-
-    if refunded > 0 and net_paid <= 0:
-        return "REFUNDED"
-
-    if net_paid <= 0:
-        return "UNPAID"
-
-    if price > 0 and net_paid >= price:
-        return "PAID"
-
-    return "PARTIALLY_PAID"
-
-
-def refresh_payment_summary(
-    conn,
-    order_id: str,
-) -> dict:
-
-    order = conn.execute(
-        """
-        SELECT price
-        FROM orders
-        WHERE order_id=%s
-        FOR UPDATE
-        """,
-        (order_id,),
-    ).fetchone()
-
-    if not order:
-
-        raise HTTPException(
-            status_code=404,
-            detail="الطلب غير موجود",
-        )
-
-    totals = payment_totals(
-        conn,
-        order_id,
-    )
-
-    paid = (
-        totals["paid"]
-        - totals["refunded"]
-    )
-
-    remaining = max(
-        order["price"] - paid,
-        0,
-    )
-
-    status = derive_payment_status(
-        order["price"],
-        totals["paid"],
-        totals["refunded"],
-    )
-
-    conn.execute(
-        """
-        UPDATE orders
-        SET
-            payment_status=%s,
-            deposit=%s,
-            remaining_balance=%s,
-            updated_at=CURRENT_TIMESTAMP
-        WHERE order_id=%s
-        """,
-        (
-            status,
-            paid,
-            remaining,
-            order_id,
-        ),
-    )
-
-    return {
-        "payment_status": status,
-        "paid": paid,
-        "remaining": remaining,
-    }
-
-
-def set_channel_delivery_status_safely(
-    order_id: str,
-    status: str,
-):
-
-    try:
-
-        with db() as conn:
-
-            conn.execute(
-                """
-                UPDATE orders
-                SET
-                    channel_delivery_status=%s,
-                    updated_at=CURRENT_TIMESTAMP
-                WHERE order_id=%s
-                """,
-                (
-                    status,
-                    order_id,
-                ),
-            )
-
-    except Exception:
-
-        logger.exception(
-            "Could not update delivery status for %s",
-            order_id,
         )
 
 
@@ -1040,11 +642,13 @@ def init_user_from_header(
     request: Request,
 ) -> dict:
 
+    init_data = request.headers.get(
+        "X-Telegram-Init-Data",
+        "",
+    )
+
     return verify_init_data(
-        request.headers.get(
-            "X-Telegram-Init-Data",
-            "",
-        )
+        init_data
     )
 
 
@@ -1205,63 +809,6 @@ class OrderIn(BaseModel):
 
 
 # =========================================================
-# Idempotency
-# =========================================================
-
-def order_payload_fingerprint(
-    data: OrderIn,
-) -> str:
-
-    payload = data.model_dump(
-        mode="json"
-    )
-
-    serialized = json.dumps(
-        payload,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    )
-
-    return hashlib.sha256(
-        serialized.encode("utf-8")
-    ).hexdigest()
-
-
-def validate_idempotency_key(
-    key: str,
-) -> str:
-
-    key = (key or "").strip()
-
-    if not key:
-
-        raise HTTPException(
-            status_code=400,
-            detail="Idempotency-Key مفقود",
-        )
-
-    if len(key) > 200:
-
-        raise HTTPException(
-            status_code=400,
-            detail="Idempotency-Key طويل جدًا",
-        )
-
-    if not re.fullmatch(
-        r"[A-Za-z0-9._:-]+",
-        key,
-    ):
-
-        raise HTTPException(
-            status_code=400,
-            detail="Idempotency-Key غير صالح",
-        )
-
-    return key
-
-
-# =========================================================
 # Order helpers
 # =========================================================
 
@@ -1274,7 +821,9 @@ def new_order_id() -> str:
         for _ in range(6)
     )
 
-    return f"NB-{year}-{random_part}"
+    return (
+        f"NB-{year}-{random_part}"
+    )
 
 
 def get_attachment(
@@ -1292,9 +841,7 @@ def get_attachment(
                 filename,
                 content_type,
                 data,
-                created_at,
-                order_id,
-                attached_at
+                created_at
             FROM attachments
             WHERE token=%s
               AND user_id=%s
@@ -1311,226 +858,7 @@ def get_attachment(
 def create_order(
     user: dict,
     data: OrderIn,
-    idempotency_key: str,
 ):
-
-    fingerprint = order_payload_fingerprint(
-        data
-    )
-
-    # =====================================================
-    # Existing idempotent request
-    # =====================================================
-
-    with db() as conn:
-
-        existing = conn.execute(
-            """
-            SELECT *
-            FROM orders
-            WHERE user_id=%s
-              AND idempotency_key=%s
-            """,
-            (
-                user["id"],
-                idempotency_key,
-            ),
-        ).fetchone()
-
-        if existing:
-
-            stored_fingerprint = (
-                existing.get(
-                    "idempotency_fingerprint"
-                )
-                if hasattr(
-                    existing,
-                    "get",
-                )
-                else None
-            )
-
-            # Preferred comparison
-            if stored_fingerprint:
-
-                if (
-                    stored_fingerprint
-                    != fingerprint
-                ):
-
-                    raise HTTPException(
-                        status_code=409,
-                        detail=(
-                            "تم استخدام "
-                            "Idempotency-Key "
-                            "مع طلب مختلف"
-                        ),
-                    )
-
-            else:
-
-                # Compatibility fallback for an order
-                # created before fingerprint storage.
-                existing_attachment = (
-                    conn.execute(
-                        """
-                        SELECT token
-                        FROM attachments
-                        WHERE order_id=%s
-                        ORDER BY
-                            attached_at NULLS LAST,
-                            created_at
-                        LIMIT 1
-                        """,
-                        (
-                            existing["order_id"],
-                        ),
-                    ).fetchone()
-                )
-
-                existing_payload = OrderIn(
-                    service_type=existing[
-                        "service_type"
-                    ],
-
-                    department=existing[
-                        "department"
-                    ],
-
-                    title=existing[
-                        "title"
-                    ],
-
-                    page_count=(
-                        ""
-                        if existing[
-                            "page_count"
-                        ] == "غير محدد"
-                        else existing[
-                            "page_count"
-                        ]
-                    ),
-
-                    language=(
-                        ""
-                        if existing[
-                            "language"
-                        ] == "غير محدد"
-                        else existing[
-                            "language"
-                        ]
-                    ),
-
-                    autocad_type=(
-                        ""
-                        if existing[
-                            "autocad_type"
-                        ] == "غير محدد"
-                        else existing[
-                            "autocad_type"
-                        ]
-                    ),
-
-                    deadline=existing[
-                        "deadline"
-                    ],
-
-                    notes=(
-                        ""
-                        if existing[
-                            "notes"
-                        ] == "لا توجد ملاحظات"
-                        else existing[
-                            "notes"
-                        ]
-                    ),
-
-                    attachment_token=(
-                        existing_attachment[
-                            "token"
-                        ]
-                        if existing_attachment
-                        else ""
-                    ),
-
-                    service_details=(
-                        existing.get(
-                            "service_details"
-                        )
-                        or {}
-                    ),
-                )
-
-                if (
-                    order_payload_fingerprint(
-                        existing_payload
-                    )
-                    != fingerprint
-                ):
-
-                    raise HTTPException(
-                        status_code=409,
-                        detail=(
-                            "تم استخدام "
-                            "Idempotency-Key "
-                            "مع طلب مختلف"
-                        ),
-                    )
-
-                # Backfill fingerprint for this order.
-                try:
-
-                    conn.execute(
-                        """
-                        UPDATE orders
-                        SET
-                            idempotency_fingerprint=%s
-                        WHERE order_id=%s
-                        """,
-                        (
-                            fingerprint,
-                            existing["order_id"],
-                        ),
-                    )
-
-                except Exception:
-
-                    logger.warning(
-                        "Could not backfill "
-                        "idempotency fingerprint "
-                        "for %s",
-                        existing["order_id"],
-                        exc_info=True,
-                    )
-
-            attachment = None
-
-            if data.attachment_token:
-
-                attachment = conn.execute(
-                    """
-                    SELECT *
-                    FROM attachments
-                    WHERE token=%s
-                      AND user_id=%s
-                      AND order_id=%s
-                    """,
-                    (
-                        data.attachment_token,
-                        user["id"],
-                        existing["order_id"],
-                    ),
-                ).fetchone()
-
-            return (
-                existing,
-                attachment,
-                False,
-            )
-
-    # =====================================================
-    # New order
-    # =====================================================
 
     for _ in range(10):
 
@@ -1552,13 +880,10 @@ def create_order(
                             filename,
                             content_type,
                             data,
-                            created_at,
-                            order_id,
-                            attached_at
+                            created_at
                         FROM attachments
                         WHERE token=%s
                           AND user_id=%s
-                          AND order_id IS NULL
                         FOR UPDATE
                         """,
                         (
@@ -1572,9 +897,8 @@ def create_order(
                         raise HTTPException(
                             status_code=400,
                             detail=(
-                                "المرفق غير موجود "
-                                "أو انتهت صلاحيته، "
-                                "أعد رفعه"
+                                "المرفق غير موجود أو "
+                                "انتهت صلاحيته، أعد رفعه"
                             ),
                         )
 
@@ -1593,15 +917,11 @@ def create_order(
                         autocad_type,
                         deadline,
                         notes,
-                        service_details,
-                        idempotency_key,
-                        idempotency_fingerprint,
-                        updated_at
+                        service_details
                     )
                     VALUES (
                         %s,%s,%s,%s,%s,%s,%s,
-                        %s,%s,%s,%s,%s,%s::jsonb,
-                        %s,%s,CURRENT_TIMESTAMP
+                        %s,%s,%s,%s,%s,%s::jsonb
                     )
                     RETURNING *
                     """,
@@ -1640,79 +960,30 @@ def create_order(
                             data.service_details,
                             ensure_ascii=False,
                         ),
-                        idempotency_key,
-                        fingerprint,
                     ),
                 ).fetchone()
 
-                # Keep payment summary consistent.
-                refresh_payment_summary(
-                    conn,
-                    order_id,
+                conn.execute(
+                    """
+                    INSERT INTO audit_logs(
+                        order_id,
+                        action,
+                        performed_by
+                    )
+                    VALUES(%s,%s,%s)
+                    """,
+                    (
+                        order_id,
+                        "ORDER_CREATED",
+                        f"User_{user['id']}",
+                    ),
                 )
 
-                # Attach file inside the same transaction.
-                if attachment:
+            return order, attachment
 
-                    conn.execute(
-                        """
-                        UPDATE attachments
-                        SET
-                            order_id=%s,
-                            attached_at=CURRENT_TIMESTAMP
-                        WHERE token=%s
-                          AND user_id=%s
-                          AND order_id IS NULL
-                        """,
-                        (
-                            order_id,
-                            attachment["token"],
-                            user["id"],
-                        ),
-                    )
+        except psycopg.errors.UniqueViolation:
 
-                    attachment["order_id"] = (
-                        order_id
-                    )
-
-                    attachment["attached_at"] = (
-                        datetime.now(timezone.utc)
-                    )
-
-                log_audit_safely(
-                    conn,
-                    order_id,
-                    "ORDER_CREATED",
-                    f"User_{user['id']}",
-                )
-
-            return (
-                order,
-                attachment,
-                True,
-            )
-
-        except psycopg.errors.UniqueViolation as exc:
-
-            if (
-                exc.diag.constraint_name
-                == "orders_user_id_idempotency_key_uniq"
-            ):
-
-                return create_order(
-                    user,
-                    data,
-                    idempotency_key,
-                )
-
-            # order_id collision
-            if (
-                exc.diag.constraint_name
-                == "orders_pkey"
-            ):
-                continue
-
-            raise
+            continue
 
     raise HTTPException(
         status_code=500,
@@ -1723,9 +994,28 @@ def create_order(
     )
 
 
-# =========================================================
-# Attachment storage
-# =========================================================
+def delete_attachment(
+    user_id: int,
+    token: str,
+):
+
+    if not token:
+        return
+
+    with db() as conn:
+
+        conn.execute(
+            """
+            DELETE FROM attachments
+            WHERE token=%s
+              AND user_id=%s
+            """,
+            (
+                token,
+                user_id,
+            ),
+        )
+
 
 def store_attachment(
     user_id: int,
@@ -1738,13 +1028,11 @@ def store_attachment(
 
     with db() as conn:
 
-        # Only delete old temporary/unlinked files.
         conn.execute(
             """
             DELETE FROM attachments
             WHERE created_at <
-                CURRENT_TIMESTAMP - INTERVAL '1 day'
-              AND order_id IS NULL
+            CURRENT_TIMESTAMP - INTERVAL '1 day'
             """
         )
 
@@ -1753,7 +1041,6 @@ def store_attachment(
             SELECT COUNT(*) AS n
             FROM attachments
             WHERE user_id=%s
-              AND order_id IS NULL
             """,
             (user_id,),
         ).fetchone()["n"]
@@ -1854,6 +1141,10 @@ def build_order_message(
             f"{e(order['autocad_type'])}\n"
         )
 
+    # =====================================================
+    # تفاصيل الخدمات الجديدة
+    # =====================================================
+
     service_details = (
         order.get("service_details")
         or {}
@@ -1885,8 +1176,8 @@ def build_order_message(
             label = SERVICE_DETAIL_LABELS.get(
                 key,
                 str(key)
-                .replace("_", " ")
-                .strip(),
+                    .replace("_", " ")
+                    .strip(),
             )
 
             details_text += (
@@ -1914,15 +1205,26 @@ def build_order_message(
     return text
 
 
-# =========================================================
-# Telegram delivery
-# =========================================================
-
-async def send_attachment_to_chat(
+async def send_to_chat(
     chat_id,
+    text: str,
     order_id: str,
     attachment,
 ):
+
+    # =====================================================
+    # 1. إرسال الطلب
+    # =====================================================
+
+    await telegram_app.bot.send_message(
+        chat_id=chat_id,
+        text=text,
+        parse_mode="HTML",
+    )
+
+    # =====================================================
+    # 2. لا يوجد مرفق
+    # =====================================================
 
     if not attachment:
         return
@@ -1943,6 +1245,10 @@ async def send_attachment_to_chat(
         attachment["content_type"]
         or ""
     )
+
+    # =====================================================
+    # 3. الصور
+    # =====================================================
 
     if content_type.startswith(
         "image/"
@@ -1966,6 +1272,10 @@ async def send_attachment_to_chat(
                 exc_info=True,
             )
 
+    # =====================================================
+    # 4. باقي الملفات
+    # =====================================================
+
     await telegram_app.bot.send_document(
         chat_id=chat_id,
         document=data,
@@ -1974,65 +1284,21 @@ async def send_attachment_to_chat(
     )
 
 
-async def send_to_chat(
-    chat_id,
-    text: str,
-    order_id: str,
-    attachment,
-    text_already_sent: bool = False,
-):
-
-    # =====================================================
-    # 1. Send text only when it has not already been sent.
-    # =====================================================
-
-    if not text_already_sent:
-
-        await telegram_app.bot.send_message(
-            chat_id=chat_id,
-            text=text,
-            parse_mode="HTML",
-        )
-
-        set_channel_delivery_status_safely(
-            order_id,
-            "TEXT_SENT",
-        )
-
-    # =====================================================
-    # 2. No attachment
-    # =====================================================
-
-    if not attachment:
-
-        set_channel_delivery_status_safely(
-            order_id,
-            "DELIVERED",
-        )
-
-        return
-
-    # =====================================================
-    # 3. Send attachment
-    # =====================================================
-
-    await send_attachment_to_chat(
-        chat_id,
-        order_id,
-        attachment,
-    )
-
-    set_channel_delivery_status_safely(
-        order_id,
-        "DELIVERED",
-    )
-
+# =========================================================
+# Deliver order
+# =========================================================
 
 async def deliver_order(
     order: dict,
     user: dict,
     attachment,
 ) -> bool:
+
+    """
+    إرسال الطلب الكامل والمرفق إلى قناة Telegram فقط.
+
+    لا يتم إرسال نسخة كاملة إلى الأدمن الخاص.
+    """
 
     message = build_order_message(
         order,
@@ -2041,47 +1307,21 @@ async def deliver_order(
 
     channel = parse_channel_id()
 
-    if channel is None:
+    # =====================================================
+    # يجب أن تكون القناة مضبوطة
+    # =====================================================
+
+    if not channel:
 
         logger.error(
-            "No Telegram channel configured"
-        )
-
-        set_channel_delivery_status_safely(
-            order["order_id"],
-            "FAILED",
-        )
-
-        log_audit_for_order_safely(
-            order["order_id"],
-            "ORDER_DELIVERY_TO_CHANNEL_FAILED",
-            "Telegram_Bot",
+            "CHANNEL_ID is not configured"
         )
 
         return False
 
-    current_status = (
-        order.get(
-            "channel_delivery_status"
-        )
-        or "PENDING"
-    )
-
-    text_already_sent = (
-        current_status == "TEXT_SENT"
-    )
-
-    # If already delivered, nothing to do.
-    if current_status == "DELIVERED":
-        return True
-
-    # Mark delivery attempt as pending.
-    if not text_already_sent:
-
-        set_channel_delivery_status_safely(
-            order["order_id"],
-            "PENDING",
-        )
+    # =====================================================
+    # إرسال الطلب إلى القناة فقط
+    # =====================================================
 
     try:
 
@@ -2090,25 +1330,21 @@ async def deliver_order(
             message,
             order["order_id"],
             attachment,
-            text_already_sent=text_already_sent,
+        )
+
+        logger.info(
+            "Order %s delivered to channel %s",
+            order["order_id"],
+            channel,
         )
 
     except TelegramError:
 
         logger.exception(
-            "Failed to deliver order %s to channel",
+            "Failed to deliver order %s "
+            "to channel %s",
             order["order_id"],
-        )
-
-        set_channel_delivery_status_safely(
-            order["order_id"],
-            "FAILED",
-        )
-
-        log_audit_for_order_safely(
-            order["order_id"],
-            "ORDER_DELIVERY_TO_CHANNEL_FAILED",
-            "Telegram_Bot",
+            channel,
         )
 
         return False
@@ -2116,38 +1352,35 @@ async def deliver_order(
     except Exception:
 
         logger.exception(
-            "Unexpected delivery error for order %s",
+            "Unexpected delivery error "
+            "for order %s",
             order["order_id"],
-        )
-
-        set_channel_delivery_status_safely(
-            order["order_id"],
-            "FAILED",
-        )
-
-        log_audit_for_order_safely(
-            order["order_id"],
-            "ORDER_DELIVERY_TO_CHANNEL_FAILED",
-            "Telegram_Bot",
         )
 
         return False
 
-    set_channel_delivery_status_safely(
-        order["order_id"],
-        "DELIVERED",
-    )
+    # =====================================================
+    # تسجيل النشاط الحقيقي
+    # =====================================================
 
-    log_audit_for_order_safely(
-        order["order_id"],
-        "ORDER_DELIVERED_TO_CHANNEL",
-        "Telegram_Bot",
-    )
+    try:
 
-    logger.info(
-        "Order %s delivered to channel",
-        order["order_id"],
-    )
+        await asyncio.to_thread(
+            add_audit_log,
+            order["order_id"],
+            "ORDER_DELIVERED_TO_CHANNEL",
+            "System",
+        )
+
+    except Exception:
+
+        # فشل تسجيل النشاط لا يعني أن إرسال الطلب فشل.
+        # الطلب وصل إلى القناة بالفعل.
+        logger.exception(
+            "Could not write delivery audit log "
+            "for order %s",
+            order["order_id"],
+        )
 
     return True
 
@@ -2330,32 +1563,6 @@ async def camera_command(
     )
 
 
-async def quotation_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    if not query or not query.from_user:
-        return
-    await query.answer()
-    data = query.data or ""
-    match = re.fullmatch(r"naba:(accept|reject):([A-Za-z0-9._:-]+)", data)
-    if not match:
-        return
-    action, order_id = match.groups()
-    user_id = query.from_user.id
-    try:
-        result = await asyncio.to_thread(process_customer_decision, order_id, user_id, action)
-        if action == "accept":
-            text = "✅ تم استلام موافقتك على السعر.\nسيتم التواصل معك من قبل الكادر لاستكمال إجراءات الطلب."
-        else:
-            text = "❌ تم إلغاء الطلب.\nتم نقل الطلب إلى خانة الطلبات الملغية."
-        await query.edit_message_reply_markup(reply_markup=None)
-        await query.message.reply_text(text)
-    except HTTPException as exc:
-        await query.message.reply_text(f"❌ {exc.detail}")
-    except Exception:
-        logger.exception("Customer callback failed")
-        await query.message.reply_text("❌ تعذر تنفيذ العملية. حاول مرة أخرى.")
-
-
 # =========================================================
 # Telegram application
 # =========================================================
@@ -2368,15 +1575,12 @@ telegram_app = (
 
 
 telegram_app.add_handler(
-    CallbackQueryHandler(quotation_callback, pattern=r"^naba:(accept|reject):"),
-)
-
-telegram_app.add_handler(
     CommandHandler(
         "start",
         start_command,
     )
 )
+
 
 telegram_app.add_handler(
     CommandHandler(
@@ -2385,12 +1589,14 @@ telegram_app.add_handler(
     )
 )
 
+
 telegram_app.add_handler(
     CommandHandler(
         "camera",
         camera_command,
     )
 )
+
 
 telegram_app.add_handler(
     MessageHandler(
@@ -2421,8 +1627,7 @@ async def lifespan(
             url=WEBHOOK_URL,
             secret_token=WEBHOOK_SECRET,
             allowed_updates=[
-                "message",
-                "callback_query",
+                "message"
             ],
         )
 
@@ -2482,7 +1687,7 @@ async def lifespan(
 
 app = FastAPI(
     title="النبع للخدمات الجامعية API",
-    version="5.1.0",
+    version="5.0.0",
     lifespan=lifespan,
 )
 
@@ -2528,7 +1733,6 @@ app.add_middleware(
     allow_headers=[
         "Content-Type",
         "X-Telegram-Init-Data",
-        "Idempotency-Key",
     ],
 )
 
@@ -2672,7 +1876,9 @@ async def telegram_webhook(
 # =========================================================
 
 DOCUMENT_SIGNATURES = {
-    "application/pdf": b"%PDF",
+
+    "application/pdf":
+        b"%PDF",
 
     "application/msword":
         b"\xd0\xcf\x11\xe0",
@@ -2973,44 +2179,25 @@ async def submit_order(
         request
     )
 
-    idempotency_key = validate_idempotency_key(
-        request.headers.get(
-            "Idempotency-Key",
-            "",
-        )
-    )
+    # =====================================================
+    # إنشاء الطلب
+    # =====================================================
 
-    order, attachment, created = (
-        await asyncio.to_thread(
-            create_order,
-            user,
-            payload,
-            idempotency_key,
-        )
+    order, attachment = await asyncio.to_thread(
+        create_order,
+        user,
+        payload,
     )
 
     # =====================================================
-    # Existing order retry / new order
+    # إرسال الطلب الكامل إلى القناة فقط
     # =====================================================
 
-    current_delivery_status = (
-        order.get(
-            "channel_delivery_status"
-        )
-        or "PENDING"
+    delivered = await deliver_order(
+        order,
+        user,
+        attachment,
     )
-
-    if current_delivery_status == "DELIVERED":
-
-        delivered = True
-
-    else:
-
-        delivered = await deliver_order(
-            order,
-            user,
-            attachment,
-        )
 
     if not delivered:
 
@@ -3019,6 +2206,8 @@ async def submit_order(
             order["order_id"],
         )
 
+        # لا نحذف المرفق.
+        # الطلب والمرفق يبقيان في DB.
         raise HTTPException(
             status_code=502,
             detail=(
@@ -3029,38 +2218,52 @@ async def submit_order(
         )
 
     # =====================================================
-    # Do NOT delete linked attachment.
-    # It belongs to the order now.
+    # حذف المرفق بعد نجاح الإرسال
     # =====================================================
 
-    # =====================================================
-    # Notify customer
-    # =====================================================
-
-    if created:
+    if payload.attachment_token:
 
         try:
 
-            await telegram_app.bot.send_message(
-                chat_id=user["id"],
-                text=(
-                    "✅ <b>تم استلام طلبك</b>\n\n"
-                    f"رقم الطلب: "
-                    f"<code>"
-                    f"{html.escape(order['order_id'])}"
-                    f"</code>\n"
-                    "سيتم التواصل معك من قبل الكادر."
-                ),
-                parse_mode="HTML",
-            )
-
-        except TelegramError:
-
-            logger.warning(
-                "Could not notify user %s",
+            await asyncio.to_thread(
+                delete_attachment,
                 user["id"],
-                exc_info=True,
+                payload.attachment_token,
             )
+
+        except Exception:
+
+            logger.exception(
+                "Could not delete attachment %s",
+                payload.attachment_token,
+            )
+
+    # =====================================================
+    # إشعار المستخدم فقط
+    # =====================================================
+
+    try:
+
+        await telegram_app.bot.send_message(
+            chat_id=user["id"],
+            text=(
+                "✅ <b>تم استلام طلبك</b>\n\n"
+                f"رقم الطلب: "
+                f"<code>"
+                f"{html.escape(order['order_id'])}"
+                f"</code>\n"
+                "سيتم التواصل معك من قبل الكادر."
+            ),
+            parse_mode="HTML",
+        )
+
+    except TelegramError:
+
+        logger.warning(
+            "Could not notify user %s",
+            user["id"],
+            exc_info=True,
+        )
 
     return {
         "ok": True,
@@ -3094,11 +2297,19 @@ def admin_dashboard(
     request: Request,
 ):
 
+    # =====================================================
+    # حماية الخادم
+    # =====================================================
+
     require_admin(
         request
     )
 
     with db() as conn:
+
+        # =================================================
+        # الإحصائيات العامة
+        # =================================================
 
         totals = conn.execute(
             """
@@ -3136,6 +2347,10 @@ def admin_dashboard(
             """
         ).fetchone()
 
+        # =================================================
+        # حالات الطلبات
+        # =================================================
+
         status_rows = conn.execute(
             """
             SELECT
@@ -3143,12 +2358,22 @@ def admin_dashboard(
                     order_status,
                     'UNKNOWN'
                 ) AS status,
+
                 COUNT(*) AS count
+
             FROM orders
+
             GROUP BY order_status
-            ORDER BY count DESC, status ASC
+
+            ORDER BY
+                count DESC,
+                status ASC
             """
         ).fetchall()
+
+        # =================================================
+        # الخدمات
+        # =================================================
 
         service_rows = conn.execute(
             """
@@ -3156,15 +2381,22 @@ def admin_dashboard(
                 service_type,
                 service_name,
                 COUNT(*) AS count
+
             FROM orders
+
             GROUP BY
                 service_type,
                 service_name
+
             ORDER BY
                 count DESC,
                 service_type ASC
             """
         ).fetchall()
+
+        # =================================================
+        # حالات الدفع
+        # =================================================
 
         payment_rows = conn.execute(
             """
@@ -3173,12 +2405,22 @@ def admin_dashboard(
                     payment_status,
                     'UNKNOWN'
                 ) AS status,
+
                 COUNT(*) AS count
+
             FROM orders
+
             GROUP BY payment_status
-            ORDER BY count DESC, status ASC
+
+            ORDER BY
+                count DESC,
+                status ASC
             """
         ).fetchall()
+
+        # =================================================
+        # آخر الطلبات
+        # =================================================
 
         recent_rows = conn.execute(
             """
@@ -3196,11 +2438,18 @@ def admin_dashboard(
                 deposit,
                 remaining_balance,
                 created_at
+
             FROM orders
+
             ORDER BY created_at DESC
+
             LIMIT 20
             """
         ).fetchall()
+
+        # =================================================
+        # النشاطات الحقيقية
+        # =================================================
 
         activity_rows = conn.execute(
             """
@@ -3210,22 +2459,37 @@ def admin_dashboard(
                 action,
                 performed_by,
                 timestamp
+
             FROM audit_logs
+
             ORDER BY timestamp DESC
+
             LIMIT 50
             """
         ).fetchall()
 
+    # =====================================================
+    # أدوات التحويل
+    # =====================================================
+
     def money(value):
 
         try:
-            return float(value or 0)
+
+            return float(
+                value or 0
+            )
 
         except (
             TypeError,
             ValueError,
         ):
+
             return 0.0
+
+    # =====================================================
+    # حالات الطلبات
+    # =====================================================
 
     status_counts = {
         str(row["status"]):
@@ -3258,6 +2522,10 @@ def admin_dashboard(
             "CANCELLED",
         }
     )
+
+    # =====================================================
+    # آخر الطلبات
+    # =====================================================
 
     recent_orders = []
 
@@ -3293,14 +2561,20 @@ def admin_dashboard(
                     row["payment_status"],
 
                 "price":
-                    money(row["price"]),
+                    money(
+                        row["price"]
+                    ),
 
                 "deposit":
-                    money(row["deposit"]),
+                    money(
+                        row["deposit"]
+                    ),
 
                 "remaining_balance":
                     money(
-                        row["remaining_balance"]
+                        row[
+                            "remaining_balance"
+                        ]
                     ),
 
                 "created_at":
@@ -3311,6 +2585,10 @@ def admin_dashboard(
                     ),
             }
         )
+
+    # =====================================================
+    # النشاطات
+    # =====================================================
 
     activities = []
 
@@ -3339,7 +2617,12 @@ def admin_dashboard(
             }
         )
 
+    # =====================================================
+    # النتيجة
+    # =====================================================
+
     return {
+
         "ok": True,
 
         "generated_at":
@@ -3351,19 +2634,25 @@ def admin_dashboard(
 
             "total_orders":
                 int(
-                    totals["total_orders"]
+                    totals[
+                        "total_orders"
+                    ]
                     or 0
                 ),
 
             "today_orders":
                 int(
-                    totals["today_orders"]
+                    totals[
+                        "today_orders"
+                    ]
                     or 0
                 ),
 
             "month_orders":
                 int(
-                    totals["month_orders"]
+                    totals[
+                        "month_orders"
+                    ]
                     or 0
                 ),
 
@@ -3381,17 +2670,23 @@ def admin_dashboard(
 
             "total_price":
                 money(
-                    totals["total_price"]
+                    totals[
+                        "total_price"
+                    ]
                 ),
 
             "total_deposit":
                 money(
-                    totals["total_deposit"]
+                    totals[
+                        "total_deposit"
+                    ]
                 ),
 
             "total_remaining":
                 money(
-                    totals["total_remaining"]
+                    totals[
+                        "total_remaining"
+                    ]
                 ),
         },
 
@@ -3399,6 +2694,7 @@ def admin_dashboard(
             status_counts,
 
         "service_counts": [
+
             {
                 "service_type":
                     row["service_type"],
@@ -3414,8 +2710,10 @@ def admin_dashboard(
         ],
 
         "payment_counts": {
+
             str(row["status"]):
                 int(row["count"])
+
             for row in payment_rows
         },
 
@@ -3426,409 +2724,6 @@ def admin_dashboard(
             activities,
     }
 
-
-
-# =========================================================
-# Admin workflow / quotation / payments / search / Excel
-# =========================================================
-
-class PriceIn(BaseModel):
-    price: Decimal = Field(ge=Decimal("0"), max_digits=12, decimal_places=2)
-
-
-class DeadlineIn(BaseModel):
-    delivery_at: str = Field(min_length=1, max_length=80)
-
-
-class QuoteIn(BaseModel):
-    price: Decimal = Field(ge=Decimal("0"), max_digits=12, decimal_places=2)
-    delivery_at: str = Field(min_length=1, max_length=80)
-    admin_note: str = Field(default="", max_length=2000)
-
-
-class PaymentIn(BaseModel):
-    amount: Decimal = Field(gt=Decimal("0"), max_digits=12, decimal_places=2)
-    currency: str = Field(default="IQD", max_length=10)
-    payment_method: str = Field(default="MANUAL", max_length=40)
-    note: str = Field(default="", max_length=1000)
-    request_key: str = Field(default="", max_length=200)
-
-
-class StatusIn(BaseModel):
-    status: str = Field(min_length=1, max_length=40)
-    note: str = Field(default="", max_length=1000)
-
-
-class NoteIn(BaseModel):
-    note: str = Field(min_length=1, max_length=2000)
-
-
-def fetch_order(conn, order_id: str, for_update: bool = False):
-    suffix = " FOR UPDATE" if for_update else ""
-    return conn.execute(f"""
-        SELECT * FROM orders WHERE order_id=%s{suffix}
-    """, (order_id,)).fetchone()
-
-
-def serialize_order(conn, order: dict, include_activity: bool = True) -> dict:
-    totals = payment_totals(conn, order["order_id"])
-    paid = money_decimal(totals["paid"]) - money_decimal(totals["refunded"])
-    price = money_decimal(order.get("price"))
-    remaining = max(price - paid, Decimal("0.00"))
-    attachment = conn.execute("""
-        SELECT token, filename, content_type, created_at, attached_at
-        FROM attachments WHERE order_id=%s ORDER BY created_at DESC
-    """, (order["order_id"],)).fetchall()
-    activity = []
-    if include_activity:
-        rows = conn.execute("""
-            SELECT id, order_id, action, performed_by, timestamp
-            FROM audit_logs WHERE order_id=%s ORDER BY timestamp DESC LIMIT 100
-        """, (order["order_id"],)).fetchall()
-        activity = [dict(r) for r in rows]
-        for r in activity:
-            if r.get("timestamp"):
-                r["timestamp"] = r["timestamp"].isoformat()
-    result = dict(order)
-    for k in ("created_at", "updated_at", "quote_sent_at", "customer_decided_at", "cancelled_at"):
-        if result.get(k): result[k] = result[k].isoformat()
-    result["price"] = money_float(price)
-    result["paid"] = money_float(paid)
-    result["deposit"] = money_float(paid)
-    result["remaining_balance"] = money_float(remaining)
-    result["attachments"] = [dict(a) for a in attachment]
-    for a in result["attachments"]:
-        for k in ("created_at", "attached_at"):
-            if a.get(k): a[k] = a[k].isoformat()
-    result["activity"] = activity
-    return result
-
-
-def set_price(order_id: str, price: Decimal, admin: dict):
-    with db() as conn:
-        order = fetch_order(conn, order_id, True)
-        if not order: raise HTTPException(404, "الطلب غير موجود")
-        old = money_decimal(order["price"])
-        conn.execute("UPDATE orders SET price=%s, updated_at=CURRENT_TIMESTAMP WHERE order_id=%s", (price, order_id))
-        refresh_payment_summary(conn, order_id)
-        log_audit_safely(conn, order_id, "PRICE_SET" if old == 0 else "PRICE_UPDATED", f"Admin_{admin['id']}")
-        return fetch_order(conn, order_id)
-
-
-def set_delivery_at(order_id: str, delivery_at: str, admin: dict):
-    with db() as conn:
-        order = fetch_order(conn, order_id, True)
-        if not order: raise HTTPException(404, "الطلب غير موجود")
-        conn.execute("UPDATE orders SET delivery_at=%s, updated_at=CURRENT_TIMESTAMP WHERE order_id=%s", (delivery_at, order_id))
-        log_audit_safely(conn, order_id, "DELIVERY_TIME_UPDATED", f"Admin_{admin['id']}")
-        return fetch_order(conn, order_id)
-
-
-def process_customer_decision(order_id: str, user_id: int, action: str):
-    if action not in {"accept", "reject"}: raise HTTPException(400, "عملية غير صالحة")
-    with db() as conn:
-        order = fetch_order(conn, order_id, True)
-        if not order: raise HTTPException(404, "الطلب غير موجود")
-        if int(order["user_id"]) != int(user_id): raise HTTPException(403, "هذا الطلب لا يخص حسابك")
-        if order["order_status"] != "WAITING_CUSTOMER" or order.get("customer_decision") != "WAITING":
-            raise HTTPException(409, "لا يمكن تنفيذ القرار على هذا الطلب")
-        if action == "accept":
-            conn.execute("""
-                UPDATE orders SET customer_decision='ACCEPTED', customer_decided_at=CURRENT_TIMESTAMP,
-                order_status='READY_TO_START', updated_at=CURRENT_TIMESTAMP WHERE order_id=%s
-            """, (order_id,))
-            log_audit_safely(conn, order_id, "CUSTOMER_ACCEPTED_ORDER", f"User_{user_id}")
-            return {"ok": True, "status": "READY_TO_START"}
-        conn.execute("""
-            UPDATE orders SET customer_decision='REJECTED', customer_decided_at=CURRENT_TIMESTAMP,
-            order_status='CANCELLED', cancelled_at=CURRENT_TIMESTAMP, cancelled_by=%s,
-            cancellation_reason='إلغاء الطلب من الزبون', updated_at=CURRENT_TIMESTAMP WHERE order_id=%s
-        """, (f"User_{user_id}", order_id))
-        log_audit_safely(conn, order_id, "CUSTOMER_CANCELLED_ORDER", f"User_{user_id}")
-        return {"ok": True, "status": "CANCELLED"}
-
-
-async def send_quotation(order_id: str, admin: dict, quote: QuoteIn):
-    result = await asyncio.to_thread(_prepare_quote, order_id, admin, quote)
-    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("✅ تأكيد الطلب", callback_data=f"naba:accept:{order_id}"), InlineKeyboardButton("❌ رفض الطلب", callback_data=f"naba:reject:{order_id}")]])
-    text = (
-        "📋 <b>تفاصيل طلبك</b>\n\n"
-        f"🆔 رقم الطلب: <code>{html.escape(order_id)}</code>\n"
-        f"🛠 الخدمة: {html.escape(result['service_name'])}\n"
-        f"💰 السعر: {money_float(quote.price):,.2f} IQD\n"
-        f"⏰ موعد التسليم: {html.escape(quote.delivery_at)}\n"
-        f"📝 ملاحظات: {html.escape(quote.admin_note or 'لا توجد')}\n\n"
-        "بعد الموافقة على السعر سيتم التواصل معك من قبل الكادر.\n"
-        "الدفع يتم يدويًا مع الكادر، ولا توجد دفعة إلكترونية داخل التطبيق.\n\n"
-        "يرجى اختيار أحد الخيارين أدناه."
-    )
-    try:
-        await telegram_app.bot.send_message(chat_id=result["user_id"], text=text, parse_mode="HTML", reply_markup=keyboard)
-    except TelegramError:
-        await asyncio.to_thread(_revert_quote_after_send_failure, order_id)
-        raise HTTPException(502, "تعذر إرسال العرض للزبون")
-    return {"ok": True, "message": "تم إرسال العرض للزبون", "order_id": order_id}
-
-
-def _prepare_quote(order_id: str, admin: dict, quote: QuoteIn):
-    with db() as conn:
-        order = fetch_order(conn, order_id, True)
-        if not order: raise HTTPException(404, "الطلب غير موجود")
-        if order["order_status"] not in {"NEW", "UNDER_REVIEW"}:
-            raise HTTPException(409, "لا يمكن إرسال العرض في الحالة الحالية")
-        conn.execute("""
-            UPDATE orders SET price=%s, delivery_at=%s, admin_note=%s,
-            order_status='WAITING_CUSTOMER', customer_decision='WAITING',
-            quote_sent_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP
-            WHERE order_id=%s
-        """, (quote.price, quote.delivery_at, quote.admin_note, order_id))
-        refresh_payment_summary(conn, order_id)
-        log_audit_safely(conn, order_id, "QUOTE_SENT_TO_CUSTOMER", f"Admin_{admin['id']}")
-        return {"user_id": order["user_id"], "service_name": order["service_name"]}
-
-
-def _revert_quote_after_send_failure(order_id: str):
-    try:
-        with db() as conn:
-            conn.execute("""
-                UPDATE orders SET order_status='UNDER_REVIEW', quote_sent_at=NULL, updated_at=CURRENT_TIMESTAMP
-                WHERE order_id=%s AND order_status='WAITING_CUSTOMER'
-            """, (order_id,))
-            log_audit_safely(conn, order_id, "QUOTE_SEND_FAILED", "Telegram_Bot")
-    except Exception:
-        logger.exception("Could not revert failed quote %s", order_id)
-
-
-def record_payment(order_id: str, payment: PaymentIn, admin: dict):
-    with db() as conn:
-        order = fetch_order(conn, order_id, True)
-        if not order: raise HTTPException(404, "الطلب غير موجود")
-        key = payment.request_key.strip() or None
-        if key:
-            existing = conn.execute("SELECT payment_id FROM payments WHERE order_id=%s AND request_key=%s", (order_id, key)).fetchone()
-            if existing: return {"ok": True, "duplicate": True, "payment_id": int(existing["payment_id"])}
-        totals = payment_totals(conn, order_id)
-        paid = money_decimal(totals["paid"]) - money_decimal(totals["refunded"])
-        price = money_decimal(order["price"])
-        if payment.amount > max(price - paid, Decimal("0.00")) and price > 0:
-            raise HTTPException(400, "مبلغ الدفعة أكبر من المتبقي")
-        try:
-            row = conn.execute("""
-                INSERT INTO payments(order_id, amount, currency, payment_method, note, performed_by, request_key)
-                VALUES(%s,%s,%s,%s,%s,%s,%s) RETURNING payment_id
-            """, (order_id, payment.amount, payment.currency.upper(), payment.payment_method.upper(), payment.note, f"Admin_{admin['id']}", key)).fetchone()
-        except psycopg.errors.UniqueViolation:
-            existing = conn.execute("SELECT payment_id FROM payments WHERE order_id=%s AND request_key=%s", (order_id, key)).fetchone()
-            return {"ok": True, "duplicate": True, "payment_id": int(existing["payment_id"])}
-        summary = refresh_payment_summary(conn, order_id)
-        log_audit_safely(conn, order_id, "PAYMENT_RECORDED", f"Admin_{admin['id']}")
-        return {"ok": True, "payment_id": int(row["payment_id"]), **{k: money_float(v) if k in {"paid", "remaining"} else v for k,v in summary.items()}}
-
-
-def change_order_status(order_id: str, status: str, note: str, admin: dict):
-    status = status.strip().upper()
-    with db() as conn:
-        order = fetch_order(conn, order_id, True)
-        if not order: raise HTTPException(404, "الطلب غير موجود")
-        validate_order_transition(order["order_status"], status)
-
-        if status == "COMPLETED":
-            summary = refresh_payment_summary(conn, order_id)
-            if summary["payment_status"] != "PAID":
-                raise HTTPException(
-                    409,
-                    "لا يمكن إكمال الطلب قبل تأكيد استلام المبلغ بالكامل."
-                )
-
-        if status == "CANCELLED":
-            conn.execute("""UPDATE orders SET order_status=%s, cancelled_at=CURRENT_TIMESTAMP, cancelled_by=%s,
-                         cancellation_reason=%s, admin_note=%s, updated_at=CURRENT_TIMESTAMP WHERE order_id=%s""",
-                         (status, f"Admin_{admin['id']}", note, note, order_id))
-            action = "ORDER_CANCELLED"
-        else:
-            conn.execute("UPDATE orders SET order_status=%s, admin_note=%s, updated_at=CURRENT_TIMESTAMP WHERE order_id=%s", (status, note, order_id))
-            action = "ORDER_COMPLETED" if status == "COMPLETED" else "ORDER_STATUS_CHANGED"
-        log_audit_safely(conn, order_id, action, f"Admin_{admin['id']}")
-        return fetch_order(conn, order_id)
-
-
-def add_admin_note(order_id: str, note: str, admin: dict):
-    with db() as conn:
-        if not fetch_order(conn, order_id): raise HTTPException(404, "الطلب غير موجود")
-        conn.execute("UPDATE orders SET admin_note=%s, updated_at=CURRENT_TIMESTAMP WHERE order_id=%s", (note, order_id))
-        log_audit_safely(conn, order_id, "ADMIN_NOTE_ADDED", f"Admin_{admin['id']}")
-        return {"ok": True}
-
-
-@app.get("/api/admin/orders/{order_id}")
-def admin_order_details(order_id: str, request: Request):
-    admin = require_admin(request)
-    with db() as conn:
-        order = fetch_order(conn, order_id)
-        if not order: raise HTTPException(404, "الطلب غير موجود")
-        return serialize_order(conn, order)
-
-
-@app.post("/api/admin/orders/{order_id}/price")
-def admin_set_price(order_id: str, payload: PriceIn, request: Request):
-    admin = require_admin(request)
-    order = set_price(order_id, payload.price, admin)
-    return {"ok": True, "order_id": order_id, "price": money_float(order["price"])}
-
-
-@app.post("/api/admin/orders/{order_id}/deadline")
-def admin_set_deadline(order_id: str, payload: DeadlineIn, request: Request):
-    admin = require_admin(request)
-    set_delivery_at(order_id, payload.delivery_at, admin)
-    return {"ok": True, "order_id": order_id, "delivery_at": payload.delivery_at}
-
-
-@app.post("/api/admin/orders/{order_id}/quote")
-async def admin_send_quote(order_id: str, payload: QuoteIn, request: Request):
-    admin = require_admin(request)
-    return await send_quotation(order_id, admin, payload)
-
-
-@app.post("/api/orders/{order_id}/accept")
-def customer_accept(order_id: str, request: Request):
-    user = init_user_from_header(request)
-    return process_customer_decision(order_id, user["id"], "accept")
-
-
-@app.post("/api/orders/{order_id}/reject")
-def customer_reject(order_id: str, request: Request):
-    user = init_user_from_header(request)
-    return process_customer_decision(order_id, user["id"], "reject")
-
-
-@app.post("/api/admin/orders/{order_id}/payment")
-def admin_payment(order_id: str, payload: PaymentIn, request: Request):
-    admin = require_admin(request)
-    return record_payment(order_id, payload, admin)
-
-
-@app.post("/api/admin/orders/{order_id}/status")
-def admin_status(order_id: str, payload: StatusIn, request: Request):
-    admin = require_admin(request)
-    order = change_order_status(order_id, payload.status, payload.note, admin)
-    return {"ok": True, "order_id": order_id, "status": order["order_status"]}
-
-
-@app.post("/api/admin/orders/{order_id}/note")
-def admin_note(order_id: str, payload: NoteIn, request: Request):
-    admin = require_admin(request)
-    return add_admin_note(order_id, payload.note, admin)
-
-
-@app.get("/api/admin/orders/{order_id}/activity")
-def admin_activity(order_id: str, request: Request):
-    require_admin(request)
-    with db() as conn:
-        if not fetch_order(conn, order_id): raise HTTPException(404, "الطلب غير موجود")
-        rows = conn.execute("SELECT id, order_id, action, performed_by, timestamp FROM audit_logs WHERE order_id=%s ORDER BY timestamp DESC LIMIT 200", (order_id,)).fetchall()
-        return {"ok": True, "items": [{**dict(r), "timestamp": r["timestamp"].isoformat() if r["timestamp"] else None} for r in rows]}
-
-
-@app.get("/api/admin/orders")
-def admin_orders(request: Request, status: str = "", q: str = "", limit: int = 100):
-    require_admin(request)
-    limit = max(1, min(limit, 500))
-    with db() as conn:
-        where = []
-        params = []
-        if status:
-            where.append("order_status=%s"); params.append(status.upper())
-        if q.strip():
-            where.append("(order_id ILIKE %s OR username ILIKE %s OR title ILIKE %s OR service_name ILIKE %s)")
-            term = f"%{q.strip()}%"; params.extend([term, term, term, term])
-        sql = "SELECT order_id,user_id,username,service_type,service_name,department,title,order_status,customer_decision,payment_status,price,deposit,remaining_balance,deadline,delivery_at,quote_sent_at,created_at,updated_at FROM orders"
-        if where: sql += " WHERE " + " AND ".join(where)
-        sql += " ORDER BY created_at DESC LIMIT %s"; params.append(limit)
-        rows = conn.execute(sql, params).fetchall()
-        return {"ok": True, "items": [{**dict(r), **{k: (r[k].isoformat() if hasattr(r[k], 'isoformat') else r[k]) for k in ("quote_sent_at","created_at","updated_at") if r.get(k)}} for r in rows]}
-
-
-@app.get("/api/admin/export/excel")
-async def admin_export_excel(request: Request):
-    admin = require_admin(request)
-    path = None
-    try:
-        from openpyxl import Workbook
-        from openpyxl.styles import Font, Alignment
-        with db() as conn:
-            orders = conn.execute("""
-                SELECT order_id,user_id,username,service_name,department,title,order_status,customer_decision,payment_status,
-                       price,deposit,remaining_balance,deadline,created_at,updated_at,notes
-                FROM orders ORDER BY created_at DESC
-            """).fetchall()
-            payments = conn.execute("""
-                SELECT payment_id,order_id,amount,currency,payment_method,note,performed_by,created_at
-                FROM payments ORDER BY created_at DESC
-            """).fetchall()
-            activities = conn.execute("""
-                SELECT id,order_id,action,performed_by,timestamp FROM audit_logs ORDER BY timestamp DESC
-            """).fetchall()
-        wb = Workbook()
-        ws = wb.active; ws.title = "Orders"
-        ws.append(["Order ID","Customer","Telegram ID","Service","Department","Title","Order Status","Customer Decision","Payment Status","Price","Paid","Remaining","Deadline","Created At","Updated At","Notes"])
-        for c in ws[1]: c.font = Font(bold=True)
-        for r in orders:
-            ws.append([r["order_id"],r["username"],r["user_id"],r["service_name"],r["department"],r["title"],r["order_status"],r["customer_decision"],r["payment_status"],money_float(r["price"]),money_float(r["deposit"]),money_float(r["remaining_balance"]),r["deadline"],r["created_at"],r["updated_at"],r["notes"]])
-        ws2 = wb.create_sheet("Payments"); ws2.append(["Payment ID","Order ID","Amount","Currency","Payment Method","Note","Performed By","Created At"])
-        for c in ws2[1]: c.font = Font(bold=True)
-        for r in payments: ws2.append([r["payment_id"],r["order_id"],money_float(r["amount"]),r["currency"],r["payment_method"],r["note"],r["performed_by"],r["created_at"]])
-        ws3 = wb.create_sheet("Activity"); ws3.append(["Activity ID","Order ID","Action","Performed By","Timestamp"])
-        for c in ws3[1]: c.font = Font(bold=True)
-        for r in activities: ws3.append([r["id"],r["order_id"],r["action"],r["performed_by"],r["timestamp"]])
-        ws4 = wb.create_sheet("Summary")
-        total_orders = len(orders); today = datetime.now(timezone.utc).date()
-        total_sales = sum((money_decimal(r["price"]) for r in orders), Decimal("0")); total_paid = sum((money_decimal(r["deposit"]) for r in orders), Decimal("0")); total_remaining = sum((money_decimal(r["remaining_balance"]) for r in orders), Decimal("0"))
-        counts = {}
-        for r in orders: counts[r["order_status"]] = counts.get(r["order_status"], 0) + 1
-        summary = [["Metric","Value"],["Total Orders",total_orders],["Today's Orders",sum(1 for r in orders if r["created_at"] and r["created_at"].date()==today)], ["Pending Orders",counts.get("WAITING_CUSTOMER",0)],["Active Work",sum(counts.get(x,0) for x in ("READY_TO_START","IN_PROGRESS","QUALITY_REVIEW","READY_FOR_DELIVERY"))],["Completed Orders",counts.get("COMPLETED",0)],["Cancelled Orders",counts.get("CANCELLED",0)],["Total Sales",money_float(total_sales)],["Total Paid",money_float(total_paid)],["Total Remaining",money_float(total_remaining)]]
-        for row in summary: ws4.append(row)
-        for sheet in wb.worksheets:
-            for col in sheet.columns:
-                letter = col[0].column_letter
-                sheet.column_dimensions[letter].width = min(max(max(len(str(c.value or "")) for c in col)+2, 10), 40)
-            for row in sheet.iter_rows():
-                for c in row: c.alignment = Alignment(vertical="top", wrap_text=True)
-        fd, path = tempfile.mkstemp(prefix="NABA_Orders_", suffix=".xlsx"); os.close(fd)
-        wb.save(path)
-        caption = "📊 تقرير طلبات NABA\n\nتم إنشاء التقرير من قاعدة البيانات الحالية."
-        with open(path, "rb") as f:
-            await telegram_app.bot.send_document(chat_id=admin["id"], document=f, filename="NABA_Orders.xlsx", caption=caption)
-        return {"ok": True, "message": "تم إنشاء وإرسال ملف Excel إلى Telegram"}
-    except ImportError:
-        raise HTTPException(500, "مكتبة openpyxl غير مثبتة. أضف openpyxl إلى requirements.txt")
-    except TelegramError:
-        raise HTTPException(502, "تم إنشاء التقرير لكن تعذر إرساله إلى Telegram")
-    except Exception:
-        logger.exception("Excel export failed")
-        raise HTTPException(500, "تعذر إنشاء ملف Excel. يرجى المحاولة مرة أخرى.")
-    finally:
-        if path:
-            try: os.unlink(path)
-            except OSError: pass
-
-
-@app.get("/api/admin/dashboard/sections")
-def admin_dashboard_sections(request: Request):
-    require_admin(request)
-    sections = ["NEW","WAITING_CUSTOMER","READY_TO_START","IN_PROGRESS","QUALITY_REVIEW","READY_FOR_DELIVERY","COMPLETED","CANCELLED"]
-    with db() as conn:
-        result = {}
-        for status in sections:
-            rows = conn.execute("""
-                SELECT order_id,username,service_name,price,delivery_at,quote_sent_at,created_at,updated_at,customer_decision,payment_status
-                FROM orders WHERE order_status=%s ORDER BY created_at DESC
-            """, (status,)).fetchall()
-            result[status] = [dict(r) for r in rows]
-            for item in result[status]:
-                for k in ("quote_sent_at","created_at","updated_at"):
-                    if item.get(k): item[k]=item[k].isoformat()
-                item["price"]=money_float(item["price"])
-        return {"ok": True, "sections": result}
 
 # =========================================================
 # Order status
@@ -3860,7 +2755,9 @@ def get_order_status(
                 deposit,
                 remaining_balance,
                 created_at
+
             FROM orders
+
             WHERE order_id=%s
               AND user_id=%s
             """,
