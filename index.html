@@ -2690,12 +2690,11 @@
             "X-Telegram-Init-Data": initData,
             "Accept": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/json"
           },
-          cache: "no-store",
-          credentials: "omit"
+          cache: "no-store"
         }
       );
     } catch (error) {
-      console.error("Excel download network error:", error);
+      console.error("Download network error:", error);
       throw new Error(
         "تعذر الاتصال بالخادم. تحقق من اتصال الإنترنت ثم أعد المحاولة."
       );
