@@ -716,7 +716,7 @@ async def init_db_with_retry(
         try:
             await asyncio.to_thread(init_db)
             logger.info("Database initialized successfully")
-            return
+            return True
         except psycopg.OperationalError:
             logger.warning(
                 "Database unavailable - attempt %s/%s",
@@ -726,9 +726,31 @@ async def init_db_with_retry(
             )
 
             if attempt == attempts:
-                raise
+                return False
 
             await asyncio.sleep(delay * attempt)
+
+    return False
+
+
+async def database_retry_loop():
+    """Keep retrying PostgreSQL initialization after a temporary outage."""
+    delay = 5
+
+    while True:
+        try:
+            if await init_db_with_retry(attempts=1):
+                logger.info("Database connection restored")
+                return
+        except Exception:
+            logger.exception("Unexpected database retry failure")
+
+        logger.warning(
+            "Database still unavailable; retrying in %s seconds",
+            delay,
+        )
+        await asyncio.sleep(delay)
+        delay = min(delay * 2, 60)
 
 
 def add_audit_log_conn(
@@ -2699,10 +2721,28 @@ telegram_app.add_handler(
 # Lifespan
 # =========================================================
 
+# Background PostgreSQL recovery task.
+database_retry_task: Optional[asyncio.Task] = None
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
 
-    await init_db_with_retry()
+    global database_retry_task
+
+    database_retry_task = None
+
+    # PostgreSQL/Neon can have a temporary DNS or network outage.
+    # Do not terminate the whole FastAPI process after the initial retries.
+    database_ready = await init_db_with_retry()
+
+    if not database_ready:
+        logger.error(
+            "Database is unavailable at startup; application will remain online "
+            "and retry PostgreSQL connection in the background."
+        )
+        database_retry_task = asyncio.create_task(
+            database_retry_loop()
+        )
 
     await telegram_app.initialize()
 
@@ -2728,6 +2768,17 @@ async def lifespan(_: FastAPI):
         )
 
     yield
+
+    if database_retry_task is not None:
+        database_retry_task.cancel()
+        try:
+            await database_retry_task
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            logger.exception(
+                "Database retry task shutdown failed"
+            )
 
     try:
         await telegram_app.shutdown()
