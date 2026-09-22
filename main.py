@@ -2344,9 +2344,9 @@ async def quotation_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     try:
         result = await asyncio.to_thread(process_customer_decision, order_id, user_id, action)
         if action == "accept":
-            text = "✅ تم تأكيد طلبك.\nسيتم البدء بالعمل."
+            text = "✅ تم استلام موافقتك على السعر.\nسيتم التواصل معك من قبل الكادر لاستكمال إجراءات الطلب."
         else:
-            text = "❌ تم إلغاء الطلب بناءً على رفض العرض."
+            text = "❌ تم إلغاء الطلب.\nتم نقل الطلب إلى خانة الطلبات الملغية."
         await query.edit_message_reply_markup(reply_markup=None)
         await query.message.reply_text(text)
     except HTTPException as exc:
@@ -3542,9 +3542,9 @@ def process_customer_decision(order_id: str, user_id: int, action: str):
         conn.execute("""
             UPDATE orders SET customer_decision='REJECTED', customer_decided_at=CURRENT_TIMESTAMP,
             order_status='CANCELLED', cancelled_at=CURRENT_TIMESTAMP, cancelled_by=%s,
-            cancellation_reason='رفض العرض من الزبون', updated_at=CURRENT_TIMESTAMP WHERE order_id=%s
+            cancellation_reason='إلغاء الطلب من الزبون', updated_at=CURRENT_TIMESTAMP WHERE order_id=%s
         """, (f"User_{user_id}", order_id))
-        log_audit_safely(conn, order_id, "CUSTOMER_REJECTED_ORDER", f"User_{user_id}")
+        log_audit_safely(conn, order_id, "CUSTOMER_CANCELLED_ORDER", f"User_{user_id}")
         return {"ok": True, "status": "CANCELLED"}
 
 
@@ -3558,6 +3558,8 @@ async def send_quotation(order_id: str, admin: dict, quote: QuoteIn):
         f"💰 السعر: {money_float(quote.price):,.2f} IQD\n"
         f"⏰ موعد التسليم: {html.escape(quote.delivery_at)}\n"
         f"📝 ملاحظات: {html.escape(quote.admin_note or 'لا توجد')}\n\n"
+        "بعد الموافقة على السعر سيتم التواصل معك من قبل الكادر.\n"
+        "الدفع يتم يدويًا مع الكادر، ولا توجد دفعة إلكترونية داخل التطبيق.\n\n"
         "يرجى اختيار أحد الخيارين أدناه."
     )
     try:
@@ -3629,6 +3631,15 @@ def change_order_status(order_id: str, status: str, note: str, admin: dict):
         order = fetch_order(conn, order_id, True)
         if not order: raise HTTPException(404, "الطلب غير موجود")
         validate_order_transition(order["order_status"], status)
+
+        if status == "COMPLETED":
+            summary = refresh_payment_summary(conn, order_id)
+            if summary["payment_status"] != "PAID":
+                raise HTTPException(
+                    409,
+                    "لا يمكن إكمال الطلب قبل تأكيد استلام المبلغ بالكامل."
+                )
+
         if status == "CANCELLED":
             conn.execute("""UPDATE orders SET order_status=%s, cancelled_at=CURRENT_TIMESTAMP, cancelled_by=%s,
                          cancellation_reason=%s, admin_note=%s, updated_at=CURRENT_TIMESTAMP WHERE order_id=%s""",
