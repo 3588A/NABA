@@ -2,1504 +2,813 @@
 <html lang="ar" dir="rtl">
 
 <head>
-
   <meta charset="UTF-8">
-
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0, user-scalable=no"
-  >
-
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#087fc1">
   <title>النبع للخدمات الجامعية</title>
 
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
   <style>
-
-    :root{
-      --sky:#19a9e8;
-      --sky-dark:#087fc1;
-      --sky-pale:#eaf8ff;
-      --ink:#17324d;
-      --muted:#70859a;
-      --line:#dcecf5;
-      --canvas:#f5fbfe;
-      --white:#fff;
-      --success:#16a673;
-      --danger:#d9485f;
-      --warning:#e39b22;
-      --shadow:0 18px 50px rgba(31,111,149,.12)
+    :root {
+      --sky: #19a9e8;
+      --sky-dark: #087fc1;
+      --sky-pale: #eaf8ff;
+      --ink: #17324d;
+      --muted: #70859a;
+      --line: #dcecf5;
+      --canvas: #f5fbfe;
+      --white: #fff;
+      --success: #16a673;
+      --danger: #d9485f;
+      --warning: #e39b22;
+      --shadow: 0 18px 50px rgba(31, 111, 149, .12);
     }
 
-    *{
-      box-sizing:border-box
+    * {
+      box-sizing: border-box;
     }
 
-    html{
-      background:var(--canvas)
+    html {
+      background: var(--canvas);
     }
 
-    body{
-      min-height:100vh;
-      margin:0;
-      padding:20px 14px 36px;
-      direction:rtl;
-      color:var(--ink);
-      font-family:
-        "Tajawal",
-        "Noto Sans Arabic",
-        system-ui,
-        -apple-system,
-        "Segoe UI",
-        sans-serif;
-
+    body {
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px 14px 36px;
+      direction: rtl;
+      color: var(--ink);
+      font-family: "Tajawal", "Noto Sans Arabic", system-ui, -apple-system, sans-serif;
       background:
-        radial-gradient(
-          circle at 8% 0%,
-          rgba(25,169,232,.15),
-          transparent 27%
-        ),
-        linear-gradient(
-          180deg,
-          #fbfeff 0%,
-          #f2faff 56%,
-          #e9f6fc 100%
-        )
+        radial-gradient(circle at 8% 0%, rgba(25, 169, 232, .15), transparent 27%),
+        linear-gradient(180deg, #fbfeff 0%, #f2faff 56%, #e9f6fc 100%);
     }
 
-    .container{
-      width:min(100%,680px);
-      margin:0 auto
+    button,
+    input,
+    select,
+    textarea {
+      font-family: inherit;
     }
 
-    .header{
-      position:relative;
-      overflow:hidden;
-      margin-bottom:18px;
-      padding:25px 24px;
-      color:#fff;
-      text-align:right;
-      border-radius:26px;
-      background:
-        linear-gradient(
-          135deg,
-          #073b5c 0%,
-          #0b79ad 54%,
-          #26bce9 100%
-        );
-      box-shadow:
-        0 18px 35px rgba(8,91,132,.2)
+    button {
+      -webkit-tap-highlight-color: transparent;
     }
 
-    .header:after{
-      content:"";
-      position:absolute;
-      width:210px;
-      height:210px;
-      left:-84px;
-      top:-105px;
-      border:1px solid rgba(255,255,255,.22);
-      border-radius:50%;
-      box-shadow:
-        0 0 0 24px rgba(255,255,255,.05),
-        0 0 0 49px rgba(255,255,255,.03)
+    .container {
+      width: min(100%, 720px);
+      margin: 0 auto;
     }
 
-    .header:before{
-      content:"ن";
-      position:absolute;
-      z-index:1;
-      left:22px;
-      top:20px;
-      display:grid;
-      width:48px;
-      height:48px;
-      place-items:center;
-      color:#07547a;
-      font-size:24px;
-      font-weight:800;
-      border-radius:15px;
-      background:#fff;
-      box-shadow:0 8px 18px rgba(0,0,0,.12)
+    .header {
+      position: relative;
+      overflow: hidden;
+      margin-bottom: 18px;
+      padding: 25px 24px;
+      color: #fff;
+      text-align: right;
+      border-radius: 26px;
+      background: linear-gradient(135deg, #073b5c 0%, #0b79ad 54%, #26bce9 100%);
+      box-shadow: 0 18px 35px rgba(8, 91, 132, .2);
     }
 
-    .header h2{
-      position:relative;
-      z-index:1;
-      margin:0;
-      color:#fff;
-      font-size:clamp(20px,5vw,28px);
-      font-weight:800
+    .header:before {
+      content: "ن";
+      position: absolute;
+      z-index: 1;
+      left: 22px;
+      top: 20px;
+      display: grid;
+      width: 48px;
+      height: 48px;
+      place-items: center;
+      color: #07547a;
+      font-size: 24px;
+      font-weight: 800;
+      border-radius: 15px;
+      background: #fff;
+      box-shadow: 0 8px 18px rgba(0, 0, 0, .12);
     }
 
-    .header p{
-      position:relative;
-      z-index:1;
-      margin:12px 0 0;
-      color:rgba(255,255,255,.82);
-      font-size:13px;
-      line-height:1.8
+    .header h2 {
+      margin: 0;
+      color: #fff;
+      font-size: clamp(20px, 5vw, 28px);
+      font-weight: 800;
     }
 
-    .channel-btn{
-      display:flex;
-      width:100%;
-      min-height:48px;
-      margin-top:16px;
-      padding:12px 16px;
-      align-items:center;
-      justify-content:center;
-      gap:8px;
-      color:#fff;
-      text-decoration:none;
-      text-align:center;
-      font-size:13px;
-      font-weight:800;
-      border:1px solid rgba(255,255,255,.18);
-      border-radius:13px;
-      background:
-        linear-gradient(
-          135deg,
-          #087fc1,
-          #19a9e8
-        );
-      box-shadow:
-        0 8px 18px rgba(8,127,193,.22);
-      transition:
-        transform .2s,
-        box-shadow .2s,
-        opacity .2s
+    .header p {
+      margin: 12px 0 0;
+      color: rgba(255, 255, 255, .82);
+      font-size: 13px;
+      line-height: 1.8;
     }
 
-    .channel-btn:hover{
-      transform:translateY(-1px);
-      box-shadow:
-        0 11px 22px rgba(8,127,193,.28)
+    .channel-btn {
+      display: flex;
+      width: 100%;
+      min-height: 48px;
+      margin-top: 16px;
+      padding: 12px 16px;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: #fff;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 800;
+      border: 1px solid rgba(255, 255, 255, .18);
+      border-radius: 13px;
+      background: linear-gradient(135deg, #087fc1, #19a9e8);
+      box-shadow: 0 8px 18px rgba(8, 127, 193, .22);
     }
 
-    .channel-btn:active{
-      transform:translateY(0)
+    .admin-btn {
+      display: none;
+      width: 100%;
+      min-height: 46px;
+      margin-top: 10px;
+      padding: 11px 15px;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, .2);
+      border-radius: 13px;
+      background: rgba(255, 255, 255, .12);
+      backdrop-filter: blur(8px);
+      font: inherit;
+      font-size: 13px;
+      font-weight: 800;
+      cursor: pointer;
     }
 
-    .admin-btn{
-      display:none;
-      width:100%;
-      min-height:46px;
-      margin-top:10px;
-      padding:11px 15px;
-      align-items:center;
-      justify-content:center;
-      gap:8px;
-      color:#fff;
-      border:1px solid rgba(255,255,255,.2);
-      border-radius:13px;
-      background:rgba(255,255,255,.12);
-      backdrop-filter:blur(8px);
-      font:inherit;
-      font-size:13px;
-      font-weight:800;
-      cursor:pointer
+    .admin-btn.visible {
+      display: flex;
     }
 
-    .admin-btn.visible{
-      display:flex
+    .card {
+      padding: clamp(20px, 4vw, 32px);
+      background: rgba(255, 255, 255, .97);
+      border: 1px solid rgba(220, 236, 245, .95);
+      border-radius: 22px;
+      box-shadow: var(--shadow);
     }
 
-    .card{
-      padding:clamp(20px,4vw,32px);
-      background:rgba(255,255,255,.97);
-      border:1px solid rgba(220,236,245,.95);
-      border-radius:22px;
-      box-shadow:var(--shadow)
+    .step-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+      color: var(--ink);
+      font-size: 15px;
+      font-weight: 800;
     }
 
-    .step-title{
-      display:flex;
-      align-items:center;
-      gap:10px;
-      margin-bottom:16px;
-      color:var(--ink);
-      font-size:15px;
-      font-weight:800
+    .step-title:before {
+      content: "01";
+      display: grid;
+      width: 31px;
+      height: 31px;
+      place-items: center;
+      color: var(--sky-dark);
+      font-size: 11px;
+      border-radius: 10px;
+      background: var(--sky-pale);
     }
 
-    .step-title:before{
-      content:"01";
-      display:grid;
-      width:31px;
-      height:31px;
-      place-items:center;
-      flex:0 0 31px;
-      color:var(--sky-dark);
-      font-size:11px;
-      border-radius:10px;
-      background:var(--sky-pale)
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 25px 0 14px;
+      color: var(--ink);
+      font-size: 14px;
+      font-weight: 800;
     }
 
-    .section-title{
-      display:flex;
-      align-items:center;
-      gap:10px;
-      margin:25px 0 14px;
-      color:var(--ink);
-      font-size:14px;
-      font-weight:800
+    .section-title:before {
+      content: "";
+      width: 4px;
+      height: 22px;
+      border-radius: 10px;
+      background: linear-gradient(180deg, var(--sky-dark), var(--sky));
     }
 
-    .section-title:before{
-      content:"";
-      width:4px;
-      height:22px;
-      border-radius:10px;
-      background:linear-gradient(
-        180deg,
-        var(--sky-dark),
-        var(--sky)
-      )
+    hr {
+      margin: 23px 0;
+      border: 0;
+      border-top: 1px solid var(--line);
     }
 
-    hr{
-      margin:23px 0;
-      border:0;
-      border-top:1px solid var(--line)
+    .services-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 15px;
     }
 
-    .services-grid{
-      display:grid;
-      grid-template-columns:repeat(2,1fr);
-      gap:12px;
-      margin-bottom:15px
+    .service-btn {
+      position: relative;
+      display: flex;
+      min-height: 106px;
+      padding: 16px 12px;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: var(--ink);
+      text-align: center;
+      cursor: pointer;
+      border: 1px solid var(--line);
+      border-radius: 17px;
+      background: #fff;
+      transition: transform .2s, border-color .2s, box-shadow .2s;
     }
 
-    .service-btn{
-      position:relative;
-      display:flex;
-      min-height:106px;
-      padding:16px 12px;
-      flex-direction:column;
-      align-items:center;
-      justify-content:center;
-      gap:8px;
-      color:var(--ink);
-      text-align:center;
-      cursor:pointer;
-      border:1px solid var(--line);
-      border-radius:17px;
-      background:#fff;
-      transition:
-        transform .2s,
-        border-color .2s,
-        box-shadow .2s
+    .service-btn:hover {
+      transform: translateY(-2px);
+      border-color: #8bd4f3;
     }
 
-    .service-btn:hover{
-      transform:translateY(-2px);
-      border-color:#8bd4f3;
-      box-shadow:
-        0 10px 22px rgba(25,169,232,.13)
+    .service-btn.selected {
+      border-color: var(--sky);
+      background: linear-gradient(145deg, #f8fdff, #e8f7ff);
+      box-shadow: 0 8px 20px rgba(25, 169, 232, .10);
     }
 
-    .service-btn.selected{
-      border-color:var(--sky);
-      background:
-        linear-gradient(
-          145deg,
-          #f8fdff,
-          #e8f7ff
-        );
-      box-shadow:
-        0 10px 25px rgba(25,169,232,.16)
+    .service-btn.selected:after {
+      content: "✓";
+      position: absolute;
+      top: 9px;
+      left: 10px;
+      display: grid;
+      width: 20px;
+      height: 20px;
+      place-items: center;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 800;
+      border-radius: 50%;
+      background: var(--sky);
     }
 
-    .service-btn.selected:after{
-      content:"✓";
-      position:absolute;
-      top:9px;
-      left:10px;
-      display:grid;
-      width:20px;
-      height:20px;
-      place-items:center;
-      color:#fff;
-      font-size:12px;
-      font-weight:800;
-      border-radius:50%;
-      background:var(--sky)
+    .service-btn span.icon {
+      display: grid;
+      width: 43px;
+      height: 43px;
+      place-items: center;
+      font-size: 22px;
+      border-radius: 14px;
+      background: var(--sky-pale);
     }
 
-    .service-btn span.icon{
-      display:grid;
-      width:43px;
-      height:43px;
-      place-items:center;
-      font-size:22px;
-      border-radius:14px;
-      background:var(--sky-pale)
+    .service-btn span.title {
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 800;
     }
 
-    .service-btn span.title{
-      color:var(--ink);
-      font-size:12px;
-      font-weight:800
+    .service-btn small {
+      color: var(--muted);
+      font-size: 10px;
+      line-height: 1.5;
     }
 
-    .service-btn small{
-      color:var(--muted);
-      font-size:10px;
-      line-height:1.5
+    .form-group {
+      margin-bottom: 16px;
+      text-align: right;
     }
 
-    .form-group{
-      margin-bottom:16px;
-      text-align:right
-    }
-
-    label{
-      display:block;
-      margin-bottom:8px;
-      color:#456278;
-      font-size:12px;
-      font-weight:800
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: #456278;
+      font-size: 12px;
+      font-weight: 800;
     }
 
     input[type=text],
     input[type=number],
     input[type=datetime-local],
     select,
-    textarea{
-      width:100%;
-      padding:13px 14px;
-      color:var(--ink);
-      font:inherit;
-      font-size:13px;
-      outline:0;
-      border:1px solid var(--line);
-      border-radius:12px;
-      background:#fbfeff;
-      transition:
-        border-color .2s,
-        box-shadow .2s
-    }
-
-    input::placeholder,
-    textarea::placeholder{
-      color:#9aabba
+    textarea {
+      width: 100%;
+      padding: 13px 14px;
+      color: var(--ink);
+      font: inherit;
+      font-size: 13px;
+      outline: 0;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fbfeff;
     }
 
     input:focus,
     select:focus,
-    textarea:focus{
-      border-color:#62c5ed;
-      background:#fff;
-      box-shadow:
-        0 0 0 4px rgba(25,169,232,.11)
-    }
-
-    textarea{
-      min-height:100px;
-      resize:vertical;
-      line-height:1.7
-    }
-
-    .file-upload-box{
-      display:flex;
-      min-height:108px;
-      padding:16px;
-      flex-direction:column;
-      align-items:center;
-      justify-content:center;
-      cursor:pointer;
-      text-align:center;
-      border:1.5px dashed #abd8ea;
-      border-radius:15px;
-      background:#f7fcff;
-      transition:
-        border-color .2s,
-        background .2s
-    }
-
-    .file-upload-box:hover{
-      border-color:var(--sky);
-      background:var(--sky-pale)
-    }
-
-    .file-upload-box span{
-      display:grid;
-      width:40px;
-      height:40px;
-      place-items:center;
-      font-size:20px;
-      border-radius:13px;
-      background:#e2f5fd
-    }
-
-    .file-upload-box div{
-      color:var(--muted);
-      font-size:12px
-    }
-
-    .file-status{
-      max-width:100%;
-      margin-top:8px;
-      color:var(--sky-dark)!important;
-      font-weight:800;
-      overflow:hidden;
-      text-overflow:ellipsis;
-      white-space:nowrap
-    }
-
-    input[type=file]{
-      display:none
-    }
-
-    .btn-submit{
-      width:100%;
-      margin-top:7px;
-      padding:14px 18px;
-      color:#fff;
-      border:0;
-      border-radius:13px;
-      background:
-        linear-gradient(
-          135deg,
-          var(--sky-dark),
-          var(--sky)
-        );
-      box-shadow:
-        0 10px 20px rgba(25,169,232,.23);
-      font:inherit;
-      font-size:14px;
-      font-weight:800;
-      cursor:pointer;
-      transition:
-        transform .2s,
-        box-shadow .2s,
-        opacity .2s
-    }
-
-    .btn-submit:hover{
-      transform:translateY(-1px);
-      box-shadow:
-        0 14px 25px rgba(25,169,232,.28)
-    }
-
-    .btn-submit:disabled{
-      cursor:wait;
-      opacity:.65;
-      transform:none
-    }
-
-    .hidden{
-      display:none!important
+    textarea:focus {
+      border-color: #62c5ed;
+      background: #fff;
+      box-shadow: 0 0 0 4px rgba(25, 169, 232, .11);
     }
-
-    .info-box{
-      margin:12px 0 16px;
-      padding:12px 14px;
-      color:#456278;
-      font-size:11px;
-      line-height:1.8;
-      border:1px solid var(--line);
-      border-radius:12px;
-      background:#f8fcff
-    }
-
-    .success-box{
-      padding:30px 10px 14px;
-      text-align:center
-    }
-
-    .success-icon{
-      display:grid;
-      width:72px;
-      height:72px;
-      margin:0 auto 16px;
-      place-items:center;
-      color:var(--success);
-      font-size:38px;
-      border-radius:22px;
-      background:#e9fbf3
-    }
-
-    .success-box h3{
-      color:var(--ink)
-    }
-
-    .success-box p{
-      color:var(--muted);
-      line-height:1.8
-    }
-
-    .order-id-badge{
-      display:inline-flex;
-      margin:9px 0;
-      padding:9px 16px;
-      color:var(--success);
-      font-size:14px;
-      font-weight:800;
-      border:1px solid #a9e8cd;
-      border-radius:999px;
-      background:#effcf6
-    }
-
-    .error-box{
-      margin-top:14px;
-      padding:12px 14px;
-      color:#9f2439;
-      font-size:12px;
-      line-height:1.8;
-      border:1px solid #f1b8c2;
-      border-radius:12px;
-      background:#fff3f5
-    }
-
-    /* =====================================================
-       ADMIN DASHBOARD
-       ===================================================== */
-
-    .admin-panel{
-      display:none;
-      margin-bottom:18px
-    }
-
-    .admin-panel.visible{
-      display:block
-    }
-
-    .admin-header{
-      padding:20px;
-      color:#fff;
-      border-radius:20px;
-      background:
-        linear-gradient(
-          135deg,
-          #123c56,
-          #087fc1
-        );
-      box-shadow:
-        0 14px 30px rgba(8,91,132,.18)
-    }
-
-    .admin-header-top{
-      display:flex;
-      align-items:flex-start;
-      justify-content:space-between;
-      gap:12px
+
+    textarea {
+      min-height: 100px;
+      resize: vertical;
+      line-height: 1.7;
     }
 
-    .admin-header h3{
-      margin:0;
-      font-size:18px
+    .file-upload-box {
+      display: flex;
+      min-height: 108px;
+      padding: 16px;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      text-align: center;
+      border: 1.5px dashed #abd8ea;
+      border-radius: 15px;
+      background: #f7fcff;
     }
 
-    .admin-header p{
-      margin:7px 0 0;
-      color:rgba(255,255,255,.75);
-      font-size:11px
-    }
-
-    .admin-refresh{
-      flex:0 0 auto;
-      min-width:42px;
-      height:42px;
-      padding:0 11px;
-      color:#fff;
-      border:1px solid rgba(255,255,255,.22);
-      border-radius:11px;
-      background:rgba(255,255,255,.12);
-      font:inherit;
-      font-size:16px;
-      font-weight:800;
-      cursor:pointer
-    }
-
-    .admin-refresh:disabled{
-      cursor:wait;
-      opacity:.6
-    }
+    .file-upload-box:hover {
+      background: #eef9ff;
+      border-color: var(--sky);
+    }
 
-    .admin-close{
-      width:100%;
-      margin-top:14px;
-      padding:10px;
-      color:#fff;
-      border:1px solid rgba(255,255,255,.2);
-      border-radius:10px;
-      background:rgba(255,255,255,.1);
-      font:inherit;
-      font-size:12px;
-      font-weight:800;
-      cursor:pointer
+    .file-status {
+      margin-top: 8px;
+      color: var(--sky-dark);
+      font-weight: 800;
+      word-break: break-word;
     }
 
-    .admin-loading{
-      display:none;
-      margin-top:12px;
-      padding:11px 13px;
-      color:#456278;
-      text-align:center;
-      font-size:11px;
-      border:1px solid var(--line);
-      border-radius:12px;
-      background:#f8fcff
+    .btn-submit {
+      width: 100%;
+      margin-top: 7px;
+      padding: 14px 18px;
+      color: #fff;
+      border: 0;
+      border-radius: 13px;
+      background: linear-gradient(135deg, var(--sky-dark), var(--sky));
+      box-shadow: 0 10px 20px rgba(25, 169, 232, .23);
+      font: inherit;
+      font-size: 14px;
+      font-weight: 800;
+      cursor: pointer;
     }
 
-    .admin-loading.visible{
-      display:block
+    .btn-submit:disabled {
+      cursor: wait;
+      opacity: .65;
     }
 
-    .admin-error{
-      display:none;
-      margin-top:12px;
-      padding:12px 14px;
-      color:#9f2439;
-      font-size:11px;
-      line-height:1.8;
-      border:1px solid #f1b8c2;
-      border-radius:12px;
-      background:#fff3f5
+    .hidden {
+      display: none !important;
     }
 
-    .admin-error.visible{
-      display:block
+    .info-box {
+      margin: 12px 0 16px;
+      padding: 12px 14px;
+      color: #456278;
+      font-size: 11px;
+      line-height: 1.8;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #f8fcff;
     }
 
-    .stats-grid{
-      display:grid;
-      grid-template-columns:repeat(2,1fr);
-      gap:10px;
-      margin-top:12px
+    .error-box {
+      margin-top: 14px;
+      padding: 12px 14px;
+      color: #9f2439;
+      font-size: 12px;
+      border: 1px solid #f1b8c2;
+      border-radius: 12px;
+      background: #fff3f5;
     }
 
-    .stat-card{
-      padding:16px 12px;
-      text-align:center;
-      border:1px solid var(--line);
-      border-radius:15px;
-      background:#fff;
-      box-shadow:0 7px 18px rgba(31,111,149,.07)
+    .success-box {
+      margin-top: 15px;
+      padding: 14px;
+      border: 1px solid #b9ead7;
+      border-radius: 14px;
+      background: #f0fcf7;
     }
 
-    .stat-icon{
-      font-size:21px
+    /* Admin */
+    .admin-panel {
+      display: none;
+      margin-bottom: 18px;
     }
 
-    .stat-value{
-      margin-top:7px;
-      color:var(--ink);
-      font-size:22px;
-      font-weight:900
+    .admin-panel.visible {
+      display: block;
     }
 
-    .stat-label{
-      margin-top:4px;
-      color:var(--muted);
-      font-size:10px;
-      font-weight:700
+    .admin-header {
+      padding: 20px;
+      color: #fff;
+      border-radius: 20px;
+      background: linear-gradient(135deg, #123c56, #087fc1);
     }
 
-    .financial-grid{
-      display:grid;
-      grid-template-columns:repeat(3,1fr);
-      gap:10px;
-      margin-top:12px
+    .admin-section {
+      margin-top: 14px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 17px;
+      background: #fff;
     }
 
-    .financial-card{
-      min-width:0;
-      padding:14px 8px;
-      text-align:center;
-      border:1px solid var(--line);
-      border-radius:15px;
-      background:#fff;
-      box-shadow:0 7px 18px rgba(31,111,149,.07)
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin-top: 12px;
     }
 
-    .financial-icon{
-      font-size:19px
+    .stat-card {
+      padding: 16px 12px;
+      text-align: center;
+      border: 1px solid var(--line);
+      border-radius: 15px;
+      background: #fff;
     }
 
-    .financial-value{
-      margin-top:6px;
-      color:var(--ink);
-      font-size:15px;
-      font-weight:900;
-      overflow:hidden;
-      text-overflow:ellipsis;
-      white-space:nowrap
+    .stat-value {
+      margin-top: 7px;
+      color: var(--ink);
+      font-size: 22px;
+      font-weight: 900;
     }
 
-    .financial-label{
-      margin-top:4px;
-      color:var(--muted);
-      font-size:9px;
-      font-weight:700
+    .stat-label {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 700;
     }
 
-    .admin-section{
-      margin-top:14px;
-      padding:16px;
-      border:1px solid var(--line);
-      border-radius:17px;
-      background:#fff
+    .order-row {
+      padding: 12px;
+      border: 1px solid #e6f1f6;
+      border-radius: 13px;
+      background: #fbfeff;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: .15s;
     }
 
-    .admin-section-title{
-      margin:0 0 13px;
-      color:var(--ink);
-      font-size:13px;
-      font-weight:900
+    .order-row:hover {
+      background: #f0f8fd;
+      transform: translateY(-1px);
     }
 
-    .service-stat-row{
-      display:flex;
-      min-height:42px;
-      padding:8px 0;
-      align-items:center;
-      justify-content:space-between;
-      gap:10px;
-      border-bottom:1px solid #edf5f9
+    .order-badge {
+      display: inline-flex;
+      padding: 4px 7px;
+      font-size: 9px;
+      font-weight: 800;
+      border-radius: 999px;
+      border: 1px solid #dcecf5;
     }
 
-    .service-stat-row:last-child{
-      border-bottom:0
+    .order-badge.success {
+      color: #087b54;
+      border-color: #b9ead7;
+      background: #effcf6;
     }
 
-    .service-stat-name{
-      color:#456278;
-      font-size:11px;
-      font-weight:700
+    .order-badge.warning {
+      color: #8a641f;
+      border-color: #f0d9a5;
+      background: #fff9eb;
     }
 
-    .service-stat-number{
-      min-width:35px;
-      padding:5px 8px;
-      color:var(--sky-dark);
-      text-align:center;
-      font-size:11px;
-      font-weight:900;
-      border-radius:999px;
-      background:var(--sky-pale)
+    .order-badge.danger {
+      color: #a1283d;
+      border-color: #f1b8c2;
+      background: #fff3f5;
     }
 
-    .payment-grid{
-      display:grid;
-      grid-template-columns:repeat(3,1fr);
-      gap:8px
+    .order-badge.info {
+      color: #087fc1;
+      border-color: #b9def1;
+      background: #effaff;
     }
 
-    .payment-card{
-      padding:11px 7px;
-      text-align:center;
-      border:1px solid var(--line);
-      border-radius:12px;
-      background:#fafdff
+    .empty-state {
+      padding: 20px;
+      color: var(--muted);
+      text-align: center;
+      font-size: 12px;
     }
 
-    .payment-value{
-      color:var(--sky-dark);
-      font-size:18px;
-      font-weight:900
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, .6);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 14px;
     }
 
-    .payment-label{
-      margin-top:4px;
-      color:var(--muted);
-      font-size:9px;
-      font-weight:700;
-      line-height:1.5
+    .modal-card {
+      width: min(100%, 650px);
+      max-height: 90vh;
+      overflow-y: auto;
+      background: #fff;
+      border-radius: 20px;
+      padding: 20px;
     }
 
-    .orders-list{
-      display:flex;
-      flex-direction:column;
-      gap:9px
+    .btn-action {
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 0;
+      font-weight: 800;
+      cursor: pointer;
+      font-size: 12px;
     }
 
-    .order-row{
-      padding:12px;
-      border:1px solid #e6f1f6;
-      border-radius:13px;
-      background:#fbfeff
+    .btn-action:disabled {
+      opacity: .55;
+      cursor: wait;
     }
 
-    .order-row-top{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:8px
+    .btn-success {
+      background: var(--success);
+      color: #fff;
     }
 
-    .order-id{
-      color:var(--sky-dark);
-      font-size:11px;
-      font-weight:900
+    .btn-danger {
+      background: var(--danger);
+      color: #fff;
     }
 
-    .order-date{
-      color:var(--muted);
-      font-size:9px;
-      white-space:nowrap
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
     }
 
-    .order-service{
-      margin-top:7px;
-      color:var(--ink);
-      font-size:11px;
-      font-weight:800
+    .detail-item {
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fbfeff;
     }
 
-    .order-user{
-      margin-top:5px;
-      color:#567087;
-      font-size:10px;
-      overflow:hidden;
-      text-overflow:ellipsis;
-      white-space:nowrap
+    .detail-item.full {
+      grid-column: 1 / -1;
     }
 
-    .order-meta{
-      display:flex;
-      flex-wrap:wrap;
-      gap:5px;
-      margin-top:9px
+    .detail-label {
+      color: var(--muted);
+      font-size: 10px;
+      margin-bottom: 4px;
     }
 
-    .order-badge{
-      display:inline-flex;
-      align-items:center;
-      min-height:23px;
-      padding:4px 7px;
-      color:#456278;
-      font-size:9px;
-      font-weight:800;
-      border:1px solid #dcecf5;
-      border-radius:999px;
-      background:#fff
+    .detail-value {
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 800;
+      word-break: break-word;
     }
 
-    .order-badge.success{
-      color:#087b54;
-      border-color:#b9ead7;
-      background:#effcf6
+    .activity-item {
+      padding: 8px 10px;
+      margin-bottom: 6px;
+      border-radius: 9px;
+      background: #f8fcff;
+      border: 1px solid var(--line);
+      font-size: 11px;
     }
 
-    .order-badge.warning{
-      color:#8a641f;
-      border-color:#f0d9a5;
-      background:#fff9eb
+    .quotation-box {
+      margin-top: 15px;
+      padding: 14px;
+      border: 1px solid var(--sky);
+      border-radius: 14px;
+      background: #f0f8fd;
     }
 
-    .order-badge.danger{
-      color:#a1283d;
-      border-color:#f1b8c2;
-      background:#fff3f5
+    .quotation-title {
+      margin: 0 0 8px;
+      color: var(--sky-dark);
+      font-size: 14px;
+      font-weight: 900;
     }
 
-    .order-money{
-      display:grid;
-      grid-template-columns:repeat(3,1fr);
-      gap:5px;
-      margin-top:9px
+    .quotation-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 5px 0;
+      border-bottom: 1px solid rgba(25, 169, 232, .12);
+      font-size: 12px;
     }
 
-    .money-item{
-      padding:7px 4px;
-      text-align:center;
-      border-radius:9px;
-      background:#f3f9fc
+    .quotation-row:last-child {
+      border-bottom: 0;
     }
 
-    .money-label{
-      display:block;
-      color:var(--muted);
-      font-size:8px
+    .toast {
+      position: fixed;
+      z-index: 3000;
+      right: 14px;
+      left: 14px;
+      bottom: 18px;
+      display: none;
+      padding: 13px 15px;
+      color: #fff;
+      text-align: center;
+      border-radius: 12px;
+      background: #17324d;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, .2);
+      font-size: 12px;
+      font-weight: 800;
     }
 
-    .money-value{
-      display:block;
-      margin-top:3px;
-      color:var(--ink);
-      font-size:9px;
-      font-weight:900;
-      overflow:hidden;
-      text-overflow:ellipsis;
-      white-space:nowrap
+    .toast.visible {
+      display: block;
     }
-
-    .empty-state{
-      padding:18px 10px;
-      color:var(--muted);
-      text-align:center;
-      font-size:11px;
-      border:1px dashed #cfe4ee;
-      border-radius:12px;
-      background:#fafdff
-    }
-
-    .admin-notice{
-      padding:12px;
-      color:#7c5a20;
-      font-size:11px;
-      line-height:1.8;
-      border:1px solid #f0d9a5;
-      border-radius:12px;
-      background:#fff9eb
-    }
-
-    @media(max-width:420px){
 
-      body{
-        padding:12px 10px 28px
+    @media (max-width: 520px) {
+      .detail-grid {
+        grid-template-columns: 1fr;
       }
 
-      .header{
-        padding:20px 18px;
-        border-radius:22px
+      .detail-item.full {
+        grid-column: auto;
       }
 
-      .card{
-        padding:18px 14px
+      .modal-card {
+        padding: 15px;
       }
-
-      .service-btn{
-        min-height:96px
-      }
-
-      .financial-grid{
-        grid-template-columns:1fr;
-      }
-
-      .payment-grid{
-        grid-template-columns:1fr;
-      }
-
     }
-
   </style>
-
 </head>
 
 <body>
 
 <div class="container">
 
+  <!-- HEADER -->
   <div class="header">
-
-    <h2>
-      النبع للخدمات الجامعية 🎓
-    </h2>
-
-    <p>
-      استمارة تقديم الطلبات والأعمال الأكاديمية والهندسية والمهنية
-    </p>
+    <h2>النبع للخدمات الجامعية 🎓</h2>
+    <p>استمارة تقديم الطلبات والأعمال الأكاديمية والهندسية والمهنية</p>
 
     <a
       href="https://t.me/ALNABASURVICE"
       target="_blank"
       rel="noopener noreferrer"
-      class="channel-btn"
-    >
+      class="channel-btn">
       📢 قناة النبع للخدمات الجامعية
     </a>
 
     <button
       id="adminButton"
       class="admin-btn"
-      onclick="toggleAdminPanel()"
-    >
+      onclick="toggleAdminPanel()">
       🔐 لوحة تحكم الأدمن
     </button>
-
   </div>
 
 
-  <!-- =====================================================
-       ADMIN DASHBOARD
-       ===================================================== -->
+  <!-- ==================== ADMIN DASHBOARD ==================== -->
 
-  <div
-    id="adminPanel"
-    class="admin-panel"
-  >
+  <div id="adminPanel" class="admin-panel">
 
     <div class="admin-header">
 
-      <div class="admin-header-top">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
 
         <div>
-
-          <h3>
-            📊 لوحة تحكم النبع
-          </h3>
-
-          <p>
-            لوحة الإدارة والإحصائيات — خاصة بالأدمن
+          <h3 style="margin:0;">📊 لوحة تحكم النبع</h3>
+          <p style="margin:5px 0 0; opacity:.8; font-size:11px;">
+            إدارة الطلبات، العروض، والدفعات
           </p>
-
         </div>
 
-        <button
-          id="adminRefreshButton"
-          class="admin-refresh"
-          onclick="loadAdminDashboard()"
-          title="تحديث البيانات"
-        >
-          🔄
-        </button>
+        <div style="display:flex; gap:5px;">
+          <button
+            class="btn-action"
+            style="background:#fff; color:#087fc1;"
+            onclick="exportExcel()">
+            📥 Excel
+          </button>
+
+          <button
+            class="btn-action"
+            style="background:rgba(255,255,255,.2); color:#fff;"
+            onclick="loadAdminDashboard()">
+            🔄
+          </button>
+        </div>
 
       </div>
 
       <button
-        class="admin-close"
-        onclick="toggleAdminPanel()"
-      >
-        إغلاق لوحة التحكم
+        class="admin-btn visible"
+        style="margin-top:12px; background:rgba(0,0,0,.2);"
+        onclick="toggleAdminPanel()">
+        إغلاق اللوحة
       </button>
 
     </div>
 
 
-    <div
-      id="adminLoading"
-      class="admin-loading"
-    >
-      ⏳ جاري تحميل بيانات لوحة التحكم...
-    </div>
-
-
-    <div
-      id="adminError"
-      class="admin-error"
-    ></div>
-
-
-    <!-- =====================================================
-         ORDER STATISTICS
-         ===================================================== -->
+    <!-- STATS -->
 
     <div class="stats-grid">
 
       <div class="stat-card">
-
-        <div class="stat-icon">
-          📦
-        </div>
-
-        <div
-          id="statTotal"
-          class="stat-value"
-        >
-          —
-        </div>
-
-        <div class="stat-label">
-          إجمالي الطلبات
-        </div>
-
+        <div id="statTotal" class="stat-value">—</div>
+        <div class="stat-label">إجمالي الطلبات</div>
       </div>
 
-
       <div class="stat-card">
-
-        <div class="stat-icon">
-          🆕
-        </div>
-
-        <div
-          id="statNew"
-          class="stat-value"
-        >
-          —
-        </div>
-
-        <div class="stat-label">
-          الطلبات الجديدة
-        </div>
-
+        <div id="statNew" class="stat-value">—</div>
+        <div class="stat-label">جديدة</div>
       </div>
 
-
       <div class="stat-card">
-
-        <div class="stat-icon">
-          ⏳
-        </div>
-
-        <div
-          id="statProcessing"
-          class="stat-value"
-        >
-          —
-        </div>
-
-        <div class="stat-label">
-          قيد المعالجة
-        </div>
-
+        <div id="statProcessing" class="stat-value">—</div>
+        <div class="stat-label">قيد المعالجة</div>
       </div>
 
-
       <div class="stat-card">
-
-        <div class="stat-icon">
-          ✅
-        </div>
-
-        <div
-          id="statCompleted"
-          class="stat-value"
-        >
-          —
-        </div>
-
-        <div class="stat-label">
-          مكتملة
-        </div>
-
-      </div>
-
-
-      <div class="stat-card">
-
-        <div class="stat-icon">
-          ❌
-        </div>
-
-        <div
-          id="statCancelled"
-          class="stat-value"
-        >
-          —
-        </div>
-
-        <div class="stat-label">
-          ملغاة
-        </div>
-
-      </div>
-
-
-      <div class="stat-card">
-
-        <div class="stat-icon">
-          📅
-        </div>
-
-        <div
-          id="statToday"
-          class="stat-value"
-        >
-          —
-        </div>
-
-        <div class="stat-label">
-          طلبات اليوم
-        </div>
-
-      </div>
-
-
-      <div class="stat-card">
-
-        <div class="stat-icon">
-          📆
-        </div>
-
-        <div
-          id="statMonth"
-          class="stat-value"
-        >
-          —
-        </div>
-
-        <div class="stat-label">
-          طلبات الشهر
-        </div>
-
+        <div id="statCompleted" class="stat-value">—</div>
+        <div class="stat-label">مكتملة</div>
       </div>
 
     </div>
 
 
-    <!-- =====================================================
-         FINANCIAL STATISTICS
-         ===================================================== -->
-
-    <div class="financial-grid">
-
-      <div class="financial-card">
-
-        <div class="financial-icon">
-          💰
-        </div>
-
-        <div
-          id="statTotalPrice"
-          class="financial-value"
-        >
-          —
-        </div>
-
-        <div class="financial-label">
-          إجمالي الأسعار
-        </div>
-
-      </div>
-
-
-      <div class="financial-card">
-
-        <div class="financial-icon">
-          💵
-        </div>
-
-        <div
-          id="statTotalDeposit"
-          class="financial-value"
-        >
-          —
-        </div>
-
-        <div class="financial-label">
-          إجمالي العربون
-        </div>
-
-      </div>
-
-
-      <div class="financial-card">
-
-        <div class="financial-icon">
-          🧾
-        </div>
-
-        <div
-          id="statTotalRemaining"
-          class="financial-value"
-        >
-          —
-        </div>
-
-        <div class="financial-label">
-          إجمالي المتبقي
-        </div>
-
-      </div>
-
-    </div>
-
-
-    <!-- =====================================================
-         SERVICE STATISTICS
-         ===================================================== -->
+    <!-- SEARCH / FILTER -->
 
     <div class="admin-section">
 
-      <h4 class="admin-section-title">
-        📌 توزيع الطلبات حسب الخدمة
+      <h4 style="margin:0 0 10px; font-size:13px;">
+        🔍 البحث والتصفية
       </h4>
 
-      <div class="service-stat-row">
+      <input
+        type="text"
+        id="adminSearchInput"
+        placeholder="بحث برقم الطلب، المعرف، أو العنوان..."
+        oninput="debounceSearch()">
 
-        <span class="service-stat-name">
-          📝 تقارير وبحوث
-        </span>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px;">
 
-        <span
-          id="statResearch"
-          class="service-stat-number"
-        >
-          —
-        </span>
+        <select id="adminStatusFilter" onchange="loadAdminOrders()">
+          <option value="">جميع الحالات</option>
+          <option value="NEW">جديد</option>
+          <option value="UNDER_REVIEW">تحت المراجعة</option>
+          <option value="WAITING_CUSTOMER">بانتظار موافقة الزبون</option>
+          <option value="ACCEPTED">مقبول</option>
+          <option value="READY_TO_START">جاهز للبدء</option>
+          <option value="IN_PROGRESS">قيد التنفيذ</option>
+          <option value="READY_FOR_DELIVERY">جاهز للتسليم</option>
+          <option value="COMPLETED">مكتمل</option>
+          <option value="REJECTED">مرفوض</option>
+          <option value="CANCELLED">ملغى</option>
+        </select>
 
-      </div>
-
-
-      <div class="service-stat-row">
-
-        <span class="service-stat-name">
-          📐 تصميم AutoCAD
-        </span>
-
-        <span
-          id="statAutocad"
-          class="service-stat-number"
-        >
-          —
-        </span>
-
-      </div>
-
-
-      <div class="service-stat-row">
-
-        <span class="service-stat-name">
-          📊 تحليل Minitab
-        </span>
-
-        <span
-          id="statMinitab"
-          class="service-stat-number"
-        >
-          —
-        </span>
-
-      </div>
-
-
-      <div class="service-stat-row">
-
-        <span class="service-stat-name">
-          💻 تنسيق وتصميم
-        </span>
-
-        <span
-          id="statFormatting"
-          class="service-stat-number"
-        >
-          —
-        </span>
-
-      </div>
-
-
-      <div class="service-stat-row">
-
-        <span class="service-stat-name">
-          📄 CV
-        </span>
-
-        <span
-          id="statCV"
-          class="service-stat-number"
-        >
-          —
-        </span>
-
-      </div>
-
-
-      <div class="service-stat-row">
-
-        <span class="service-stat-name">
-          🎨 Logo / هوية بصرية
-        </span>
-
-        <span
-          id="statDesign"
-          class="service-stat-number"
-        >
-          —
-        </span>
+        <select id="adminServiceFilter" onchange="loadAdminOrders()">
+          <option value="">جميع الخدمات</option>
+          <option value="research">مشاريع • تقارير • بحوث</option>
+          <option value="autocad">رسم وتصميم AutoCAD</option>
+          <option value="minitab">تحليل البيانات Minitab</option>
+          <option value="formatting">تنسيق PowerPoint / Word / PDF</option>
+          <option value="cv">سيرة ذاتية CV احترافية</option>
+          <option value="cv_ats">سيرة ذاتية CV بنظام ATS</option>
+          <option value="logo">تصميم Logo</option>
+          <option value="identity">Logo + هوية بصرية</option>
+        </select>
 
       </div>
 
     </div>
 
 
-    <!-- =====================================================
-         PAYMENT STATISTICS
-         ===================================================== -->
+    <!-- ORDERS -->
 
     <div class="admin-section">
 
-      <h4 class="admin-section-title">
-        💳 حالات الدفع
+      <h4 style="margin:0 0 10px; font-size:13px;">
+        📦 قائمة الطلبات
       </h4>
 
-      <div class="payment-grid">
-
-        <div class="payment-card">
-
-          <div
-            id="paymentUnpaid"
-            class="payment-value"
-          >
-            —
-          </div>
-
-          <div class="payment-label">
-            غير مدفوع
-          </div>
-
-        </div>
-
-
-        <div class="payment-card">
-
-          <div
-            id="paymentPartial"
-            class="payment-value"
-          >
-            —
-          </div>
-
-          <div class="payment-label">
-            دفع جزئي
-          </div>
-
-        </div>
-
-
-        <div class="payment-card">
-
-          <div
-            id="paymentPaid"
-            class="payment-value"
-          >
-            —
-          </div>
-
-          <div class="payment-label">
-            مدفوع بالكامل
-          </div>
-
-        </div>
-
-      </div>
-
-    </div>
-
-
-    <!-- =====================================================
-         RECENT ORDERS
-         ===================================================== -->
-
-    <div class="admin-section">
-
-      <h4 class="admin-section-title">
-        🕘 آخر الطلبات
-      </h4>
-
-      <div
-        id="recentOrders"
-        class="orders-list"
-      >
-
-        <div class="empty-state">
-          لا توجد بيانات بعد.
-        </div>
-
-      </div>
-
-    </div>
-
-
-    <!-- =====================================================
-         ADMIN SECURITY
-         ===================================================== -->
-
-    <div class="admin-section">
-
-      <h4 class="admin-section-title">
-        🔐 حالة لوحة التحكم
-      </h4>
-
-      <div class="admin-notice">
-        تم التعرف على الحساب كأدمن من خلال Telegram User ID.
-        الحماية النهائية للـAPI تتم في FastAPI، لذلك
-        إظهار هذه الواجهة وحده لا يعتبر طبقة أمان.
+      <div id="adminOrdersList">
+        ⏳ جاري التحميل...
       </div>
 
     </div>
@@ -1507,9 +816,282 @@
   </div>
 
 
-  <div class="card">
+  <!-- ==================== ADMIN MODAL ==================== -->
 
-    <!-- ================= FORM ================= -->
+  <div id="orderModal" class="modal-overlay hidden">
+
+    <div class="modal-card">
+
+      <div style="
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        border-bottom:1px solid var(--line);
+        padding-bottom:10px;
+      ">
+
+        <h3
+          id="modalOrderId"
+          style="margin:0; color:var(--sky-dark);">
+          —
+        </h3>
+
+        <button
+          onclick="closeModal()"
+          style="border:0; background:none; font-size:18px; cursor:pointer;">
+          ❌
+        </button>
+
+      </div>
+
+
+      <div
+        id="modalContent"
+        style="margin-top:14px; font-size:12px; line-height:1.7;">
+        جاري تحميل البيانات...
+      </div>
+
+
+      <!-- ADMIN ACTIONS -->
+
+      <div
+        style="
+          margin-top:16px;
+          padding-top:12px;
+          border-top:1px solid var(--line);
+        ">
+
+        <h4 style="margin:0 0 8px;">
+          💼 إجراءات الأدمن
+        </h4>
+
+
+        <!-- QUOTATION -->
+
+        <div style="
+          background:#f4f9fc;
+          padding:10px;
+          border-radius:10px;
+          margin-bottom:10px;
+        ">
+
+          <label>
+            💰 إرسال عرض سعر:
+          </label>
+
+          <div style="
+            display:grid;
+            grid-template-columns:1fr 1fr;
+            gap:6px;
+            margin-bottom:6px;
+          ">
+
+            <input
+              type="number"
+              id="quotPrice"
+              min="0"
+              step="0.01"
+              placeholder="السعر الكلي">
+
+            <select id="quotCurrency">
+              <option value="IQD">IQD</option>
+              <option value="USD">USD</option>
+              <option value="EUR">EUR</option>
+            </select>
+
+          </div>
+
+          <div style="
+            display:grid;
+            grid-template-columns:1fr 1fr;
+            gap:6px;
+            margin-bottom:6px;
+          ">
+
+            <input
+              type="date"
+              id="quotDate"
+              title="تاريخ التسليم">
+
+            <input
+              type="time"
+              id="quotTime"
+              title="وقت التسليم">
+
+          </div>
+
+          <input
+            type="text"
+            id="quotNotes"
+            placeholder="ملاحظات العرض..."
+            style="margin-bottom:6px;">
+
+          <button
+            id="quotationButton"
+            class="btn-action btn-success"
+            style="width:100%;"
+            onclick="submitQuotation()">
+            إرسال العرض للزبون 🚀
+          </button>
+
+        </div>
+
+
+        <!-- STATUS + PAYMENT -->
+
+        <div style="
+          display:grid;
+          grid-template-columns:1fr 1fr;
+          gap:8px;
+        ">
+
+          <div>
+
+            <label>
+              تغيير الحالة:
+            </label>
+
+            <select id="updateStatusSelect">
+
+              <option value="UNDER_REVIEW">
+                تحت المراجعة
+              </option>
+
+              <option value="WAITING_CUSTOMER">
+                بانتظار الزبون
+              </option>
+
+              <option value="ACCEPTED">
+                مقبول
+              </option>
+
+              <option value="READY_TO_START">
+                جاهز للبدء
+              </option>
+
+              <option value="IN_PROGRESS">
+                قيد التنفيذ
+              </option>
+
+              <option value="READY_FOR_DELIVERY">
+                جاهز للتسليم
+              </option>
+
+              <option value="COMPLETED">
+                مكتمل
+              </option>
+
+              <option value="REJECTED">
+                رفض الطلب
+              </option>
+
+              <option value="CANCELLED">
+                إلغاء الطلب
+              </option>
+
+            </select>
+
+            <input
+              type="text"
+              id="statusAdminNote"
+              placeholder="ملاحظة اختيارية"
+              style="margin-top:6px;">
+
+            <button
+              id="statusButton"
+              class="btn-action"
+              style="
+                background:var(--sky-dark);
+                color:#fff;
+                width:100%;
+                margin-top:4px;
+              "
+              onclick="submitStatusUpdate()">
+              تحديث الحالة
+            </button>
+
+          </div>
+
+
+          <div>
+
+            <label>
+              تسجيل دفعة يدوية:
+            </label>
+
+            <input
+              type="number"
+              id="payAmount"
+              min="0"
+              step="0.01"
+              placeholder="المبلغ">
+
+            <select
+              id="payCurrency"
+              style="margin-top:6px;">
+              <option value="IQD">IQD</option>
+              <option value="USD">USD</option>
+              <option value="EUR">EUR</option>
+            </select>
+
+            <input
+              type="text"
+              id="payMethod"
+              value="يدوي"
+              placeholder="طريقة الدفع"
+              style="margin-top:6px;">
+
+            <button
+              id="paymentButton"
+              class="btn-action btn-success"
+              style="width:100%; margin-top:4px;"
+              onclick="submitPayment()">
+              تسجيل الدفعة 💵
+            </button>
+
+          </div>
+
+        </div>
+
+
+        <!-- ADMIN NOTE -->
+
+        <div style="margin-top:10px;">
+
+          <label>
+            📝 إضافة ملاحظة للأدمن:
+          </label>
+
+          <textarea
+            id="adminNoteText"
+            rows="3"
+            placeholder="أضف ملاحظة داخلية للطلب..."></textarea>
+
+          <button
+            id="noteButton"
+            class="btn-action"
+            style="
+              width:100%;
+              margin-top:5px;
+              background:#17324d;
+              color:#fff;
+            "
+            onclick="submitAdminNote()">
+            حفظ الملاحظة
+          </button>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <!-- ==================== CUSTOMER FORM ==================== -->
+
+  <div class="card" id="formCard">
 
     <div id="formContainer">
 
@@ -1518,173 +1100,109 @@
       </div>
 
 
-      <!-- =====================================================
-           ACADEMIC & ENGINEERING
-           ===================================================== -->
+      <!-- ACADEMIC -->
 
       <div class="section-title">
         الخدمات الأكاديمية والهندسية
       </div>
 
-
       <div class="services-grid">
 
         <div
           class="service-btn"
-          onclick="selectService('research', this)"
-        >
-
+          onclick="selectService('research', this)">
           <span class="icon">📝</span>
-
-          <span class="title">
-            تقارير وبحوث
-          </span>
-
+          <span class="title">تقارير وبحوث</span>
+          <small>مشاريع • تقارير • بحوث</small>
         </div>
-
 
         <div
           class="service-btn"
-          onclick="selectService('autocad', this)"
-        >
-
+          onclick="selectService('autocad', this)">
           <span class="icon">📐</span>
-
-          <span class="title">
-            تصميم AutoCAD
-          </span>
-
+          <span class="title">تصميم AutoCAD</span>
         </div>
-
 
         <div
           class="service-btn"
-          onclick="selectService('minitab', this)"
-        >
-
+          onclick="selectService('minitab', this)">
           <span class="icon">📊</span>
-
-          <span class="title">
-            تحليل Minitab
-          </span>
-
+          <span class="title">تحليل Minitab</span>
         </div>
-
 
         <div
           class="service-btn"
-          onclick="selectService('formatting', this)"
-        >
-
+          onclick="selectService('formatting', this)">
           <span class="icon">💻</span>
-
-          <span class="title">
-            تنسيق وتصميم
-          </span>
-
+          <span class="title">تنسيق وتصميم</span>
+          <small>PowerPoint / Word / PDF</small>
         </div>
 
       </div>
 
 
-      <!-- =====================================================
-           PROFESSIONAL SERVICES
-           ===================================================== -->
+      <!-- PROFESSIONAL -->
 
       <div class="section-title">
         الخدمات المهنية
       </div>
 
-
       <div class="services-grid">
 
         <div
           class="service-btn"
-          onclick="selectService('cv', this)"
-        >
-
+          onclick="selectService('cv', this)">
           <span class="icon">📄</span>
+          <span class="title">السيرة الذاتية CV</span>
+          <small>احترافي</small>
+        </div>
 
-          <span class="title">
-            السيرة الذاتية CV
-          </span>
-
-          <small>
-            احترافي أو ATS
-          </small>
-
+        <div
+          class="service-btn"
+          onclick="selectService('cv_ats', this)">
+          <span class="icon">🎯</span>
+          <span class="title">السيرة الذاتية ATS</span>
+          <small>متوافقة مع أنظمة ATS</small>
         </div>
 
       </div>
 
 
-      <!-- =====================================================
-           DESIGN & BRANDING
-           ===================================================== -->
+      <!-- DESIGN -->
 
       <div class="section-title">
         التصميم والهوية البصرية
       </div>
 
-
       <div class="services-grid">
 
         <div
           class="service-btn"
-          onclick="selectService('logo', this)"
-        >
-
+          onclick="selectService('logo', this)">
           <span class="icon">✒️</span>
-
-          <span class="title">
-            تصميم Logo
-          </span>
-
-          <small>
-            شعار مخصص
-          </small>
-
+          <span class="title">تصميم Logo</span>
         </div>
-
 
         <div
           class="service-btn"
-          onclick="selectService('identity', this)"
-        >
-
+          onclick="selectService('identity', this)">
           <span class="icon">🎨</span>
-
-          <span class="title">
-            Logo + هوية بصرية
-          </span>
-
-          <small>
-            هوية متكاملة
-          </small>
-
+          <span class="title">Logo + هوية بصرية</span>
         </div>
 
       </div>
 
 
-      <div
-        id="dynamicFields"
-        class="hidden"
-      >
+      <!-- DYNAMIC FIELDS -->
+
+      <div id="dynamicFields" class="hidden">
 
         <hr>
 
 
-        <!-- =====================================================
-             CURRENT SERVICES FIELDS
-             ===================================================== -->
+        <!-- STANDARD -->
 
-
-        <div
-          id="standardFields"
-        >
-
-          <!-- Department -->
+        <div id="standardFields">
 
           <div class="form-group">
 
@@ -1695,14 +1213,10 @@
             <input
               type="text"
               id="department"
-              maxlength="200"
-              placeholder="مثال: هندسة مدني / كلية العلوم"
-            >
+              placeholder="مثال: هندسة مدني">
 
           </div>
 
-
-          <!-- Title -->
 
           <div class="form-group">
 
@@ -1713,19 +1227,14 @@
             <input
               type="text"
               id="title"
-              maxlength="300"
-              placeholder="أدخل العنوان التفصيلي للطلب"
-            >
+              placeholder="أدخل العنوان التفصيلي">
 
           </div>
 
 
-          <!-- Pages -->
-
           <div
             id="pageCountGroup"
-            class="form-group hidden"
-          >
+            class="form-group hidden">
 
             <label>
               عدد الصفحات / السلايدات
@@ -1735,72 +1244,38 @@
               type="number"
               id="pageCount"
               min="1"
-              max="10000"
-              placeholder="مثال: 10"
-            >
+              placeholder="مثال: 10">
 
           </div>
 
 
-          <!-- Language -->
-
           <div
             id="languageGroup"
-            class="form-group hidden"
-          >
+            class="form-group hidden">
 
             <label>
-              لغة التقرير / العمل
+              لغة التقرير
             </label>
 
             <select id="language">
-
-              <option value="العربية">
-                اللغة العربية
-              </option>
-
-              <option value="الإنكليزية">
-                اللغة الإنكليزية
-              </option>
-
-              <option value="مزدوج (عربي + إنكليزي)">
-                مزدوج (عربي + إنكليزي)
-              </option>
-
+              <option value="العربية">العربية</option>
+              <option value="الإنكليزية">الإنكليزية</option>
             </select>
 
           </div>
 
 
-          <!-- AutoCAD -->
-
           <div
             id="autocadGroup"
-            class="form-group hidden"
-          >
+            class="form-group hidden">
 
             <label>
-              نوع الرسم الهندسي المطلوب
+              نوع الرسم الهندسي
             </label>
 
             <select id="autocadType">
-
-              <option value="Plan">
-                مخطط أفقي (Plan)
-              </option>
-
-              <option value="Elevation/Section">
-                واجهة / مقطع
-              </option>
-
-              <option value="3D Model">
-                مجسم ثلاثي الأبعاد
-              </option>
-
-              <option value="رسم مشروع كامل">
-                مشروع متكامل
-              </option>
-
+              <option value="Plan">Plan</option>
+              <option value="3D Model">3D Model</option>
             </select>
 
           </div>
@@ -1808,20 +1283,9 @@
         </div>
 
 
-        <!-- =====================================================
-             CV FIELDS
-             ===================================================== -->
+        <!-- CV -->
 
-        <div
-          id="cvFields"
-          class="hidden"
-        >
-
-          <div class="info-box">
-            سيتم الاتفاق على التفاصيل النهائية والسعر بعد مراجعة
-            المعلومات والملفات المرسلة من العميل.
-          </div>
-
+        <div id="cvFields" class="hidden">
 
           <div class="form-group">
 
@@ -1836,7 +1300,7 @@
               </option>
 
               <option value="CV ATS">
-                CV بنظام ATS
+                CV ATS
               </option>
 
             </select>
@@ -1847,113 +1311,22 @@
           <div class="form-group">
 
             <label>
-              الصورة الشخصية *
-            </label>
-
-            <select id="cvPhoto">
-
-              <option value="مع صورة">
-                مع صورة
-              </option>
-
-              <option value="بدون صورة">
-                بدون صورة
-              </option>
-
-            </select>
-
-          </div>
-
-
-          <div class="form-group">
-
-            <label>
-              لغة السيرة الذاتية *
-            </label>
-
-            <select id="cvLanguage">
-
-              <option value="العربية">
-                العربية
-              </option>
-
-              <option value="الإنكليزية">
-                الإنكليزية
-              </option>
-
-              <option value="مزدوج (عربي + إنكليزي)">
-                مزدوج (عربي + إنكليزي)
-              </option>
-
-            </select>
-
-          </div>
-
-
-          <div class="form-group">
-
-            <label>
-              الوظيفة المستهدفة / المجال
+              الوظيفة المستهدفة
             </label>
 
             <input
               type="text"
               id="cvTarget"
-              maxlength="300"
-              placeholder="مثال: Industrial Engineer / Supply Chain"
-            >
-
-          </div>
-
-
-          <div class="form-group">
-
-            <label>
-              الخبرة العملية
-            </label>
-
-            <input
-              type="text"
-              id="cvExperience"
-              maxlength="500"
-              placeholder="مثال: حديث التخرج / 2 سنوات خبرة"
-            >
-
-          </div>
-
-
-          <div class="form-group">
-
-            <label>
-              تعليمات إضافية للـCV
-            </label>
-
-            <textarea
-              id="cvNotes"
-              maxlength="2000"
-              rows="4"
-              placeholder="اكتب المعلومات أو الطلبات الخاصة بالسيرة الذاتية..."
-            ></textarea>
+              placeholder="مثال: مهندس موقع">
 
           </div>
 
         </div>
 
 
-        <!-- =====================================================
-             DESIGN FIELDS
-             ===================================================== -->
+        <!-- DESIGN -->
 
-        <div
-          id="designFields"
-          class="hidden"
-        >
-
-          <div class="info-box">
-            خدمة التصميم مخصصة حسب احتياج العميل.
-            يتم الاتفاق على التفاصيل النهائية والسعر بعد مراجعة الطلب.
-          </div>
-
+        <div id="designFields" class="hidden">
 
           <div class="form-group">
 
@@ -1963,10 +1336,7 @@
 
             <input
               type="text"
-              id="designProject"
-              maxlength="300"
-              placeholder="اسم المشروع أو العلامة التجارية"
-            >
+              id="designProject">
 
           </div>
 
@@ -1979,10 +1349,7 @@
 
             <input
               type="text"
-              id="designBusiness"
-              maxlength="300"
-              placeholder="مثال: مطعم / شركة / متجر / أكاديمية"
-            >
+              id="designBusiness">
 
           </div>
 
@@ -1990,102 +1357,21 @@
           <div class="form-group">
 
             <label>
-              نوع التصميم
-            </label>
-
-            <select id="designType">
-
-              <option value="تصميم Logo">
-                تصميم Logo
-              </option>
-
-              <option value="Logo + هوية بصرية">
-                Logo + هوية بصرية
-              </option>
-
-              <option value="تصميم مخصص">
-                تصميم مخصص
-              </option>
-
-            </select>
-
-          </div>
-
-
-          <div class="form-group">
-
-            <label>
-              فكرة التصميم والتفاصيل المطلوبة *
+              فكرة التصميم *
             </label>
 
             <textarea
               id="designIdea"
-              maxlength="3000"
-              rows="5"
-              placeholder="اشرح فكرتك، طبيعة التصميم، النصوص، الرموز، أو أي تفاصيل تريد ظهورها..."
-            ></textarea>
-
-          </div>
-
-
-          <div class="form-group">
-
-            <label>
-              الألوان أو النمط المفضل
-            </label>
-
-            <input
-              type="text"
-              id="designColors"
-              maxlength="500"
-              placeholder="مثال: أزرق وذهبي / بسيط / رسمي / عصري"
-            >
-
-          </div>
-
-
-          <div class="form-group">
-
-            <label>
-              أماكن استخدام التصميم
-            </label>
-
-            <input
-              type="text"
-              id="designUsage"
-              maxlength="500"
-              placeholder="مثال: Instagram / موقع / مطبوعات / واجهة محل"
-            >
-
-          </div>
-
-
-          <div class="form-group">
-
-            <label>
-              تعليمات إضافية
-            </label>
-
-            <textarea
-              id="designNotes"
-              maxlength="2000"
-              rows="4"
-              placeholder="أي ملاحظات أو تعليمات إضافية..."
-            ></textarea>
+              rows="3"></textarea>
 
           </div>
 
         </div>
 
 
-        <!-- =====================================================
-             DEADLINE
-             ===================================================== -->
+        <!-- DEADLINE -->
 
-        <div
-          id="deadlineGroup"
-          class="form-group"
-        >
+        <div class="form-group">
 
           <label>
             الموعد النهائي للتسليم *
@@ -2093,88 +1379,68 @@
 
           <input
             type="datetime-local"
-            id="deadline"
-          >
+            id="deadline">
 
         </div>
 
 
-        <!-- =====================================================
-             NOTES FOR CURRENT SERVICES
-             ===================================================== -->
-
-        <div
-          id="standardNotesGroup"
-          class="form-group"
-        >
-
-          <label>
-            تعليمات إضافية من الدكتور / تفاصيل الشغل
-          </label>
-
-          <textarea
-            id="notes"
-            maxlength="2000"
-            rows="4"
-            placeholder="اكتب أي شروط خاصة أو ملاحظات مهمة..."
-          ></textarea>
-
-        </div>
-
-
-        <!-- =====================================================
-             FILE
-             ===================================================== -->
+        <!-- NOTES -->
 
         <div class="form-group">
 
           <label>
-            إرفاق مخطط / ملف التعليمات / صور الملازم
-            (اختياري)
+            تعليمات إضافية
+          </label>
+
+          <textarea
+            id="notes"
+            rows="3"></textarea>
+
+        </div>
+
+
+        <!-- FILE -->
+
+        <div class="form-group">
+
+          <label>
+            إرفاق ملف / صورة (اختياري)
           </label>
 
           <div
             class="file-upload-box"
-            onclick="document.getElementById('fileInput').click()"
-          >
+            onclick="document.getElementById('fileInput').click()">
 
-            <span>
-              📁
-            </span>
+            <span style="font-size:28px;">📁</span>
 
-            <div style="margin-top:6px">
-              اضغط لاختيار صورة أو ملف
+            <div>
+              اضغط لاختيار ملف
             </div>
 
             <div
               id="fileStatus"
-              class="file-status"
-            ></div>
+              class="file-status"></div>
 
           </div>
-
 
           <input
             type="file"
             id="fileInput"
-            accept="image/*,.pdf,.doc,.docx"
-            onchange="handleFileSelect(this)"
-          >
+            class="hidden"
+            onchange="handleFileSelect(this)">
 
         </div>
 
 
         <div
           id="errorBox"
-          class="error-box hidden"
-        ></div>
+          class="error-box hidden"></div>
 
 
         <button
           id="submitButton"
           class="btn-submit"
-          onclick="submitOrder()"
-        >
+          onclick="submitOrder()">
           إرسال الطلب 🚀
         </button>
 
@@ -2183,41 +1449,126 @@
     </div>
 
 
-    <!-- ================= SUCCESS ================= -->
+    <!-- ==================== SUCCESS ==================== -->
 
     <div
       id="successContainer"
-      class="success-box hidden"
-    >
+      class="hidden"
+      style="text-align:center; padding:20px;">
 
-      <div class="success-icon">
+      <div style="font-size:40px;">
         ✅
       </div>
 
-      <h3 style="margin:0">
+      <h3>
         تم إرسال طلبك بنجاح!
       </h3>
 
-      <p style="font-size:13px">
+      <p>
         رقم الطلب المرجعي:
       </p>
 
       <div
         id="orderBadge"
-        class="order-id-badge"
-      >
-        NB-2026-000000
+        style="
+          font-size:18px;
+          font-weight:800;
+          color:var(--success);
+          margin:10px 0;
+        ">
+        —
       </div>
 
-      <p style="font-size:12px">
-        سيقوم المشرف بمراجعة الطلب
-        والتواصل معك من قبل الكادر.
-      </p>
+
+      <div class="info-box">
+        احتفظ برقم الطلب لمتابعة حالته.
+        يمكنك تحديث الحالة من الزر أدناه.
+      </div>
+
+
+      <!-- CUSTOMER ORDER STATUS -->
+
+      <div
+        id="customerOrderStatusBox"
+        class="success-box">
+
+        <div
+          id="customerStatusText"
+          style="
+            font-size:13px;
+            font-weight:900;
+          ">
+          جاري تحميل حالة الطلب...
+        </div>
+
+        <div
+          id="customerPaymentText"
+          style="
+            margin-top:6px;
+            font-size:11px;
+            color:var(--muted);
+          ">
+        </div>
+
+      </div>
+
+
+      <!-- QUOTATION -->
+
+      <div
+        id="customerQuotBox"
+        class="quotation-box hidden"
+        style="text-align:right;">
+
+        <h4 class="quotation-title">
+          📋 عرض السعر المقدم لك
+        </h4>
+
+        <div id="quotBoxDetails"></div>
+
+        <div
+          style="
+            display:grid;
+            grid-template-columns:1fr 1fr;
+            gap:8px;
+            margin-top:12px;
+          ">
+
+          <button
+            id="acceptQuotationButton"
+            class="btn-action btn-success"
+            onclick="respondQuotation('accept')">
+            ✅ قبول العرض
+          </button>
+
+          <button
+            id="rejectQuotationButton"
+            class="btn-action btn-danger"
+            onclick="respondQuotation('reject')">
+            ❌ رفض العرض
+          </button>
+
+        </div>
+
+      </div>
+
+
+      <button
+        id="refreshOrderButton"
+        class="btn-submit"
+        style="margin-top:15px;"
+        onclick="refreshCustomerOrder()">
+        🔄 تحديث حالة الطلب
+      </button>
+
 
       <button
         class="btn-submit"
-        onclick="closeApp()"
-      >
+        style="
+          margin-top:8px;
+          background:#17324d;
+        "
+        onclick="closeApp()">
         إغلاق النافذة
       </button>
 
@@ -2228,2477 +1579,2711 @@
 </div>
 
 
+<div id="toast" class="toast"></div>
+
+
 <script>
+  "use strict";
 
-  // =====================================================
-  // Telegram
-  // =====================================================
+  /*
+   * ============================================================
+   * NABA - Telegram Mini App Frontend
+   * Compatible with corrected FastAPI backend
+   * ============================================================
+   */
 
-  const tg = window.Telegram.WebApp;
+  const tg = window.Telegram?.WebApp;
+
+  if (!tg) {
+    document.body.innerHTML = `
+      <div style="
+        padding:30px;
+        text-align:center;
+        font-family:system-ui;
+        direction:rtl;
+      ">
+        <h3>⚠️</h3>
+        <p>يجب فتح التطبيق من داخل Telegram.</p>
+      </div>
+    `;
+    throw new Error("Telegram WebApp is not available.");
+  }
 
   tg.ready();
   tg.expand();
 
 
-  // =====================================================
-  // Backend
-  // =====================================================
-
-  const API_BASE =
-    "https://naba-88f2c996.fastapicloud.dev";
-
-
-  // =====================================================
-  // Admin
-  // =====================================================
-
-  const ADMIN_TELEGRAM_ID =
-    "6931187332";
-
-
-  function getTelegramUserId(){
-
-    try{
-
-      const user =
-        tg.initDataUnsafe
-        &&
-        tg.initDataUnsafe.user;
-
-      if(!user){
-
-        return "";
-
-      }
-
-      return String(
-        user.id
-      );
-
-    }
-
-    catch(error){
-
-      console.error(
-        "Telegram user error:",
-        error
-      );
-
-      return "";
-
-    }
-
-  }
-
-
-  function isAdmin(){
-
-    return (
-      getTelegramUserId()
-      === ADMIN_TELEGRAM_ID
-    );
-
-  }
-
-
-  function initializeAdmin(){
-
-    const button =
-      document.getElementById(
-        "adminButton"
-      );
-
-    if(!button){
-
-      return;
-
-    }
-
-
-    if(isAdmin()){
-
-      button.classList.add(
-        "visible"
-      );
-
-    }
-
-    else{
-
-      button.classList.remove(
-        "visible"
-      );
-
-      const panel =
-        document.getElementById(
-          "adminPanel"
-        );
-
-      if(panel){
-
-        panel.classList.remove(
-          "visible"
-        );
-
-      }
-
-    }
-
-  }
-
-
-  function toggleAdminPanel(){
-
-    if(!isAdmin()){
-
-      return;
-
-    }
-
-
-    const panel =
-      document.getElementById(
-        "adminPanel"
-      );
-
-
-    if(!panel){
-
-      return;
-
-    }
-
-
-    panel.classList.toggle(
-      "visible"
-    );
-
-
-    if(
-      panel.classList.contains(
-        "visible"
-      )
-    ){
-
-      loadAdminDashboard();
-
-    }
-
-  }
-
-
-  // =====================================================
-  // Admin Dashboard
-  // =====================================================
-
-  async function loadAdminDashboard(){
-
-    if(!isAdmin()){
-
-      return;
-
-    }
-
-
-    const loading =
-      document.getElementById(
-        "adminLoading"
-      );
-
-    const errorBox =
-      document.getElementById(
-        "adminError"
-      );
-
-    const refreshButton =
-      document.getElementById(
-        "adminRefreshButton"
-      );
-
-
-    if(loading){
-
-      loading.classList.add(
-        "visible"
-      );
-
-    }
-
-
-    if(errorBox){
-
-      errorBox.classList.remove(
-        "visible"
-      );
-
-      errorBox.innerText =
-        "";
-
-    }
-
-
-    if(refreshButton){
-
-      refreshButton.disabled =
-        true;
-
-    }
-
-
-    try{
-
-      if(!tg.initData){
-
-        throw new Error(
-          "بيانات Telegram غير موجودة."
-        );
-
-      }
-
-
-      const data =
-        await apiRequest(
-          "/api/admin/dashboard",
-          {
-
-            method:"GET",
-
-            headers:{
-              "X-Telegram-Init-Data":
-                tg.initData
-            }
-
-          }
-        );
-
-
-      if(
-        !data
-        ||
-        data.ok !== true
-      ){
-
-        throw new Error(
-          "لم يتم استلام بيانات لوحة التحكم."
-        );
-
-      }
-
-
-      renderAdminDashboard(
-        data
-      );
-
-    }
-
-    catch(error){
-
-      console.error(
-        "NABA admin dashboard error:",
-        error
-      );
-
-
-      if(errorBox){
-
-        errorBox.innerText =
-          error.message
-          ||
-          "تعذر تحميل بيانات لوحة التحكم.";
-
-        errorBox.classList.add(
-          "visible"
-        );
-
-      }
-
-    }
-
-    finally{
-
-      if(loading){
-
-        loading.classList.remove(
-          "visible"
-        );
-
-      }
-
-
-      if(refreshButton){
-
-        refreshButton.disabled =
-          false;
-
-      }
-
-    }
-
-  }
-
-
-  // =====================================================
-  // Render Admin Dashboard
-  // =====================================================
-
-  function renderAdminDashboard(
-    data
-  ){
-
-    const summary =
-      data.summary
-      ||
-      {};
-
-
-    setAdminStat(
-      "statTotal",
-      formatNumber(
-        summary.total_orders
-      )
-    );
-
-
-    setAdminStat(
-      "statNew",
-      formatNumber(
-        summary.new_orders
-      )
-    );
-
-
-    setAdminStat(
-      "statProcessing",
-      formatNumber(
-        summary.processing_orders
-      )
-    );
-
-
-    setAdminStat(
-      "statCompleted",
-      formatNumber(
-        summary.completed_orders
-      )
-    );
-
-
-    setAdminStat(
-      "statCancelled",
-      formatNumber(
-        summary.cancelled_orders
-      )
-    );
-
-
-    setAdminStat(
-      "statToday",
-      formatNumber(
-        summary.today_orders
-      )
-    );
-
-
-    setAdminStat(
-      "statMonth",
-      formatNumber(
-        summary.month_orders
-      )
-    );
-
-
-    setAdminStat(
-      "statTotalPrice",
-      formatMoney(
-        summary.total_price
-      )
-    );
-
-
-    setAdminStat(
-      "statTotalDeposit",
-      formatMoney(
-        summary.total_deposit
-      )
-    );
-
-
-    setAdminStat(
-      "statTotalRemaining",
-      formatMoney(
-        summary.total_remaining
-      )
-    );
-
-
-    renderServiceStats(
-      data.service_counts
-      ||
-      []
-    );
-
-
-    renderPaymentStats(
-      data.payment_counts
-      ||
-      {}
-    );
-
-
-    renderRecentOrders(
-      data.recent_orders
-      ||
-      []
-    );
-
-  }
-
-
-  // =====================================================
-  // Service Statistics
-  // =====================================================
-
-  function renderServiceStats(
-    serviceCounts
-  ){
-
-    const map = {
-
-      research:
-        "statResearch",
-
-      autocad:
-        "statAutocad",
-
-      minitab:
-        "statMinitab",
-
-      formatting:
-        "statFormatting",
-
-      cv:
-        "statCV",
-
-      cv_ats:
-        "statCV",
-
-      logo:
-        "statDesign",
-
-      identity:
-        "statDesign"
-
-    };
-
-
-    const totals = {};
-
-
-    serviceCounts.forEach(
-      item => {
-
-        if(!item){
-
-          return;
-
-        }
-
-
-        const type =
-          String(
-            item.service_type
-            ||
-            ""
-          );
-
-
-        const count =
-          Number(
-            item.count
-            ||
-            0
-          );
-
-
-        totals[type] =
-          (totals[type] || 0)
-          +
-          count;
-
-      }
-    );
-
-
-    Object.keys(map)
-      .forEach(
-        type => {
-
-          const elementId =
-            map[type];
-
-          if(!elementId){
-
-            return;
-
-          }
-
-
-          if(
-            type === "cv_ats"
-          ){
-
-            return;
-
-          }
-
-
-          setAdminStat(
-            elementId,
-            formatNumber(
-              totals[type]
-              ||
-              0
-            )
-          );
-
-        }
-      );
-
-
-    const designTotal =
-      (
-        totals.logo
-        ||
-        0
-      )
-      +
-      (
-        totals.identity
-        ||
-        0
-      );
-
-
-    setAdminStat(
-      "statDesign",
-      formatNumber(
-        designTotal
-      )
-    );
-
-
-    const cvTotal =
-      (
-        totals.cv
-        ||
-        0
-      )
-      +
-      (
-        totals.cv_ats
-        ||
-        0
-      );
-
-
-    setAdminStat(
-      "statCV",
-      formatNumber(
-        cvTotal
-      )
-    );
-
-  }
-
-
-  // =====================================================
-  // Payment Statistics
-  // =====================================================
-
-  function renderPaymentStats(
-    paymentCounts
-  ){
-
-    const normalized = {};
-
-
-    Object.keys(
-      paymentCounts || {}
-    )
-      .forEach(
-        key => {
-
-          normalized[
-            normalizePaymentStatus(key)
-          ] =
-            Number(
-              paymentCounts[key]
-              ||
-              0
-            );
-
-        }
-      );
-
-
-    const unpaid =
-      getPaymentCount(
-        normalized,
-        [
-          "unpaid",
-          "غير مدفوع",
-          "pending"
-        ]
-      );
-
-
-    const partial =
-      getPaymentCount(
-        normalized,
-        [
-          "partial",
-          "دفع جزئي",
-          "partially_paid"
-        ]
-      );
-
-
-    const paid =
-      getPaymentCount(
-        normalized,
-        [
-          "paid",
-          "مدفوع",
-          "مدفوع بالكامل"
-        ]
-      );
-
-
-    setAdminStat(
-      "paymentUnpaid",
-      formatNumber(
-        unpaid
-      )
-    );
-
-
-    setAdminStat(
-      "paymentPartial",
-      formatNumber(
-        partial
-      )
-    );
-
-
-    setAdminStat(
-      "paymentPaid",
-      formatNumber(
-        paid
-      )
-    );
-
-  }
-
-
-  function normalizePaymentStatus(
-    value
-  ){
-
-    return String(
-      value
-      ||
-      ""
-    )
-      .trim()
-      .toLowerCase();
-
-  }
-
-
-  function getPaymentCount(
-    normalized,
-    keys
-  ){
-
-    let total = 0;
-
-
-    keys.forEach(
-      key => {
-
-        const normalizedKey =
-          normalizePaymentStatus(
-            key
-          );
-
-
-        total +=
-          Number(
-            normalized[
-              normalizedKey
-            ]
-            ||
-            0
-          );
-
-      }
-    );
-
-
-    return total;
-
-  }
-
-
-  // =====================================================
-  // Recent Orders
-  // =====================================================
-
-  function renderRecentOrders(
-    orders
-  ){
-
-    const container =
-      document.getElementById(
-        "recentOrders"
-      );
-
-
-    if(!container){
-
-      return;
-
-    }
-
-
-    container.innerHTML =
-      "";
-
-
-    if(
-      !Array.isArray(orders)
-      ||
-      orders.length === 0
-    ){
-
-      const empty =
-        document.createElement(
-          "div"
-        );
-
-      empty.className =
-        "empty-state";
-
-      empty.innerText =
-        "لا توجد طلبات حديثة.";
-
-      container.appendChild(
-        empty
-      );
-
-      return;
-
-    }
-
-
-    orders.forEach(
-      order => {
-
-        container.appendChild(
-          createRecentOrderElement(
-            order
-          )
-        );
-
-      }
-    );
-
-  }
-
-
-  function createRecentOrderElement(
-    order
-  ){
-
-    const row =
-      document.createElement(
-        "div"
-      );
-
-    row.className =
-      "order-row";
-
-
-    const top =
-      document.createElement(
-        "div"
-      );
-
-    top.className =
-      "order-row-top";
-
-
-    const orderId =
-      document.createElement(
-        "span"
-      );
-
-    orderId.className =
-      "order-id";
-
-    orderId.innerText =
-      String(
-        order.order_id
-        ||
-        "—"
-      );
-
-
-    const date =
-      document.createElement(
-        "span"
-      );
-
-    date.className =
-      "order-date";
-
-    date.innerText =
-      formatDateTime(
-        order.created_at
-      );
-
-
-    top.appendChild(
-      orderId
-    );
-
-    top.appendChild(
-      date
-    );
-
-
-    row.appendChild(
-      top
-    );
-
-
-    const service =
-      document.createElement(
-        "div"
-      );
-
-    service.className =
-      "order-service";
-
-    service.innerText =
-      String(
-        order.service_name
-        ||
-        order.service_type
-        ||
-        "خدمة غير محددة"
-      );
-
-
-    row.appendChild(
-      service
-    );
-
-
-    const user =
-      document.createElement(
-        "div"
-      );
-
-    user.className =
-      "order-user";
-
-    const username =
-      order.username
-        ? "@" + String(
-            order.username
-          )
-        : "";
-
-
-    const userId =
-      order.user_id
-        ? "ID: " + String(
-            order.user_id
-          )
-        : "";
-
-
-    user.innerText =
-      [
-        username,
-        userId
-      ]
-        .filter(Boolean)
-        .join(" • ")
-      ||
-      "مستخدم غير معروف";
-
-
-    row.appendChild(
-      user
-    );
-
-
-    const meta =
-      document.createElement(
-        "div"
-      );
-
-    meta.className =
-      "order-meta";
-
-
-    meta.appendChild(
-      createOrderBadge(
-        "الحالة: "
-        +
-        formatStatus(
-          order.order_status
-        ),
-        getStatusClass(
-          order.order_status
-        )
-      )
-    );
-
-
-    meta.appendChild(
-      createOrderBadge(
-        "الدفع: "
-        +
-        formatPaymentStatus(
-          order.payment_status
-        ),
-        getPaymentClass(
-          order.payment_status
-        )
-      )
-    );
-
-
-    if(order.department){
-
-      meta.appendChild(
-        createOrderBadge(
-          String(
-            order.department
-          )
-        )
-      );
-
-    }
-
-
-    row.appendChild(
-      meta
-    );
-
-
-    const money =
-      document.createElement(
-        "div"
-      );
-
-    money.className =
-      "order-money";
-
-
-    money.appendChild(
-      createMoneyItem(
-        "السعر",
-        order.price
-      )
-    );
-
-
-    money.appendChild(
-      createMoneyItem(
-        "العربون",
-        order.deposit
-      )
-    );
-
-
-    money.appendChild(
-      createMoneyItem(
-        "المتبقي",
-        order.remaining_balance
-      )
-    );
-
-
-    row.appendChild(
-      money
-    );
-
-
-    return row;
-
-  }
-
-
-  function createOrderBadge(
-    text,
-    className
-  ){
-
-    const badge =
-      document.createElement(
-        "span"
-      );
-
-    badge.className =
-      "order-badge"
-      +
-      (
-        className
-          ? " " + className
-          : ""
-      );
-
-    badge.innerText =
-      text;
-
-    return badge;
-
-  }
-
-
-  function createMoneyItem(
-    label,
-    value
-  ){
-
-    const item =
-      document.createElement(
-        "div"
-      );
-
-    item.className =
-      "money-item";
-
-
-    const labelElement =
-      document.createElement(
-        "span"
-      );
-
-    labelElement.className =
-      "money-label";
-
-    labelElement.innerText =
-      label;
-
-
-    const valueElement =
-      document.createElement(
-        "span"
-      );
-
-    valueElement.className =
-      "money-value";
-
-    valueElement.innerText =
-      formatMoney(
-        value
-      );
-
-
-    item.appendChild(
-      labelElement
-    );
-
-    item.appendChild(
-      valueElement
-    );
-
-
-    return item;
-
-  }
-
-
-  // =====================================================
-  // Admin Formatting Helpers
-  // =====================================================
-
-  function formatNumber(
-    value
-  ){
-
-    const number =
-      Number(
-        value
-        ||
-        0
-      );
-
-
-    if(
-      Number.isNaN(
-        number
-      )
-    ){
-
-      return "0";
-
-    }
-
-
-    return new Intl.NumberFormat(
-      "ar-IQ"
-    ).format(
-      number
-    );
-
-  }
-
-
-  function formatMoney(
-    value
-  ){
-
-    if(
-      value === null
-      ||
-      value === undefined
-      ||
-      value === ""
-    ){
-
-      return "0";
-
-    }
-
-
-    const number =
-      Number(
-        value
-      );
-
-
-    if(
-      Number.isNaN(
-        number
-      )
-    ){
-
-      return String(
-        value
-      );
-
-    }
-
-
-    return new Intl.NumberFormat(
-      "ar-IQ",
-      {
-        maximumFractionDigits:2
-      }
-    ).format(
-      number
-    );
-
-  }
-
-
-  function formatDateTime(
-    value
-  ){
-
-    if(!value){
-
-      return "—";
-
-    }
-
-
-    const date =
-      new Date(
-        value
-      );
-
-
-    if(
-      Number.isNaN(
-        date.getTime()
-      )
-    ){
-
-      return String(
-        value
-      );
-
-    }
-
-
-    return new Intl.DateTimeFormat(
-      "ar-IQ",
-      {
-        year:"numeric",
-        month:"2-digit",
-        day:"2-digit",
-        hour:"2-digit",
-        minute:"2-digit"
-      }
-    ).format(
-      date
-    );
-
-  }
-
-
-  function formatStatus(
-    value
-  ){
-
-    const status =
-      String(
-        value
-        ||
-        ""
-      )
-        .trim()
-        .toUpperCase();
-
-
-    const map = {
-
-      NEW:
-        "جديد",
-
-      PROCESSING:
-        "قيد المعالجة",
-
-      COMPLETED:
-        "مكتمل",
-
-      CANCELLED:
-        "ملغى",
-
-      CANCELED:
-        "ملغى"
-
-    };
-
-
-    return (
-      map[status]
-      ||
-      String(
-        value
-        ||
-        "غير محدد"
-      )
-    );
-
-  }
-
-
-  function getStatusClass(
-    value
-  ){
-
-    const status =
-      String(
-        value
-        ||
-        ""
-      )
-        .trim()
-        .toUpperCase();
-
-
-    if(
-      status === "COMPLETED"
-    ){
-
-      return "success";
-
-    }
-
-
-    if(
-      status === "CANCELLED"
-      ||
-      status === "CANCELED"
-    ){
-
-      return "danger";
-
-    }
-
-
-    if(
-      status === "PROCESSING"
-    ){
-
-      return "warning";
-
-    }
-
-
-    return "";
-
-  }
-
-
-  function formatPaymentStatus(
-    value
-  ){
-
-    const status =
-      String(
-        value
-        ||
-        ""
-      )
-        .trim()
-        .toLowerCase();
-
-
-    const map = {
-
-      unpaid:
-        "غير مدفوع",
-
-      pending:
-        "غير مدفوع",
-
-      partial:
-        "دفع جزئي",
-
-      partially_paid:
-        "دفع جزئي",
-
-      paid:
-        "مدفوع بالكامل"
-
-    };
-
-
-    return (
-      map[status]
-      ||
-      String(
-        value
-        ||
-        "غير محدد"
-      )
-    );
-
-  }
-
-
-  function getPaymentClass(
-    value
-  ){
-
-    const status =
-      String(
-        value
-        ||
-        ""
-      )
-        .trim()
-        .toLowerCase();
-
-
-    if(
-      status === "paid"
-    ){
-
-      return "success";
-
-    }
-
-
-    if(
-      status === "partial"
-      ||
-      status === "partially_paid"
-    ){
-
-      return "warning";
-
-    }
-
-
-    if(
-      status === "unpaid"
-      ||
-      status === "pending"
-    ){
-
-      return "danger";
-
-    }
-
-
-    return "";
-
-  }
-
-
-  function setAdminStat(
-    id,
-    value
-  ){
-
-    const element =
-      document.getElementById(
-        id
-      );
-
-    if(element){
-
-      element.innerText =
-        value;
-
-    }
-
-  }
-
-
-  // =====================================================
-  // State
-  // =====================================================
+  /* ============================================================
+     CONFIG
+     ============================================================ */
+
+  const API_BASE = "https://naba-88f2c996.fastapicloud.dev";
+
+  const CHANNEL_URL = "https://t.me/ALNABASURVICE";
+
+  const MAX_FILE_SIZE_MB = 5;
+
+  const VALID_SERVICES = [
+    "research",
+    "autocad",
+    "minitab",
+    "formatting",
+    "cv",
+    "cv_ats",
+    "logo",
+    "identity"
+  ];
+
+  const SERVICE_NAMES = {
+    research: "مشاريع • تقارير • بحوث",
+    autocad: "رسم وتصميم AutoCAD",
+    minitab: "تحليل البيانات Minitab",
+    formatting: "تنسيق PowerPoint / Word / PDF",
+    cv: "سيرة ذاتية CV احترافية",
+    cv_ats: "سيرة ذاتية CV بنظام ATS",
+    logo: "تصميم Logo",
+    identity: "Logo + هوية بصرية"
+  };
+
+  const STATUS_NAMES = {
+    NEW: "جديد",
+    UNDER_REVIEW: "تحت المراجعة",
+    WAITING_CUSTOMER: "بانتظار الزبون",
+    ACCEPTED: "مقبول",
+    READY_TO_START: "جاهز للبدء",
+    IN_PROGRESS: "قيد التنفيذ",
+    READY_FOR_DELIVERY: "جاهز للتسليم",
+    COMPLETED: "مكتمل",
+    REJECTED: "مرفوض",
+    CANCELLED: "ملغى"
+  };
+
+  const PAYMENT_STATUS_NAMES = {
+    UNPAID: "غير مدفوع",
+    PARTIALLY_PAID: "مدفوع جزئياً",
+    PAID: "مدفوع بالكامل",
+    REFUNDED: "مسترجع"
+  };
+
+
+  /* ============================================================
+     STATE
+     ============================================================ */
 
   let selectedServiceType = "";
   let selectedFile = null;
-  let attachmentToken = "";
+  let activeOrderId = null;
+  let searchTimeout = null;
+  let customerOrderTimer = null;
+  let adminAccessChecked = false;
+  let adminIsAuthorized = false;
 
 
-  // =====================================================
-  // Services
-  // =====================================================
+  /* ============================================================
+     BASIC HELPERS
+     ============================================================ */
 
-  function selectService(
-    type,
-    element
-  ){
+  function getInitData() {
+    return String(tg.initData || "").trim();
+  }
+
+
+  function getTelegramUserIdUnsafe() {
+    return String(tg.initDataUnsafe?.user?.id || "");
+  }
+
+
+  function showToast(message, duration = 3000) {
+    const toast = document.getElementById("toast");
+
+    if (!toast) {
+      return;
+    }
+
+    toast.textContent = String(message || "");
+    toast.classList.add("visible");
+
+    clearTimeout(showToast.timer);
+
+    showToast.timer = setTimeout(() => {
+      toast.classList.remove("visible");
+    }, duration);
+  }
+
+
+  function showError(message) {
+    const box = document.getElementById("errorBox");
+
+    if (!box) {
+      return;
+    }
+
+    box.textContent = String(message || "حدث خطأ غير معروف");
+    box.classList.remove("hidden");
+  }
+
+
+  function hideError() {
+    const box = document.getElementById("errorBox");
+
+    if (box) {
+      box.classList.add("hidden");
+      box.textContent = "";
+    }
+  }
+
+
+  function escapeHtml(value) {
+    if (value === null || value === undefined) {
+      return "";
+    }
+
+    return String(value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+
+  function formatMoney(value, currency = "") {
+    if (value === null || value === undefined || value === "") {
+      return "0 " + currency;
+    }
+
+    const number = Number(value);
+
+    if (!Number.isFinite(number)) {
+      return escapeHtml(value) + (currency ? " " + escapeHtml(currency) : "");
+    }
+
+    return number.toLocaleString("ar-IQ", {
+      maximumFractionDigits: 2
+    }) + (currency ? " " + currency : "");
+  }
+
+
+  function formatDate(value) {
+    if (!value) {
+      return "—";
+    }
+
+    try {
+      const date = new Date(value);
+
+      if (Number.isNaN(date.getTime())) {
+        return String(value);
+      }
+
+      return date.toLocaleString("ar-IQ", {
+        dateStyle: "medium",
+        timeStyle: "short"
+      });
+
+    } catch {
+      return String(value);
+    }
+  }
+
+
+  function serviceName(value) {
+    return SERVICE_NAMES[value] || value || "—";
+  }
+
+
+  function statusName(value) {
+    return STATUS_NAMES[value] || value || "—";
+  }
+
+
+  function paymentStatusName(value) {
+    return PAYMENT_STATUS_NAMES[value] || value || "—";
+  }
+
+
+  function statusClass(status) {
+    if (
+      status === "COMPLETED" ||
+      status === "ACCEPTED" ||
+      status === "READY_FOR_DELIVERY"
+    ) {
+      return "success";
+    }
+
+    if (
+      status === "REJECTED" ||
+      status === "CANCELLED"
+    ) {
+      return "danger";
+    }
+
+    if (
+      status === "WAITING_CUSTOMER" ||
+      status === "UNDER_REVIEW"
+    ) {
+      return "warning";
+    }
+
+    return "info";
+  }
+
+
+  function ensureTelegramAuth() {
+    const initData = getInitData();
+
+    if (!initData) {
+      throw new Error(
+        "تعذر التحقق من Telegram. افتح التطبيق من داخل Telegram وليس من المتصفح مباشرة."
+      );
+    }
+
+    return initData;
+  }
+
+
+  /* ============================================================
+     API
+     ============================================================ */
+
+  async function apiRequest(url, options = {}) {
+
+    const initData = ensureTelegramAuth();
+
+    const requestOptions = {
+      ...options,
+      headers: {
+        ...(options.headers || {}),
+        "X-Telegram-Init-Data": initData
+      }
+    };
+
+    let response;
+
+    try {
+      response = await fetch(API_BASE + url, requestOptions);
+    } catch (error) {
+      throw new Error(
+        "تعذر الاتصال بالخادم. تحقق من الإنترنت وحاول مرة أخرى."
+      );
+    }
+
+    const contentType = response.headers.get("content-type") || "";
+
+    let data = {};
+
+    if (contentType.includes("application/json")) {
+      data = await response.json().catch(() => ({}));
+    } else {
+      const text = await response.text().catch(() => "");
+      data = text ? { detail: text } : {};
+    }
+
+    if (!response.ok) {
+
+      let message = "حدث خطأ بالخادم.";
+
+      if (typeof data.detail === "string") {
+        message = data.detail;
+      } else if (Array.isArray(data.detail)) {
+        message = data.detail
+          .map(item => item.msg || JSON.stringify(item))
+          .join(" | ");
+      } else if (data.message) {
+        message = data.message;
+      }
+
+      throw new Error(message);
+    }
+
+    return data;
+  }
+
+
+  async function apiDownload(url) {
+
+    const initData = ensureTelegramAuth();
+
+    let response;
+
+    try {
+      response = await fetch(API_BASE + url, {
+        method: "GET",
+        headers: {
+          "X-Telegram-Init-Data": initData
+        }
+      });
+    } catch {
+      throw new Error("تعذر الاتصال بالخادم.");
+    }
+
+    if (!response.ok) {
+
+      const contentType =
+        response.headers.get("content-type") || "";
+
+      let message = "فشل تحميل الملف.";
+
+      if (contentType.includes("application/json")) {
+        const data = await response.json().catch(() => ({}));
+
+        if (typeof data.detail === "string") {
+          message = data.detail;
+        }
+      } else {
+        const text = await response.text().catch(() => "");
+
+        if (text) {
+          message = text;
+        }
+      }
+
+      throw new Error(message);
+    }
+
+    return response;
+  }
+
+
+  /* ============================================================
+     ADMIN AUTHORIZATION
+     ============================================================ */
+
+  async function initializeAdmin() {
+
+    if (adminAccessChecked) {
+      return adminIsAuthorized;
+    }
+
+    adminAccessChecked = true;
+
+    const button = document.getElementById("adminButton");
+
+    try {
+
+      const data = await apiRequest("/api/admin/access");
+
+      adminIsAuthorized = Boolean(
+        data?.ok === true ||
+        data?.authorized === true ||
+        data?.is_admin === true
+      );
+
+      if (adminIsAuthorized && button) {
+        button.classList.add("visible");
+      }
+
+      return adminIsAuthorized;
+
+    } catch (error) {
+
+      adminIsAuthorized = false;
+
+      if (button) {
+        button.classList.remove("visible");
+      }
+
+      return false;
+    }
+  }
+
+
+  function isAdmin() {
+    return adminIsAuthorized;
+  }
+
+
+  /* ============================================================
+     ADMIN PANEL
+     ============================================================ */
+
+  async function toggleAdminPanel() {
+
+    if (!isAdmin()) {
+
+      const authorized = await initializeAdmin();
+
+      if (!authorized) {
+        showToast("ليس لديك صلاحية الوصول إلى لوحة الأدمن.");
+        return;
+      }
+    }
+
+    const panel = document.getElementById("adminPanel");
+
+    if (!panel) {
+      return;
+    }
+
+    panel.classList.toggle("visible");
+
+    if (panel.classList.contains("visible")) {
+      await loadAdminDashboard();
+    }
+  }
+
+
+  /* ============================================================
+     SERVICE SELECTION
+     ============================================================ */
+
+  function selectService(type, element) {
+
+    if (!VALID_SERVICES.includes(type)) {
+      return;
+    }
 
     selectedServiceType = type;
 
     document
       .querySelectorAll(".service-btn")
-      .forEach(
-        btn => btn.classList.remove("selected")
-      );
+      .forEach(button => {
+        button.classList.remove("selected");
+      });
 
     element.classList.add("selected");
-
 
     document
       .getElementById("dynamicFields")
       .classList.remove("hidden");
 
-
-    const pageGroup =
-      document.getElementById(
-        "pageCountGroup"
-      );
-
-    const languageGroup =
-      document.getElementById(
-        "languageGroup"
-      );
-
-    const autocadGroup =
-      document.getElementById(
-        "autocadGroup"
-      );
-
-    const cvFields =
-      document.getElementById(
-        "cvFields"
-      );
-
-    const designFields =
-      document.getElementById(
-        "designFields"
-      );
-
-    const standardFields =
-      document.getElementById(
-        "standardFields"
-      );
-
-    const deadlineGroup =
-      document.getElementById(
-        "deadlineGroup"
-      );
-
-    const standardNotesGroup =
-      document.getElementById(
-        "standardNotesGroup"
-      );
-
-
-    pageGroup.classList.add(
-      "hidden"
-    );
-
-    languageGroup.classList.add(
-      "hidden"
-    );
-
-    autocadGroup.classList.add(
-      "hidden"
-    );
-
-    cvFields.classList.add(
-      "hidden"
-    );
-
-    designFields.classList.add(
-      "hidden"
-    );
-
-    standardFields.classList.remove(
-      "hidden"
-    );
-
-    deadlineGroup.classList.remove(
-      "hidden"
-    );
-
-    standardNotesGroup.classList.remove(
-      "hidden"
-    );
-
-
-    // =================================================
-    // Existing services
-    // =================================================
-
-    if(type === "research"){
-
-      pageGroup.classList.remove(
-        "hidden"
-      );
-
-      languageGroup.classList.remove(
-        "hidden"
-      );
-
-    }
-
-
-    else if(type === "autocad"){
-
-      autocadGroup.classList.remove(
-        "hidden"
-      );
-
-    }
-
-
-    else if(type === "formatting"){
-
-      pageGroup.classList.remove(
-        "hidden"
-      );
-
-    }
-
-
-    // =================================================
-    // CV
-    // =================================================
-
-    else if(type === "cv"){
-
-      standardFields.classList.add(
-        "hidden"
-      );
-
-      standardNotesGroup.classList.add(
-        "hidden"
-      );
-
-      cvFields.classList.remove(
-        "hidden"
-      );
-
-    }
-
-
-    // =================================================
-    // Design
-    // =================================================
-
-    else if(
-      type === "logo"
-      ||
-      type === "identity"
-    ){
-
-      standardFields.classList.add(
-        "hidden"
-      );
-
-      standardNotesGroup.classList.add(
-        "hidden"
-      );
-
-      designFields.classList.remove(
-        "hidden"
-      );
-
-
-      const designType =
-        document.getElementById(
-          "designType"
-        );
-
-
-      if(type === "logo"){
-
-        designType.value =
-          "تصميم Logo";
-
-      }
-
-      else{
-
-        designType.value =
-          "Logo + هوية بصرية";
-
-      }
-
-    }
-
-  }
-
-
-  // =====================================================
-  // File selection
-  // =====================================================
-
-  function handleFileSelect(
-    input
-  ){
-
-    const file =
-      input.files[0];
-
-    const status =
-      document.getElementById(
-        "fileStatus"
-      );
-
-    selectedFile =
-      file || null;
-
-    attachmentToken = "";
-
-
-    if(!file){
-
-      status.innerText = "";
-
-      return;
-
-    }
-
-
-    const maxSize =
-      5 * 1024 * 1024;
-
-
-    if(file.size > maxSize){
-
-      selectedFile = null;
-
-      input.value = "";
-
-      status.innerText = "";
-
-      showError(
-        "حجم الملف أكبر من 5 MB."
-      );
-
-      return;
-
-    }
-
-
-    status.innerText =
-      "✓ تم اختيار الملف: "
-      +
-      file.name;
-
-    hideError();
-
-  }
-
-
-  // =====================================================
-  // Error UI
-  // =====================================================
-
-  function showError(
-    message
-  ){
-
-    const box =
-      document.getElementById(
-        "errorBox"
-      );
-
-    box.innerText =
-      message;
-
-    box.classList.remove(
-      "hidden"
-    );
-
-  }
-
-
-  function hideError(){
+    document
+      .getElementById("standardFields")
+      .classList.remove("hidden");
 
     document
-      .getElementById("errorBox")
+      .getElementById("cvFields")
       .classList.add("hidden");
 
-  }
+    document
+      .getElementById("designFields")
+      .classList.add("hidden");
 
 
-  // =====================================================
-  // API helper
-  // =====================================================
+    /*
+     * Reset optional groups.
+     */
 
-  async function apiRequest(
-    url,
-    options
-  ){
+    document
+      .getElementById("pageCountGroup")
+      .classList.add("hidden");
 
-    const response =
-      await fetch(
-        API_BASE.replace(/\/$/, "")
-        +
-        url,
-        options
-      );
+    document
+      .getElementById("languageGroup")
+      .classList.add("hidden");
 
-
-    const data =
-      await response
-        .json()
-        .catch(
-          () => ({})
-        );
+    document
+      .getElementById("autocadGroup")
+      .classList.add("hidden");
 
 
-    if(!response.ok){
+    /*
+     * Research / formatting / Minitab
+     */
 
-      throw new Error(
-        data.detail
-        ||
-        "حدث خطأ في الخادم"
-      );
+    if (
+      type === "research" ||
+      type === "formatting" ||
+      type === "minitab"
+    ) {
 
+      document
+        .getElementById("pageCountGroup")
+        .classList.remove("hidden");
+
+      document
+        .getElementById("languageGroup")
+        .classList.remove("hidden");
     }
 
 
-    return data;
+    /*
+     * AutoCAD
+     */
+
+    if (type === "autocad") {
+
+      document
+        .getElementById("pageCountGroup")
+        .classList.remove("hidden");
+
+      document
+        .getElementById("autocadGroup")
+        .classList.remove("hidden");
+    }
+
+
+    /*
+     * CV
+     */
+
+    if (
+      type === "cv" ||
+      type === "cv_ats"
+    ) {
+
+      document
+        .getElementById("standardFields")
+        .classList.add("hidden");
+
+      document
+        .getElementById("cvFields")
+        .classList.remove("hidden");
+
+      const cvType = document.getElementById("cvType");
+
+      if (cvType) {
+        cvType.value =
+          type === "cv_ats"
+            ? "CV ATS"
+            : "CV احترافي";
+      }
+    }
+
+
+    /*
+     * Design
+     */
+
+    if (
+      type === "logo" ||
+      type === "identity"
+    ) {
+
+      document
+        .getElementById("standardFields")
+        .classList.add("hidden");
+
+      document
+        .getElementById("designFields")
+        .classList.remove("hidden");
+    }
 
   }
 
 
-  // =====================================================
-  // Upload attachment
-  // =====================================================
+  /* ============================================================
+     FILE
+     ============================================================ */
 
-  async function uploadAttachment(){
+  function handleFileSelect(input) {
 
-    if(!selectedFile){
+    selectedFile = input.files?.[0] || null;
 
-      return "";
+    const status =
+      document.getElementById("fileStatus");
 
+    if (!status) {
+      return;
     }
 
-
-    if(!tg.initData){
-
-      throw new Error(
-        "بيانات Telegram غير موجودة. افتح التطبيق من داخل البوت."
-      );
-
+    if (!selectedFile) {
+      status.textContent = "";
+      return;
     }
 
+    const maxBytes =
+      MAX_FILE_SIZE_MB * 1024 * 1024;
 
-    const form =
-      new FormData();
+    if (selectedFile.size > maxBytes) {
 
-    form.append(
-      "file",
-      selectedFile,
-      selectedFile.name
-    );
+      selectedFile = null;
+      input.value = "";
 
+      status.textContent = "";
 
-    const data =
-      await apiRequest(
-        "/api/upload",
-        {
-          method:"POST",
-
-          headers:{
-            "X-Telegram-Init-Data":
-              tg.initData
-          },
-
-          body:form
-        }
+      showError(
+        `حجم الملف يتجاوز الحد المسموح ${MAX_FILE_SIZE_MB} MB.`
       );
 
-
-    return data.token || "";
-
-  }
-
-
-  // =====================================================
-  // Submit order
-  // =====================================================
-
-  async function submitOrder(){
+      return;
+    }
 
     hideError();
 
+    status.textContent =
+      "✓ " + selectedFile.name;
+  }
 
-    if(!tg.initData){
 
-      showError(
-        "افتح تطبيق النبع من داخل Telegram، وليس من متصفح عادي."
-      );
+  /* ============================================================
+     VALIDATION
+     ============================================================ */
 
-      return;
+  function validateOrder() {
 
+    if (!selectedServiceType) {
+      throw new Error("يرجى اختيار الخدمة أولاً.");
+    }
+
+    if (!VALID_SERVICES.includes(selectedServiceType)) {
+      throw new Error("نوع الخدمة غير صالح.");
     }
 
 
-    if(!selectedServiceType){
+    /*
+     * Standard services
+     */
 
-      showError(
-        "اختر الخدمة المطلوبة أولًا."
-      );
+    if (
+      !["cv", "cv_ats", "logo", "identity"]
+        .includes(selectedServiceType)
+    ) {
 
-      return;
+      const department =
+        document.getElementById("department")?.value.trim();
 
+      const title =
+        document.getElementById("title")?.value.trim();
+
+      if (!department) {
+        throw new Error("يرجى إدخال التخصص أو الكلية.");
+      }
+
+      if (!title) {
+        throw new Error("يرجى إدخال عنوان العمل أو اسم المادة.");
+      }
     }
 
 
-    const deadline =
-      document
-        .getElementById("deadline")
-        .value;
+    /*
+     * CV
+     */
 
-
-    if(!deadline){
-
-      showError(
-        "اختر الموعد النهائي."
-      );
-
-      return;
-
-    }
-
-
-    const deadlineDate =
-      new Date(deadline);
-
-
-    if(
-      Number.isNaN(
-        deadlineDate.getTime()
-      )
-    ){
-
-      showError(
-        "الموعد النهائي غير صالح."
-      );
-
-      return;
-
-    }
-
-
-    if(
-      deadlineDate.getTime()
-      <
-      Date.now()
-    ){
-
-      showError(
-        "لا يمكن اختيار موعد في الماضي."
-      );
-
-      return;
-
-    }
-
-
-    // =================================================
-    // Standard fields
-    // =================================================
-
-    let department = "";
-
-    let title = "";
-
-    let notes = "";
-
-
-    const departmentElement =
-      document.getElementById("department");
-
-    const titleElement =
-      document.getElementById("title");
-
-    const notesElement =
-      document.getElementById("notes");
-
-
-    if(departmentElement){
-
-      department =
-        departmentElement
-          .value
-          .trim();
-
-    }
-
-
-    if(titleElement){
-
-      title =
-        titleElement
-          .value
-          .trim();
-
-    }
-
-
-    if(notesElement){
-
-      notes =
-        notesElement
-          .value
-          .trim();
-
-    }
-
-
-    // =================================================
-    // Service details
-    // =================================================
-
-    let serviceDetails = {};
-
-
-    // =================================================
-    // CV
-    // =================================================
-
-    if(
-      selectedServiceType === "cv"
-    ){
-
-      const cvType =
-        document
-          .getElementById("cvType")
-          ?.value
-          ?.trim()
-          ||
-          "";
-
-      const cvPhoto =
-        document
-          .getElementById("cvPhoto")
-          ?.value
-          ?.trim()
-          ||
-          "";
-
-      const cvLanguage =
-        document
-          .getElementById("cvLanguage")
-          ?.value
-          ?.trim()
-          ||
-          "";
+    if (
+      selectedServiceType === "cv" ||
+      selectedServiceType === "cv_ats"
+    ) {
 
       const cvTarget =
-        document
-          .getElementById("cvTarget")
-          ?.value
-          ?.trim()
-          ||
-          "";
+        document.getElementById("cvTarget")?.value.trim();
 
-      const cvExperience =
-        document
-          .getElementById("cvExperience")
-          ?.value
-          ?.trim()
-          ||
-          "";
-
-      const cvNotes =
-        document
-          .getElementById("cvNotes")
-          ?.value
-          ?.trim()
-          ||
-          "";
-
-
-      department =
-        cvTarget
-        ||
-        "CV";
-
-
-      title =
-        cvType
-        ||
-        "سيرة ذاتية";
-
-
-      notes =
-        cvNotes
-        ||
-        notes
-        ||
-        "";
-
-
-      serviceDetails = {
-
-        cv_type:
-          cvType,
-
-        photo:
-          cvPhoto,
-
-        language:
-          cvLanguage,
-
-        target_job:
-          cvTarget,
-
-        experience:
-          cvExperience,
-
-        extra_notes:
-          cvNotes
-
-      };
-
+      if (!cvTarget) {
+        throw new Error("يرجى إدخال الوظيفة المستهدفة.");
+      }
     }
 
 
-    // =================================================
-    // Logo / Identity
-    // =================================================
+    /*
+     * Design
+     */
 
-    if(
-      selectedServiceType === "logo"
-      ||
+    if (
+      selectedServiceType === "logo" ||
       selectedServiceType === "identity"
-    ){
+    ) {
 
-      const designProject =
-        document
-          .getElementById("designProject")
-          ?.value
-          ?.trim()
-          ||
-          "";
+      const project =
+        document.getElementById("designProject")?.value.trim();
 
-      const designBusiness =
-        document
-          .getElementById("designBusiness")
-          ?.value
-          ?.trim()
-          ||
-          "";
+      const business =
+        document.getElementById("designBusiness")?.value.trim();
 
-      const designType =
-        document
-          .getElementById("designType")
-          ?.value
-          ?.trim()
-          ||
-          "";
+      const idea =
+        document.getElementById("designIdea")?.value.trim();
 
-      const designIdea =
-        document
-          .getElementById("designIdea")
-          ?.value
-          ?.trim()
-          ||
-          "";
+      if (!project) {
+        throw new Error("يرجى إدخال اسم المشروع أو العلامة.");
+      }
 
-      const designColors =
-        document
-          .getElementById("designColors")
-          ?.value
-          ?.trim()
-          ||
-          "";
+      if (!business) {
+        throw new Error("يرجى إدخال مجال النشاط.");
+      }
 
-      const designUsage =
-        document
-          .getElementById("designUsage")
-          ?.value
-          ?.trim()
-          ||
-          "";
-
-      const designNotes =
-        document
-          .getElementById("designNotes")
-          ?.value
-          ?.trim()
-          ||
-          "";
-
-
-      department =
-        designBusiness;
-
-
-      title =
-        designProject;
-
-
-      notes =
-        designNotes
-        ||
-        notes
-        ||
-        "";
-
-
-      serviceDetails = {
-
-        design_type:
-          designType,
-
-        brand_name:
-          designProject,
-
-        business_field:
-          designBusiness,
-
-        design_idea:
-          designIdea,
-
-        preferred_colors:
-          designColors,
-
-        usage:
-          designUsage,
-
-        extra_notes:
-          designNotes
-
-      };
-
+      if (!idea) {
+        throw new Error("يرجى إدخال فكرة التصميم.");
+      }
     }
 
 
-    // =================================================
-    // Standard services validation
-    // =================================================
+    /*
+     * Deadline
+     */
 
-    if(
-      selectedServiceType !== "cv"
-      &&
-      selectedServiceType !== "logo"
-      &&
-      selectedServiceType !== "identity"
-    ){
+    const deadlineValue =
+      document.getElementById("deadline")?.value;
 
-      if(!department){
+    if (!deadlineValue) {
+      throw new Error("يرجى تحديد الموعد النهائي.");
+    }
 
-        showError(
-          "أدخل التخصص أو الكلية."
-        );
+    const deadlineDate =
+      new Date(deadlineValue);
 
-        return;
+    if (
+      Number.isNaN(deadlineDate.getTime()) ||
+      deadlineDate.getTime() <= Date.now()
+    ) {
+      throw new Error(
+        "الموعد النهائي يجب أن يكون في المستقبل."
+      );
+    }
 
+    return true;
+  }
+
+
+  /* ============================================================
+     BUILD ORDER PAYLOAD
+     ============================================================ */
+
+  function buildOrderPayload(attachmentToken) {
+
+    const deadlineValue =
+      document.getElementById("deadline").value;
+
+    const deadlineDate =
+      new Date(deadlineValue);
+
+    const serviceDetails = {};
+
+
+    /*
+     * Research / Minitab / Formatting
+     */
+
+    if (
+      selectedServiceType === "research" ||
+      selectedServiceType === "minitab" ||
+      selectedServiceType === "formatting"
+    ) {
+
+      const pageCount =
+        document.getElementById("pageCount")?.value;
+
+      const language =
+        document.getElementById("language")?.value;
+
+      if (pageCount) {
+        serviceDetails.page_count = String(pageCount);
       }
 
-
-      if(!title){
-
-        showError(
-          "أدخل عنوان العمل."
-        );
-
-        return;
-
+      if (language) {
+        serviceDetails.language = String(language);
       }
-
     }
 
 
-    // =================================================
-    // CV validation
-    // =================================================
+    /*
+     * AutoCAD
+     */
 
-    if(
-      selectedServiceType === "cv"
-    ){
+    if (selectedServiceType === "autocad") {
 
-      if(!department){
+      const autocadType =
+        document.getElementById("autocadType")?.value;
 
-        showError(
-          "أدخل الوظيفة أو المجال المستهدف."
-        );
+      const pageCount =
+        document.getElementById("pageCount")?.value;
 
-        return;
-
+      if (autocadType) {
+        serviceDetails.autocad_type =
+          String(autocadType);
       }
 
+      if (pageCount) {
+        serviceDetails.page_count =
+          String(pageCount);
+      }
     }
 
 
-    // =================================================
-    // Logo / Identity validation
-    // =================================================
+    /*
+     * CV
+     */
 
-    if(
-      selectedServiceType === "logo"
-      ||
+    if (
+      selectedServiceType === "cv" ||
+      selectedServiceType === "cv_ats"
+    ) {
+
+      const cvType =
+        document.getElementById("cvType")?.value;
+
+      const cvTarget =
+        document.getElementById("cvTarget")?.value.trim();
+
+      serviceDetails.cv_type =
+        String(cvType || "");
+
+      serviceDetails.target_position =
+        String(cvTarget || "");
+    }
+
+
+    /*
+     * Design
+     */
+
+    if (
+      selectedServiceType === "logo" ||
       selectedServiceType === "identity"
-    ){
+    ) {
 
-      if(!department){
+      serviceDetails.project_name =
+        document.getElementById("designProject")?.value.trim() || "";
 
-        showError(
-          "أدخل اسم النشاط أو المجال."
-        );
+      serviceDetails.business_field =
+        document.getElementById("designBusiness")?.value.trim() || "";
 
-        return;
-
-      }
-
-
-      if(!title){
-
-        showError(
-          "أدخل اسم المشروع أو العلامة التجارية."
-        );
-
-        return;
-
-      }
-
+      serviceDetails.design_idea =
+        document.getElementById("designIdea")?.value.trim() || "";
     }
 
+
+    const department =
+      document.getElementById("department")?.value.trim() || "General";
+
+    const title =
+      document.getElementById("title")?.value.trim()
+      || serviceName(selectedServiceType);
+
+
+    const notes =
+      document.getElementById("notes")?.value.trim() || "";
+
+
+    /*
+     * Backend OrderIn expects:
+     *
+     * service_type
+     * department
+     * title
+     * page_count
+     * language
+     * autocad_type
+     * deadline
+     * notes
+     * attachment_token
+     * service_details
+     */
+
+    let pageCount = null;
+    let language = null;
+    let autocadType = null;
+
+
+    if (
+      selectedServiceType === "research" ||
+      selectedServiceType === "minitab" ||
+      selectedServiceType === "formatting" ||
+      selectedServiceType === "autocad"
+    ) {
+
+      const pageCountValue =
+        document.getElementById("pageCount")?.value;
+
+      if (pageCountValue) {
+        pageCount =
+          parseInt(pageCountValue, 10);
+      }
+    }
+
+
+    if (
+      selectedServiceType === "research" ||
+      selectedServiceType === "minitab" ||
+      selectedServiceType === "formatting"
+    ) {
+
+      language =
+        document.getElementById("language")?.value || null;
+    }
+
+
+    if (selectedServiceType === "autocad") {
+
+      autocadType =
+        document.getElementById("autocadType")?.value || null;
+    }
+
+
+    return {
+      service_type: selectedServiceType,
+      department,
+      title,
+      page_count: Number.isFinite(pageCount)
+        ? pageCount
+        : null,
+      language,
+      autocad_type: autocadType,
+      deadline: deadlineDate.toISOString(),
+      notes,
+      attachment_token: attachmentToken || null,
+      service_details: serviceDetails
+    };
+  }
+
+
+  /* ============================================================
+     IDEMPOTENCY KEY
+     ============================================================ */
+
+  function getSubmissionIdempotencyKey() {
+
+    const storageKey =
+      "naba_order_idempotency_key";
+
+    let key = null;
+
+    try {
+      key = sessionStorage.getItem(storageKey);
+
+      if (!key) {
+
+        if (window.crypto?.randomUUID) {
+          key = "NABA-" + crypto.randomUUID();
+        } else {
+          key =
+            "NABA-" +
+            Date.now() +
+            "-" +
+            Math.random().toString(36).slice(2);
+        }
+
+        sessionStorage.setItem(storageKey, key);
+      }
+
+    } catch {
+
+      key =
+        "NABA-" +
+        Date.now() +
+        "-" +
+        Math.random().toString(36).slice(2);
+    }
+
+    return key;
+  }
+
+
+  function clearSubmissionIdempotencyKey() {
+
+    try {
+      sessionStorage.removeItem(
+        "naba_order_idempotency_key"
+      );
+    } catch {
+      // Ignore storage errors.
+    }
+  }
+
+
+  /* ============================================================
+     SUBMIT ORDER
+     ============================================================ */
+
+  async function submitOrder() {
 
     const button =
-      document.getElementById(
-        "submitButton"
-      );
+      document.getElementById("submitButton");
+
+    hideError();
+
+    try {
+
+      validateOrder();
+
+      button.disabled = true;
+      button.textContent = "جاري إرسال الطلب...";
 
 
-    button.disabled = true;
+      /*
+       * Upload first
+       */
 
-    button.innerText =
-      "جاري رفع المرفق...";
+      let attachmentToken = "";
+
+      if (selectedFile) {
+
+        button.textContent =
+          "جاري رفع الملف...";
+
+        const formData =
+          new FormData();
+
+        formData.append(
+          "file",
+          selectedFile,
+          selectedFile.name
+        );
 
 
-    try{
+        const uploadResponse =
+          await apiRequest(
+            "/api/upload",
+            {
+              method: "POST",
+              body: formData
+            }
+          );
 
-      // ---------------------------------------------
-      // 1. Upload attachment
-      // ---------------------------------------------
 
-      attachmentToken =
-        await uploadAttachment();
+        attachmentToken =
+          uploadResponse?.token || "";
+
+        if (!attachmentToken) {
+          throw new Error(
+            "تم رفع الملف ولكن لم يتم استلام رمز المرفق."
+          );
+        }
+      }
 
 
-      // ---------------------------------------------
-      // 2. Prepare payload
-      // ---------------------------------------------
+      /*
+       * Build payload
+       */
 
-      const payload = {
-
-        service_type:
-          selectedServiceType,
-
-        department:
-          department,
-
-        title:
-          title,
-
-        page_count:
-          document
-            .getElementById("pageCount")
-            ?.value
-            ||
-            "",
-
-        language:
-          document
-            .getElementById("language")
-            ?.value
-            ||
-            "",
-
-        autocad_type:
-          document
-            .getElementById("autocadType")
-            ?.value
-            ||
-            "",
-
-        deadline:
-          deadline,
-
-        notes:
-          notes,
-
-        attachment_token:
+      const payload =
+        buildOrderPayload(
           attachmentToken
-          ||
-          "",
-
-        service_details:
-          serviceDetails
-
-      };
+        );
 
 
-      // ---------------------------------------------
-      // 3. Send directly to FastAPI
-      // ---------------------------------------------
-
-      button.innerText =
-        "جاري إرسال الطلب...";
+      button.textContent =
+        "جاري إنشاء الطلب...";
 
 
-      const data =
+      const response =
         await apiRequest(
           "/api/orders",
           {
-
-            method:"POST",
-
-            headers:{
-
-              "Content-Type":
-                "application/json",
-
-              "X-Telegram-Init-Data":
-                tg.initData
-
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Idempotency-Key":
+                getSubmissionIdempotencyKey()
             },
-
-            body:
-              JSON.stringify(
-                payload
-              )
-
+            body: JSON.stringify(payload)
           }
         );
 
 
-      // ---------------------------------------------
-      // 4. Confirm
-      // ---------------------------------------------
-
-      if(
-        !data.ok
-        ||
-        !data.order_id
-      ){
-
+      if (!response?.order_id) {
         throw new Error(
-          "لم يؤكد الخادم استلام الطلب."
+          "تم تنفيذ الطلب ولكن لم يتم استلام رقم الطلب."
         );
-
       }
 
+
+      /*
+       * Success
+       */
+
+      activeOrderId =
+        response.order_id;
+
+      clearSubmissionIdempotencyKey();
 
       document
         .getElementById("formContainer")
         .classList.add("hidden");
 
-
       document
         .getElementById("orderBadge")
-        .innerText =
-          data.order_id;
-
+        .textContent =
+        response.order_id;
 
       document
         .getElementById("successContainer")
         .classList.remove("hidden");
 
-    }
 
-
-    catch(error){
-
-      console.error(
-        "NABA order error:",
-        error
+      showToast(
+        response.delivered === false
+          ? "تم إنشاء الطلب، وسيتم إعادة محاولة الإرسال."
+          : "تم إرسال الطلب بنجاح."
       );
 
+
+      await refreshCustomerOrder();
+
+      startCustomerOrderPolling();
+
+
+    } catch (error) {
 
       showError(
-        error.message
-        ||
-        "تعذر إرسال الطلب."
+        error?.message ||
+        "حدث خطأ أثناء إرسال الطلب."
+      );
+
+      button.disabled = false;
+      button.textContent =
+        "إرسال الطلب 🚀";
+    }
+  }
+
+
+  /* ============================================================
+     CUSTOMER ORDER
+     ============================================================ */
+
+  async function refreshCustomerOrder() {
+
+    if (!activeOrderId) {
+      return;
+    }
+
+    const statusText =
+      document.getElementById(
+        "customerStatusText"
+      );
+
+    const paymentText =
+      document.getElementById(
+        "customerPaymentText"
+      );
+
+    try {
+
+      const data =
+        await apiRequest(
+          `/api/orders/${encodeURIComponent(activeOrderId)}`
+        );
+
+      const order =
+        data?.order || data;
+
+
+      if (!order) {
+        throw new Error(
+          "لم يتم العثور على بيانات الطلب."
+        );
+      }
+
+
+      statusText.textContent =
+        "الحالة: " +
+        statusName(order.order_status);
+
+
+      paymentText.textContent =
+        "حالة الدفع: " +
+        paymentStatusName(order.payment_status);
+
+
+      renderCustomerQuotation(order);
+
+
+    } catch (error) {
+
+      statusText.textContent =
+        "تعذر تحديث حالة الطلب.";
+
+      paymentText.textContent =
+        error?.message || "";
+    }
+  }
+
+
+  function renderCustomerQuotation(order) {
+
+    const box =
+      document.getElementById(
+        "customerQuotBox"
+      );
+
+    const details =
+      document.getElementById(
+        "quotBoxDetails"
+      );
+
+    if (!box || !details) {
+      return;
+    }
+
+
+    /*
+     * Quote is actionable only when the backend
+     * says WAITING_CUSTOMER.
+     */
+
+    const canRespond =
+      order.order_status === "WAITING_CUSTOMER";
+
+
+    if (
+      !order.price ||
+      !canRespond
+    ) {
+
+      box.classList.add("hidden");
+
+      return;
+    }
+
+
+    const currency =
+      order.currency || "IQD";
+
+
+    details.innerHTML = `
+
+      <div class="quotation-row">
+        <span>السعر</span>
+        <strong>
+          ${formatMoney(order.price, currency)}
+        </strong>
+      </div>
+
+      <div class="quotation-row">
+        <span>تاريخ التسليم</span>
+        <strong>
+          ${escapeHtml(order.delivery_date || "—")}
+        </strong>
+      </div>
+
+      <div class="quotation-row">
+        <span>وقت التسليم</span>
+        <strong>
+          ${escapeHtml(order.delivery_time || "—")}
+        </strong>
+      </div>
+
+      <div class="quotation-row">
+        <span>ملاحظات</span>
+        <strong>
+          ${escapeHtml(order.quotation_notes || "لا توجد")}
+        </strong>
+      </div>
+
+    `;
+
+
+    box.classList.remove("hidden");
+  }
+
+
+  function startCustomerOrderPolling() {
+
+    stopCustomerOrderPolling();
+
+    customerOrderTimer =
+      setInterval(
+        async () => {
+
+          if (!activeOrderId) {
+            return;
+          }
+
+          try {
+            await refreshCustomerOrder();
+          } catch {
+            // Silent background refresh failure.
+          }
+
+        },
+        15000
+      );
+  }
+
+
+  function stopCustomerOrderPolling() {
+
+    if (customerOrderTimer) {
+      clearInterval(customerOrderTimer);
+      customerOrderTimer = null;
+    }
+  }
+
+
+  /* ============================================================
+     CUSTOMER QUOTATION RESPONSE
+     ============================================================ */
+
+  async function respondQuotation(action) {
+
+    if (!activeOrderId) {
+      return;
+    }
+
+
+    const acceptButton =
+      document.getElementById(
+        "acceptQuotationButton"
+      );
+
+    const rejectButton =
+      document.getElementById(
+        "rejectQuotationButton"
       );
 
 
-      button.disabled = false;
+    acceptButton.disabled = true;
+    rejectButton.disabled = true;
 
-      button.innerText =
-        "إرسال الطلب 🚀";
 
+    try {
+
+      const endpoint =
+        action === "accept"
+          ? "accept_quotation"
+          : "reject_quotation";
+
+
+      await apiRequest(
+        `/api/orders/${encodeURIComponent(activeOrderId)}/${endpoint}`,
+        {
+          method: "POST"
+        }
+      );
+
+
+      showToast(
+        action === "accept"
+          ? "تم قبول عرض السعر."
+          : "تم رفض عرض السعر."
+      );
+
+
+      await refreshCustomerOrder();
+
+
+    } catch (error) {
+
+      showToast(
+        error?.message ||
+        "تعذر تنفيذ القرار."
+      );
+
+    } finally {
+
+      acceptButton.disabled = false;
+      rejectButton.disabled = false;
+    }
+  }
+
+
+  /* ============================================================
+     ADMIN DASHBOARD
+     ============================================================ */
+
+  async function loadAdminDashboard() {
+
+    if (!isAdmin()) {
+
+      const authorized =
+        await initializeAdmin();
+
+      if (!authorized) {
+        return;
+      }
     }
 
+
+    try {
+
+      const data =
+        await apiRequest(
+          "/api/admin/dashboard"
+        );
+
+
+      const summary =
+        data?.summary || {};
+
+
+      document.getElementById(
+        "statTotal"
+      ).textContent =
+        summary.total_orders ?? 0;
+
+
+      document.getElementById(
+        "statNew"
+      ).textContent =
+        summary.new_orders ?? 0;
+
+
+      document.getElementById(
+        "statProcessing"
+      ).textContent =
+        summary.processing_orders ?? 0;
+
+
+      document.getElementById(
+        "statCompleted"
+      ).textContent =
+        summary.completed_orders ?? 0;
+
+
+      await loadAdminOrders();
+
+    } catch (error) {
+
+      showToast(
+        error?.message ||
+        "تعذر تحميل لوحة الأدمن."
+      );
+    }
   }
 
 
-  // =====================================================
-  // Close Mini App
-  // =====================================================
+  /* ============================================================
+     ADMIN SEARCH
+     ============================================================ */
 
-  function closeApp(){
+  function debounceSearch() {
 
-    tg.close();
+    clearTimeout(searchTimeout);
 
+    searchTimeout =
+      setTimeout(
+        () => loadAdminOrders(),
+        400
+      );
   }
 
 
-  // =====================================================
-  // Initialize
-  // =====================================================
+  async function loadAdminOrders() {
 
-  initializeAdmin();
+    if (!isAdmin()) {
+      return;
+    }
+
+
+    const q =
+      document
+        .getElementById("adminSearchInput")
+        .value
+        .trim();
+
+
+    const status =
+      document
+        .getElementById("adminStatusFilter")
+        .value;
+
+
+    const service =
+      document
+        .getElementById("adminServiceFilter")
+        .value;
+
+
+    const list =
+      document.getElementById(
+        "adminOrdersList"
+      );
+
+
+    list.innerHTML =
+      '<div class="empty-state">⏳ جاري البحث...</div>';
+
+
+    try {
+
+      const params =
+        new URLSearchParams();
+
+      if (q) {
+        params.set("q", q);
+      }
+
+      if (status) {
+        params.set("status", status);
+      }
+
+      if (service) {
+        params.set("service_type", service);
+      }
+
+      params.set("limit", "50");
+      params.set("offset", "0");
+
+
+      const data =
+        await apiRequest(
+          `/api/admin/orders?${params.toString()}`
+        );
+
+
+      const orders =
+        Array.isArray(data?.orders)
+          ? data.orders
+          : [];
+
+
+      list.innerHTML = "";
+
+
+      if (!orders.length) {
+
+        list.innerHTML =
+          '<div class="empty-state">لا توجد نتائج.</div>';
+
+        return;
+      }
+
+
+      orders.forEach(order => {
+
+        const row =
+          document.createElement("div");
+
+
+        row.className =
+          "order-row";
+
+
+        row.onclick =
+          () => openModal(order.order_id);
+
+
+        const status =
+          order.order_status || "";
+
+
+        const username =
+          order.username ||
+          order.user_id ||
+          "—";
+
+
+        row.innerHTML = `
+
+          <div style="
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            gap:8px;
+          ">
+
+            <b style="color:var(--sky-dark);">
+              ${escapeHtml(order.order_id)}
+            </b>
+
+            <span class="
+              order-badge
+              ${statusClass(status)}
+            ">
+              ${escapeHtml(statusName(status))}
+            </span>
+
+          </div>
+
+
+          <div style="
+            margin-top:5px;
+            font-weight:800;
+          ">
+            ${escapeHtml(order.title || "بدون عنوان")}
+          </div>
+
+
+          <div style="
+            color:var(--muted);
+            font-size:10px;
+            margin-top:3px;
+          ">
+            ${escapeHtml(serviceName(order.service_type))}
+          </div>
+
+
+          <div style="
+            color:var(--muted);
+            font-size:10px;
+            margin-top:3px;
+          ">
+            الزبون:
+            ${escapeHtml(username)}
+          </div>
+
+        `;
+
+
+        list.appendChild(row);
+      });
+
+
+    } catch (error) {
+
+      list.innerHTML = `
+        <div class="error-box">
+          ${escapeHtml(
+            error?.message ||
+            "تعذر تحميل الطلبات."
+          )}
+        </div>
+      `;
+    }
+  }
+
+
+  /* ============================================================
+     ADMIN MODAL
+     ============================================================ */
+
+  async function openModal(orderId) {
+
+    if (!isAdmin()) {
+      return;
+    }
+
+
+    activeOrderId =
+      String(orderId);
+
+
+    document.getElementById(
+      "modalOrderId"
+    ).textContent =
+      activeOrderId;
+
+
+    document.getElementById(
+      "orderModal"
+    ).classList.remove("hidden");
+
+
+    const content =
+      document.getElementById(
+        "modalContent"
+      );
+
+
+    content.innerHTML =
+      '<div class="empty-state">⏳ جاري تحميل البيانات...</div>';
+
+
+    try {
+
+      const data =
+        await apiRequest(
+          `/api/admin/orders/${encodeURIComponent(activeOrderId)}`
+        );
+
+
+      const order =
+        data?.order || {};
+
+
+      const payments =
+        Array.isArray(data?.payments)
+          ? data.payments
+          : [];
+
+
+      const auditLogs =
+        Array.isArray(data?.audit_logs)
+          ? data.audit_logs
+          : [];
+
+
+      renderAdminOrderDetails(
+        order,
+        payments,
+        auditLogs
+      );
+
+
+      /*
+       * Pre-fill fields
+       */
+
+      const quoteCurrency =
+        document.getElementById(
+          "quotCurrency"
+        );
+
+      if (quoteCurrency) {
+        quoteCurrency.value =
+          order.currency || "IQD";
+      }
+
+
+      const paymentCurrency =
+        document.getElementById(
+          "payCurrency"
+        );
+
+      if (paymentCurrency) {
+        paymentCurrency.value =
+          order.currency || "IQD";
+      }
+
+
+      const statusSelect =
+        document.getElementById(
+          "updateStatusSelect"
+        );
+
+      if (statusSelect) {
+
+        const existing =
+          Array.from(
+            statusSelect.options
+          ).some(
+            option =>
+              option.value === order.order_status
+          );
+
+        if (existing) {
+          statusSelect.value =
+            order.order_status;
+        }
+      }
+
+
+    } catch (error) {
+
+      content.innerHTML = `
+        <div class="error-box">
+          ${escapeHtml(
+            error?.message ||
+            "تعذر تحميل تفاصيل الطلب."
+          )}
+        </div>
+      `;
+    }
+  }
+
+
+  function renderAdminOrderDetails(
+    order,
+    payments,
+    auditLogs
+  ) {
+
+    const content =
+      document.getElementById(
+        "modalContent"
+      );
+
+
+    const serviceDetails =
+      parseServiceDetails(
+        order.service_details
+      );
+
+
+    let paymentsHtml =
+      '<div class="empty-state">لا توجد دفعات.</div>';
+
+
+    if (payments.length) {
+
+      paymentsHtml =
+        payments.map(
+          payment => `
+            <div class="activity-item">
+
+              <b>
+                ${formatMoney(
+                  payment.amount,
+                  payment.currency || order.currency || "IQD"
+                )}
+              </b>
+
+              <span>
+                — ${escapeHtml(
+                  payment.payment_method || "يدوي"
+                )}
+              </span>
+
+              <div style="
+                color:var(--muted);
+                font-size:10px;
+                margin-top:3px;
+              ">
+                ${escapeHtml(
+                  formatDate(payment.created_at)
+                )}
+              </div>
+
+            </div>
+          `
+        ).join("");
+    }
+
+
+    let auditHtml =
+      '<div class="empty-state">لا يوجد سجل نشاط.</div>';
+
+
+    if (auditLogs.length) {
+
+      auditHtml =
+        auditLogs
+          .slice(0, 20)
+          .map(
+            log => `
+              <div class="activity-item">
+
+                <b>
+                  ${escapeHtml(
+                    log.action ||
+                    log.event_type ||
+                    "نشاط"
+                  )}
+                </b>
+
+                <div style="
+                  color:var(--muted);
+                  margin-top:3px;
+                ">
+                  ${escapeHtml(
+                    log.description ||
+                    log.message ||
+                    ""
+                  )}
+                </div>
+
+                <div style="
+                  color:var(--muted);
+                  font-size:10px;
+                  margin-top:3px;
+                ">
+                  ${escapeHtml(
+                    formatDate(
+                      log.created_at
+                    )
+                  )}
+                </div>
+
+              </div>
+            `
+          )
+          .join("");
+    }
+
+
+    const serviceDetailsHtml =
+      Object.keys(serviceDetails).length
+        ? Object.entries(serviceDetails)
+            .map(
+              ([key, value]) => `
+                <div class="detail-item">
+                  <div class="detail-label">
+                    ${escapeHtml(key)}
+                  </div>
+                  <div class="detail-value">
+                    ${escapeHtml(value)}
+                  </div>
+                </div>
+              `
+            )
+            .join("")
+        : `
+            <div class="detail-item full">
+              <div class="detail-value">
+                لا توجد تفاصيل إضافية
+              </div>
+            </div>
+          `;
+
+
+    content.innerHTML = `
+
+      <div class="detail-grid">
+
+        <div class="detail-item">
+          <div class="detail-label">
+            الخدمة
+          </div>
+          <div class="detail-value">
+            ${escapeHtml(
+              serviceName(order.service_type)
+            )}
+          </div>
+        </div>
+
+
+        <div class="detail-item">
+          <div class="detail-label">
+            الحالة
+          </div>
+          <div class="detail-value">
+            ${escapeHtml(
+              statusName(order.order_status)
+            )}
+          </div>
+        </div>
+
+
+        <div class="detail-item">
+          <div class="detail-label">
+            التخصص
+          </div>
+          <div class="detail-value">
+            ${escapeHtml(
+              order.department || "—"
+            )}
+          </div>
+        </div>
+
+
+        <div class="detail-item">
+          <div class="detail-label">
+            الزبون
+          </div>
+          <div class="detail-value">
+            ${escapeHtml(
+              order.username ||
+              order.user_id ||
+              "—"
+            )}
+          </div>
+        </div>
+
+
+        <div class="detail-item full">
+          <div class="detail-label">
+            العنوان
+          </div>
+          <div class="detail-value">
+            ${escapeHtml(
+              order.title || "—"
+            )}
+          </div>
+        </div>
+
+
+        <div class="detail-item">
+          <div class="detail-label">
+            الموعد النهائي
+          </div>
+          <div class="detail-value">
+            ${escapeHtml(
+              formatDate(order.deadline)
+            )}
+          </div>
+        </div>
+
+
+        <div class="detail-item">
+          <div class="detail-label">
+            قرار الزبون
+          </div>
+          <div class="detail-value">
+            ${escapeHtml(
+              order.customer_decision || "WAITING"
+            )}
+          </div>
+        </div>
+
+
+        <div class="detail-item">
+          <div class="detail-label">
+            السعر
+          </div>
+          <div class="detail-value">
+            ${formatMoney(
+              order.price,
+              order.currency || "IQD"
+            )}
+          </div>
+        </div>
+
+
+        <div class="detail-item">
+          <div class="detail-label">
+            المدفوع
+          </div>
+          <div class="detail-value">
+            ${formatMoney(
+              order.deposit,
+              order.currency || "IQD"
+            )}
+          </div>
+        </div>
+
+
+        <div class="detail-item">
+          <div class="detail-label">
+            المتبقي
+          </div>
+          <div class="detail-value">
+            ${formatMoney(
+              order.remaining_balance,
+              order.currency || "IQD"
+            )}
+          </div>
+        </div>
+
+
+        <div class="detail-item">
+          <div class="detail-label">
+            حالة الدفع
+          </div>
+          <div class="detail-value">
+            ${escapeHtml(
+              paymentStatusName(
+                order.payment_status
+              )
+            )}
+          </div>
+        </div>
+
+
+        <div class="detail-item full">
+          <div class="detail-label">
+            الملاحظات
+          </div>
+          <div class="detail-value">
+            ${escapeHtml(
+              order.notes || "لا توجد"
+            )}
+          </div>
+        </div>
+
+
+        <div class="detail-item full">
+          <div class="detail-label">
+            ملاحظات الأدمن
+          </div>
+          <div class="detail-value">
+            ${escapeHtml(
+              order.admin_note || "لا توجد"
+            )}
+          </div>
+        </div>
+
+      </div>
+
+
+      <h4 style="margin:18px 0 8px;">
+        ⚙️ تفاصيل الخدمة
+      </h4>
+
+      <div class="detail-grid">
+        ${serviceDetailsHtml}
+      </div>
+
+
+      <h4 style="margin:18px 0 8px;">
+        💵 سجل الدفعات
+      </h4>
+
+      ${paymentsHtml}
+
+
+      <h4 style="margin:18px 0 8px;">
+        📜 سجل النشاط
+      </h4>
+
+      ${auditHtml}
+
+    `;
+  }
+
+
+  function parseServiceDetails(value) {
+
+    if (!value) {
+      return {};
+    }
+
+    if (typeof value === "object") {
+      return value;
+    }
+
+    if (typeof value === "string") {
+
+      try {
+        const parsed =
+          JSON.parse(value);
+
+        return (
+          parsed &&
+          typeof parsed === "object"
+        )
+          ? parsed
+          : {};
+
+      } catch {
+        return {
+          details: value
+        };
+      }
+    }
+
+    return {};
+  }
+
+
+  function closeModal() {
+
+    document
+      .getElementById("orderModal")
+      .classList.add("hidden");
+  }
+
+
+  /* ============================================================
+     ADMIN QUOTATION
+     ============================================================ */
+
+  async function submitQuotation() {
+
+    if (!activeOrderId) {
+      showToast("لم يتم تحديد الطلب.");
+      return;
+    }
+
+
+    const priceValue =
+      document.getElementById(
+        "quotPrice"
+      ).value.trim();
+
+
+    const currency =
+      document.getElementById(
+        "quotCurrency"
+      ).value;
+
+
+    const date =
+      document.getElementById(
+        "quotDate"
+      ).value;
+
+
+    const time =
+      document.getElementById(
+        "quotTime"
+      ).value;
+
+
+    const notes =
+      document.getElementById(
+        "quotNotes"
+      ).value.trim();
+
+
+    const price =
+      Number(priceValue);
+
+
+    if (!Number.isFinite(price) || price <= 0) {
+      showToast("أدخل سعراً صحيحاً.");
+      return;
+    }
+
+
+    if (!date) {
+      showToast("حدد تاريخ التسليم.");
+      return;
+    }
+
+
+    if (!time) {
+      showToast("حدد وقت التسليم.");
+      return;
+    }
+
+
+    const button =
+      document.getElementById(
+        "quotationButton"
+      );
+
+
+    button.disabled = true;
+    button.textContent =
+      "جاري إرسال العرض...";
+
+
+    try {
+
+      await apiRequest(
+        `/api/admin/orders/${encodeURIComponent(activeOrderId)}/quotation`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json"
+          },
+          body: JSON.stringify({
+            price,
+            currency,
+            delivery_date: date,
+            delivery_time: time,
+            notes
+          })
+        }
+      );
+
+
+      showToast(
+        "تم إرسال عرض السعر للزبون."
+      );
+
+
+      await openModal(activeOrderId);
+      await loadAdminDashboard();
+
+
+    } catch (error) {
+
+      showToast(
+        error?.message ||
+        "تعذر إرسال عرض السعر."
+      );
+
+    } finally {
+
+      button.disabled = false;
+      button.textContent =
+        "إرسال العرض للزبون 🚀";
+    }
+  }
+
+
+  /* ============================================================
+     ADMIN STATUS
+     ============================================================ */
+
+  async function submitStatusUpdate() {
+
+    if (!activeOrderId) {
+      return;
+    }
+
+
+    const status =
+      document.getElementById(
+        "updateStatusSelect"
+      ).value;
+
+
+    const adminNote =
+      document.getElementById(
+        "statusAdminNote"
+      ).value.trim();
+
+
+    if (!status) {
+      showToast("حدد الحالة.");
+      return;
+    }
+
+
+    const button =
+      document.getElementById(
+        "statusButton"
+      );
+
+
+    button.disabled = true;
+    button.textContent =
+      "جاري التحديث...";
+
+
+    try {
+
+      await apiRequest(
+        `/api/admin/orders/${encodeURIComponent(activeOrderId)}/status`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json"
+          },
+          body: JSON.stringify({
+            status,
+            admin_note: adminNote
+          })
+        }
+      );
+
+
+      showToast(
+        "تم تحديث حالة الطلب."
+      );
+
+
+      await openModal(activeOrderId);
+      await loadAdminDashboard();
+
+
+    } catch (error) {
+
+      showToast(
+        error?.message ||
+        "تعذر تحديث الحالة."
+      );
+
+    } finally {
+
+      button.disabled = false;
+      button.textContent =
+        "تحديث الحالة";
+    }
+  }
+
+
+  /* ============================================================
+     ADMIN PAYMENT
+     ============================================================ */
+
+  async function submitPayment() {
+
+    if (!activeOrderId) {
+      return;
+    }
+
+
+    const amountValue =
+      document.getElementById(
+        "payAmount"
+      ).value.trim();
+
+
+    const amount =
+      Number(amountValue);
+
+
+    const currency =
+      document.getElementById(
+        "payCurrency"
+      ).value;
+
+
+    const paymentMethod =
+      document.getElementById(
+        "payMethod"
+      ).value.trim() ||
+      "يدوي";
+
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      showToast("أدخل مبلغ دفعة صحيح.");
+      return;
+    }
+
+
+    const button =
+      document.getElementById(
+        "paymentButton"
+      );
+
+
+    button.disabled = true;
+    button.textContent =
+      "جاري التسجيل...";
+
+
+    try {
+
+      await apiRequest(
+        `/api/admin/orders/${encodeURIComponent(activeOrderId)}/payments`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json"
+          },
+          body: JSON.stringify({
+            amount,
+            currency,
+            payment_method: paymentMethod
+          })
+        }
+      );
+
+
+      document.getElementById(
+        "payAmount"
+      ).value = "";
+
+
+      showToast(
+        "تم تسجيل الدفعة."
+      );
+
+
+      await openModal(activeOrderId);
+      await loadAdminDashboard();
+
+
+    } catch (error) {
+
+      showToast(
+        error?.message ||
+        "تعذر تسجيل الدفعة."
+      );
+
+    } finally {
+
+      button.disabled = false;
+      button.textContent =
+        "تسجيل الدفعة 💵";
+    }
+  }
+
+
+  /* ============================================================
+     ADMIN NOTE
+     ============================================================ */
+
+  async function submitAdminNote() {
+
+    if (!activeOrderId) {
+      return;
+    }
+
+
+    const input =
+      document.getElementById(
+        "adminNoteText"
+      );
+
+
+    const note =
+      input.value.trim();
+
+
+    if (!note) {
+      showToast("أدخل الملاحظة أولاً.");
+      return;
+    }
+
+
+    const button =
+      document.getElementById(
+        "noteButton"
+      );
+
+
+    button.disabled = true;
+    button.textContent =
+      "جاري الحفظ...";
+
+
+    try {
+
+      await apiRequest(
+        `/api/admin/orders/${encodeURIComponent(activeOrderId)}/notes`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json"
+          },
+          body: JSON.stringify({
+            admin_note: note
+          })
+        }
+      );
+
+
+      input.value = "";
+
+
+      showToast(
+        "تم حفظ الملاحظة."
+      );
+
+
+      await openModal(activeOrderId);
+
+
+    } catch (error) {
+
+      showToast(
+        error?.message ||
+        "تعذر حفظ الملاحظة."
+      );
+
+    } finally {
+
+      button.disabled = false;
+      button.textContent =
+        "حفظ الملاحظة";
+    }
+  }
+
+
+  /* ============================================================
+     EXCEL
+     ============================================================ */
+
+  async function exportExcel() {
+
+    if (!isAdmin()) {
+      showToast("ليس لديك صلاحية.");
+      return;
+    }
+
+
+    try {
+
+      showToast(
+        "جاري تجهيز ملف Excel..."
+      );
+
+
+      const response =
+        await apiDownload(
+          "/api/admin/export/excel?send_telegram=true"
+        );
+
+
+      const blob =
+        await response.blob();
+
+
+      if (!blob || blob.size === 0) {
+        throw new Error(
+          "تم استلام ملف فارغ."
+        );
+      }
+
+
+      const url =
+        URL.createObjectURL(blob);
+
+
+      const anchor =
+        document.createElement("a");
+
+
+      anchor.href = url;
+
+      anchor.download =
+        "NABA_Orders.xlsx";
+
+
+      document.body.appendChild(anchor);
+
+      anchor.click();
+
+      anchor.remove();
+
+
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+      }, 1000);
+
+
+      showToast(
+        "تم تجهيز ملف Excel."
+      );
+
+
+    } catch (error) {
+
+      showToast(
+        error?.message ||
+        "تعذر تصدير Excel."
+      );
+    }
+  }
+
+
+  /* ============================================================
+     CLOSE APP
+     ============================================================ */
+
+  function closeApp() {
+
+    stopCustomerOrderPolling();
+
+    try {
+      tg.close();
+    } catch {
+      window.close();
+    }
+  }
+
+
+  /* ============================================================
+     MODAL EVENTS
+     ============================================================ */
+
+  document
+    .getElementById("orderModal")
+    .addEventListener(
+      "click",
+      function(event) {
+
+        if (event.target === this) {
+          closeModal();
+        }
+
+      }
+    );
+
+
+  /* ============================================================
+     INITIALIZATION
+     ============================================================ */
+
+  async function initializeApp() {
+
+    try {
+
+      /*
+       * Ensure Telegram is initialized.
+       */
+
+      if (!getInitData()) {
+
+        showError(
+          "افتح التطبيق من داخل Telegram حتى يتم التحقق من الحساب."
+        );
+
+        return;
+      }
+
+
+      /*
+       * Set minimum deadline to current time.
+       */
+
+      const deadline =
+        document.getElementById(
+          "deadline"
+        );
+
+
+      if (deadline) {
+
+        const now =
+          new Date();
+
+
+        /*
+         * datetime-local expects local time,
+         * not UTC.
+         */
+
+        const local =
+          new Date(
+            now.getTime() -
+            now.getTimezoneOffset() * 60000
+          )
+            .toISOString()
+            .slice(0, 16);
+
+
+        deadline.min = local;
+      }
+
+
+      /*
+       * Check admin permission.
+       */
+
+      await initializeAdmin();
+
+
+    } catch (error) {
+
+      console.error(
+        "NABA initialization error:",
+        error
+      );
+    }
+  }
+
+
+  initializeApp();
 
 </script>
 
 </body>
-
 </html>
