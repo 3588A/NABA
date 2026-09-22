@@ -1578,7 +1578,7 @@ async def send_to_chat(
     attachment_message = (
         await telegram_app.bot.send_document(
             chat_id=chat_id,
-            document=data,
+            document=io.BytesIO(data),
             filename=filename,
             caption=caption,
         )
@@ -2204,39 +2204,33 @@ async def channel_post_handler(
     context: ContextTypes.DEFAULT_TYPE,
 ):
     """
-    Route an administrator reply from either:
-      1) the channel itself, or
-      2) the channel's linked discussion group
-    back to the customer who owns the original order.
+    Route an administrator reply made to a customer message in:
+      - the Telegram channel, or
+      - the linked discussion group.
 
-    Telegram normally delivers replies made in a channel's discussion
-    thread as ordinary `message` updates in the linked group. The
-    replied-to message is an automatic forward of the channel post, so
-    the original channel message id must be taken from `forward_origin`
-    rather than the discussion group's message id.
+    The mapping is always resolved from the original channel message id.
+    For discussion-group replies Telegram normally exposes that id through
+    reply_to_message.forward_origin.message_id.
     """
     message = update.channel_post or update.message
-
     if not message:
         return
 
-    channel = parse_channel_id()
-    if not channel:
+    channel_id = parse_channel_id()
+    if not channel_id:
         return
 
-    # A direct channel post/reply must originate from the configured channel.
-    # A discussion-group message is accepted only when it contains a
-    # forward-origin pointing back to the configured channel.
-    is_channel_message = (
+    is_direct_channel_update = (
         update.channel_post is not None
-        and str(message.chat.id) == str(channel)
-    )
-    is_group_message = (
-        update.message is not None
-        and getattr(message.chat, "type", None) in ("group", "supergroup")
+        and str(message.chat.id) == str(channel_id)
     )
 
-    if not (is_channel_message or is_group_message):
+    is_discussion_update = (
+        update.message is not None
+        and getattr(message.chat, "type", None) in {"group", "supergroup"}
+    )
+
+    if not (is_direct_channel_update or is_discussion_update):
         return
 
     replied_to = getattr(message, "reply_to_message", None)
@@ -2248,33 +2242,34 @@ async def channel_post_handler(
         or getattr(message, "caption", None)
         or ""
     ).strip()
-
     if not reply_text:
-        # Do not silently forward arbitrary media from the discussion group.
-        # The requested workflow is an administrator text reply.
         return
 
     candidate_ids = []
 
-    # Case 1: true reply inside the channel itself.
-    if str(getattr(replied_to.chat, "id", "")) == str(channel):
+    # 1) A real reply inside the channel.
+    replied_chat = getattr(replied_to, "chat", None)
+    if (
+        getattr(replied_to, "message_id", None) is not None
+        and replied_chat is not None
+        and str(getattr(replied_chat, "id", "")) == str(channel_id)
+    ):
         candidate_ids.append(replied_to.message_id)
 
-    # Case 2: reply inside the linked discussion group. Telegram represents
-    # the original channel post as an automatic forward.
+    # 2) A reply in the linked discussion group. The replied-to message is
+    # an automatic forward of the channel post in current Bot API versions.
     origin = getattr(replied_to, "forward_origin", None)
-    if origin is not None:
-        origin_chat = getattr(origin, "chat", None)
-        origin_chat_id = getattr(origin_chat, "id", None)
-        origin_message_id = getattr(origin, "message_id", None)
-        if (
-            origin_message_id is not None
-            and origin_chat_id is not None
-            and str(origin_chat_id) == str(channel)
-        ):
-            candidate_ids.append(origin_message_id)
+    origin_chat = getattr(origin, "chat", None) if origin else None
+    origin_chat_id = getattr(origin_chat, "id", None)
+    origin_message_id = getattr(origin, "message_id", None)
+    if (
+        origin_message_id is not None
+        and origin_chat_id is not None
+        and str(origin_chat_id) == str(channel_id)
+    ):
+        candidate_ids.append(origin_message_id)
 
-    # Backward compatibility with older python-telegram-bot objects.
+    # 3) Legacy python-telegram-bot fields.
     legacy_chat = getattr(replied_to, "forward_from_chat", None)
     legacy_chat_id = getattr(legacy_chat, "id", None)
     legacy_message_id = getattr(
@@ -2285,18 +2280,17 @@ async def channel_post_handler(
     if (
         legacy_message_id is not None
         and legacy_chat_id is not None
-        and str(legacy_chat_id) == str(channel)
+        and str(legacy_chat_id) == str(channel_id)
     ):
         candidate_ids.append(legacy_message_id)
 
-    # Remove duplicates while preserving order.
     candidate_ids = list(dict.fromkeys(candidate_ids))
-
     if not candidate_ids:
         logger.info(
-            "Administrator reply could not be mapped: chat=%s message_id=%s",
-            message.chat.id,
-            message.message_id,
+            "Unmapped Telegram reply: chat=%s message=%s replied=%s",
+            getattr(message.chat, "id", None),
+            getattr(message, "message_id", None),
+            getattr(replied_to, "message_id", None),
         )
         return
 
@@ -2313,6 +2307,8 @@ async def channel_post_handler(
                 (candidate_ids,),
             ).fetchone()
 
+            # Also support the original order-delivery messages used by the
+            # reference workflow, so old orders remain replyable.
             if not order:
                 order = conn.execute(
                     """
@@ -2328,19 +2324,20 @@ async def channel_post_handler(
 
         if not order:
             logger.warning(
-                "No order found for channel message ids=%s",
+                "No customer mapping for channel message ids=%s",
                 candidate_ids,
             )
             return
 
+        customer_message = (
+            "📩 <b>رسالة من إدارة النبع</b>\n\n"
+            f"🆔 الطلب: <code>{html.escape(order['order_id'])}</code>\n\n"
+            f"{html.escape(reply_text)}"
+        )
+
         success = await notify_customer(
             order["user_id"],
-            (
-                "📩 <b>رسالة من إدارة النبع</b>\n\n"
-                f"🆔 <b>رقم الطلب:</b> "
-                f"<code>{html.escape(order['order_id'])}</code>\n\n"
-                f"{html.escape(reply_text)}"
-            ),
+            customer_message,
         )
 
         with db() as conn:
@@ -2357,17 +2354,14 @@ async def channel_post_handler(
             )
 
         logger.info(
-            "Admin reply routed: order=%s user=%s success=%s source_chat=%s",
+            "Channel reply routed: order=%s user=%s success=%s",
             order["order_id"],
             order["user_id"],
             success,
-            message.chat.id,
         )
 
     except Exception:
-        logger.exception(
-            "Failed to forward administrator reply to customer"
-        )
+        logger.exception("Failed to route administrator channel reply")
 
 
 # =========================================================
