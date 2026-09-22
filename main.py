@@ -2115,44 +2115,115 @@ async def channel_post_handler(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
 ):
-    post = update.channel_post
+    """
+    يحول رد الأدمن على رسالة الطلب في القناة إلى محادثة الزبون.
 
-    if not post:
-        return
+    يدعم حالتين:
+    1) الرد المباشر داخل القناة (channel_post).
+    2) الرد من مجموعة المناقشة المرتبطة بالقناة، حيث تكون
+       الرسالة الأصلية forwarded/automatic-forwarded من القناة.
+    """
 
     channel = parse_channel_id()
-
     if not channel:
         return
 
-    if str(post.chat.id) != str(channel):
+    post = update.channel_post
+    message = update.message
+
+    # ---------------------------------------------------------
+    # تحديد الرسالة الواردة والقناة التي جاءت منها
+    # ---------------------------------------------------------
+    incoming = post or message
+    if not incoming:
         return
 
-    logger.info(
-        "Channel post received: chat=%s message_id=%s",
-        post.chat.id,
-        post.message_id,
-    )
+    # رسائل الزبائن الخاصة لا تدخل هنا؛ نريد فقط القناة أو
+    # مجموعة المناقشة المرتبطة بها.
+    if post:
+        if str(post.chat.id) != str(channel):
+            return
+    else:
+        if not message.chat.type in ("group", "supergroup"):
+            return
 
-    # -----------------------------------------------------
-    # Admin reply from the channel -> customer's private chat
-    #
-    # The bot is an administrator in the channel and there is
-    # no linked discussion group. Therefore a channel reply can
-    # be mapped back to the customer through the original order
-    # message ID stored in orders.channel_message_id.
-    # -----------------------------------------------------
-    replied_to = post.reply_to_message
-
+    replied_to = incoming.reply_to_message
     if not replied_to:
         return
 
-    reply_text = (post.text or post.caption or "").strip()
+    reply_text = (
+        incoming.text
+        or incoming.caption
+        or ""
+    ).strip()
 
     if not reply_text:
         return
 
-    replied_message_id = replied_to.message_id
+    # ---------------------------------------------------------
+    # الرسالة الهدف قد تكون:
+    # - رسالة القناة نفسها.
+    # - رسالة forwarded/automatic-forwarded في مجموعة المناقشة.
+    # ---------------------------------------------------------
+    candidate_message_ids = {
+        replied_to.message_id
+    }
+
+    forward_origin = getattr(
+        replied_to,
+        "forward_origin",
+        None,
+    )
+
+    if forward_origin is not None:
+        origin_chat = getattr(
+            forward_origin,
+            "chat",
+            None,
+        )
+        origin_message_id = getattr(
+            forward_origin,
+            "message_id",
+            None,
+        )
+
+        if (
+            origin_chat is not None
+            and str(origin_chat.id) == str(channel)
+            and origin_message_id
+        ):
+            candidate_message_ids.add(
+                origin_message_id
+            )
+
+    # توافق مع بعض إصدارات python-telegram-bot القديمة
+    forward_from_chat = getattr(
+        replied_to,
+        "forward_from_chat",
+        None,
+    )
+    forward_from_message_id = getattr(
+        replied_to,
+        "forward_from_message_id",
+        None,
+    )
+
+    if (
+        forward_from_chat is not None
+        and str(forward_from_chat.id) == str(channel)
+        and forward_from_message_id
+    ):
+        candidate_message_ids.add(
+            forward_from_message_id
+        )
+
+    logger.info(
+        "Channel/discussion reply received: "
+        "chat=%s message_id=%s target_ids=%s",
+        incoming.chat.id,
+        incoming.message_id,
+        sorted(candidate_message_ids),
+    )
 
     try:
         with db() as conn:
@@ -2160,21 +2231,21 @@ async def channel_post_handler(
                 """
                 SELECT order_id, user_id
                 FROM orders
-                WHERE channel_message_id=%s
-                   OR channel_attachment_message_id=%s
+                WHERE channel_message_id = ANY(%s)
+                   OR channel_attachment_message_id = ANY(%s)
                 ORDER BY created_at DESC
                 LIMIT 1
                 """,
                 (
-                    replied_message_id,
-                    replied_message_id,
+                    list(candidate_message_ids),
+                    list(candidate_message_ids),
                 ),
             ).fetchone()
 
         if not order:
             logger.info(
-                "Channel reply %s is not linked to an order",
-                replied_message_id,
+                "Channel reply target %s is not linked to an order",
+                sorted(candidate_message_ids),
             )
             return
 
@@ -2202,7 +2273,8 @@ async def channel_post_handler(
             )
 
         logger.info(
-            "Channel reply mapped to order=%s user=%s success=%s",
+            "Channel/discussion reply mapped to order=%s "
+            "user=%s success=%s",
             order["order_id"],
             order["user_id"],
             success,
@@ -2210,7 +2282,8 @@ async def channel_post_handler(
 
     except Exception:
         logger.exception(
-            "Failed to forward channel reply to customer"
+            "Failed to forward channel/discussion reply "
+            "to customer"
         )
 
 
@@ -2443,6 +2516,16 @@ telegram_app.add_handler(
 telegram_app.add_handler(
     MessageHandler(
         filters.ChatType.CHANNEL,
+        channel_post_handler,
+    )
+)
+
+# ردود الأدمن على منشورات القناة قد تصل من مجموعة
+# المناقشة المرتبطة بالقناة، وليس كـ channel_post.
+telegram_app.add_handler(
+    MessageHandler(
+        filters.ChatType.GROUPS
+        & ~filters.COMMAND,
         channel_post_handler,
     )
 )
@@ -4751,14 +4834,10 @@ async def export_excel_report(
                 ),
             )
 
-        except TelegramError as exc:
-
-            raise HTTPException(
-                status_code=502,
-                detail=(
-                    "تعذر إرسال التقرير عبر "
-                    f"التليجرام: {exc}"
-                ),
+        except TelegramError:
+            # فشل إرسال نسخة التليجرام لا يمنع تنزيل ملف Excel.
+            logger.exception(
+                "Could not send Excel report to admin via Telegram"
             )
 
     # Return the XLSX bytes directly. This avoids proxy/client
