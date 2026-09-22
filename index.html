@@ -292,6 +292,8 @@
     input[type=text],
     input[type=number],
     input[type=datetime-local],
+    input[type=date],
+    input[type=time],
     select,
     textarea {
       width: 100%;
@@ -619,6 +621,49 @@
       border-bottom: 0;
     }
 
+    .delivery-box {
+      margin-top: 14px;
+      padding: 14px;
+      border: 1px solid #b9ead7;
+      border-radius: 14px;
+      background: #f1fcf7;
+    }
+
+    .delivery-title {
+      margin: 0 0 7px;
+      color: #087b54;
+      font-size: 14px;
+      font-weight: 900;
+    }
+
+    .delivery-upload-box {
+      display: flex;
+      min-height: 95px;
+      margin-top: 10px;
+      padding: 14px;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      text-align: center;
+      cursor: pointer;
+      border: 1.5px dashed #8bd6bb;
+      border-radius: 12px;
+      background: #f8fffb;
+    }
+
+    .delivery-upload-box:hover {
+      border-color: var(--success);
+      background: #effcf6;
+    }
+
+    .delivery-files {
+      margin-top: 9px;
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.8;
+      word-break: break-word;
+    }
+
     .toast {
       position: fixed;
       z-index: 3000;
@@ -662,8 +707,12 @@
 
   <!-- HEADER -->
   <div class="header">
+
     <h2>النبع للخدمات الجامعية 🎓</h2>
-    <p>استمارة تقديم الطلبات والأعمال الأكاديمية والهندسية والمهنية</p>
+
+    <p>
+      استمارة تقديم الطلبات والأعمال الأكاديمية والهندسية والمهنية
+    </p>
 
     <a
       href="https://t.me/ALNABASURVICE"
@@ -679,6 +728,7 @@
       onclick="toggleAdminPanel()">
       🔐 لوحة تحكم الأدمن
     </button>
+
   </div>
 
 
@@ -688,36 +738,62 @@
 
     <div class="admin-header">
 
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+      <div style="
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        gap:10px;
+      ">
 
         <div>
-          <h3 style="margin:0;">📊 لوحة تحكم النبع</h3>
-          <p style="margin:5px 0 0; opacity:.8; font-size:11px;">
+
+          <h3 style="margin:0;">
+            📊 لوحة تحكم النبع
+          </h3>
+
+          <p style="
+            margin:5px 0 0;
+            opacity:.8;
+            font-size:11px;
+          ">
             إدارة الطلبات، العروض، والدفعات
           </p>
+
         </div>
 
         <div style="display:flex; gap:5px;">
+
           <button
             class="btn-action"
-            style="background:#fff; color:#087fc1;"
+            style="
+              background:#fff;
+              color:#087fc1;
+            "
             onclick="exportExcel()">
             📥 Excel
           </button>
 
           <button
             class="btn-action"
-            style="background:rgba(255,255,255,.2); color:#fff;"
+            style="
+              background:rgba(255,255,255,.2);
+              color:#fff;
+            "
             onclick="loadAdminDashboard()">
             🔄
           </button>
+
         </div>
 
       </div>
 
+
       <button
         class="admin-btn visible"
-        style="margin-top:12px; background:rgba(0,0,0,.2);"
+        style="
+          margin-top:12px;
+          background:rgba(0,0,0,.2);
+        "
         onclick="toggleAdminPanel()">
         إغلاق اللوحة
       </button>
@@ -766,32 +842,104 @@
         placeholder="بحث برقم الطلب، المعرف، أو العنوان..."
         oninput="debounceSearch()">
 
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px;">
+      <div style="
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        gap:8px;
+        margin-top:8px;
+      ">
 
-        <select id="adminStatusFilter" onchange="loadAdminOrders()">
-          <option value="">جميع الحالات</option>
-          <option value="NEW">جديد</option>
-          <option value="UNDER_REVIEW">تحت المراجعة</option>
-          <option value="WAITING_CUSTOMER">بانتظار موافقة الزبون</option>
-          <option value="ACCEPTED">مقبول</option>
-          <option value="READY_TO_START">جاهز للبدء</option>
-          <option value="IN_PROGRESS">قيد التنفيذ</option>
-          <option value="READY_FOR_DELIVERY">جاهز للتسليم</option>
-          <option value="COMPLETED">مكتمل</option>
-          <option value="REJECTED">مرفوض</option>
-          <option value="CANCELLED">ملغى</option>
+        <select
+          id="adminStatusFilter"
+          onchange="loadAdminOrders()">
+
+          <option value="">
+            جميع الحالات
+          </option>
+
+          <option value="NEW">
+            جديد
+          </option>
+
+          <option value="UNDER_REVIEW">
+            تحت المراجعة
+          </option>
+
+          <option value="WAITING_CUSTOMER">
+            بانتظار موافقة الزبون
+          </option>
+
+          <option value="ACCEPTED">
+            مقبول
+          </option>
+
+          <option value="READY_TO_START">
+            جاهز للبدء
+          </option>
+
+          <option value="IN_PROGRESS">
+            قيد التنفيذ
+          </option>
+
+          <option value="READY_FOR_DELIVERY">
+            جاهز للتسليم
+          </option>
+
+          <option value="COMPLETED">
+            مكتمل
+          </option>
+
+          <option value="REJECTED">
+            مرفوض
+          </option>
+
+          <option value="CANCELLED">
+            ملغى
+          </option>
+
         </select>
 
-        <select id="adminServiceFilter" onchange="loadAdminOrders()">
-          <option value="">جميع الخدمات</option>
-          <option value="research">مشاريع • تقارير • بحوث</option>
-          <option value="autocad">رسم وتصميم AutoCAD</option>
-          <option value="minitab">تحليل البيانات Minitab</option>
-          <option value="formatting">تنسيق PowerPoint / Word / PDF</option>
-          <option value="cv">سيرة ذاتية CV احترافية</option>
-          <option value="cv_ats">سيرة ذاتية CV بنظام ATS</option>
-          <option value="logo">تصميم Logo</option>
-          <option value="identity">Logo + هوية بصرية</option>
+
+        <select
+          id="adminServiceFilter"
+          onchange="loadAdminOrders()">
+
+          <option value="">
+            جميع الخدمات
+          </option>
+
+          <option value="research">
+            مشاريع • تقارير • بحوث
+          </option>
+
+          <option value="autocad">
+            رسم وتصميم AutoCAD
+          </option>
+
+          <option value="minitab">
+            تحليل البيانات Minitab
+          </option>
+
+          <option value="formatting">
+            تنسيق PowerPoint / Word / PDF
+          </option>
+
+          <option value="cv">
+            سيرة ذاتية CV احترافية
+          </option>
+
+          <option value="cv_ats">
+            سيرة ذاتية CV بنظام ATS
+          </option>
+
+          <option value="logo">
+            تصميم Logo
+          </option>
+
+          <option value="identity">
+            Logo + هوية بصرية
+          </option>
+
         </select>
 
       </div>
@@ -832,13 +980,21 @@
 
         <h3
           id="modalOrderId"
-          style="margin:0; color:var(--sky-dark);">
+          style="
+            margin:0;
+            color:var(--sky-dark);
+          ">
           —
         </h3>
 
         <button
           onclick="closeModal()"
-          style="border:0; background:none; font-size:18px; cursor:pointer;">
+          style="
+            border:0;
+            background:none;
+            font-size:18px;
+            cursor:pointer;
+          ">
           ❌
         </button>
 
@@ -847,19 +1003,22 @@
 
       <div
         id="modalContent"
-        style="margin-top:14px; font-size:12px; line-height:1.7;">
+        style="
+          margin-top:14px;
+          font-size:12px;
+          line-height:1.7;
+        ">
         جاري تحميل البيانات...
       </div>
 
 
       <!-- ADMIN ACTIONS -->
 
-      <div
-        style="
-          margin-top:16px;
-          padding-top:12px;
-          border-top:1px solid var(--line);
-        ">
+      <div style="
+        margin-top:16px;
+        padding-top:12px;
+        border-top:1px solid var(--line);
+      ">
 
         <h4 style="margin:0 0 8px;">
           💼 إجراءات الأدمن
@@ -894,12 +1053,23 @@
               placeholder="السعر الكلي">
 
             <select id="quotCurrency">
-              <option value="IQD">IQD</option>
-              <option value="USD">USD</option>
-              <option value="EUR">EUR</option>
+
+              <option value="IQD">
+                IQD
+              </option>
+
+              <option value="USD">
+                USD
+              </option>
+
+              <option value="EUR">
+                EUR
+              </option>
+
             </select>
 
           </div>
+
 
           <div style="
             display:grid;
@@ -920,11 +1090,13 @@
 
           </div>
 
+
           <input
             type="text"
             id="quotNotes"
             placeholder="ملاحظات العرض..."
             style="margin-bottom:6px;">
+
 
           <button
             id="quotationButton"
@@ -991,11 +1163,13 @@
 
             </select>
 
+
             <input
               type="text"
               id="statusAdminNote"
               placeholder="ملاحظة اختيارية"
               style="margin-top:6px;">
+
 
             <button
               id="statusButton"
@@ -1026,13 +1200,25 @@
               step="0.01"
               placeholder="المبلغ">
 
+
             <select
               id="payCurrency"
               style="margin-top:6px;">
-              <option value="IQD">IQD</option>
-              <option value="USD">USD</option>
-              <option value="EUR">EUR</option>
+
+              <option value="IQD">
+                IQD
+              </option>
+
+              <option value="USD">
+                USD
+              </option>
+
+              <option value="EUR">
+                EUR
+              </option>
+
             </select>
+
 
             <input
               type="text"
@@ -1041,10 +1227,14 @@
               placeholder="طريقة الدفع"
               style="margin-top:6px;">
 
+
             <button
               id="paymentButton"
               class="btn-action btn-success"
-              style="width:100%; margin-top:4px;"
+              style="
+                width:100%;
+                margin-top:4px;
+              "
               onclick="submitPayment()">
               تسجيل الدفعة 💵
             </button>
@@ -1067,6 +1257,7 @@
             rows="3"
             placeholder="أضف ملاحظة داخلية للطلب..."></textarea>
 
+
           <button
             id="noteButton"
             class="btn-action"
@@ -1078,6 +1269,84 @@
             "
             onclick="submitAdminNote()">
             حفظ الملاحظة
+          </button>
+
+        </div>
+
+
+        <!-- ==================== FINAL DELIVERY ==================== -->
+
+        <div
+          id="deliverySection"
+          class="delivery-box hidden">
+
+          <h4 class="delivery-title">
+            🚀 التسليم النهائي للزبون
+          </h4>
+
+          <div style="
+            color:#456278;
+            font-size:11px;
+            line-height:1.8;
+          ">
+
+            الطلب أصبح جاهزاً للتسليم.
+            ارفع ملفات العمل النهائية ثم اضغط على زر الإرسال.
+            لن يصبح الطلب <b>مكتمل</b> إلا بعد نجاح إرسال التسليم للزبون.
+
+          </div>
+
+
+          <label
+            for="deliveryFileInput"
+            class="delivery-upload-box">
+
+            <span style="font-size:27px;">
+              📦
+            </span>
+
+            <strong>
+              اضغط لاختيار ملفات التسليم
+            </strong>
+
+            <span style="
+              color:var(--muted);
+              font-size:10px;
+              margin-top:4px;
+            ">
+              يمكن اختيار أكثر من ملف
+            </span>
+
+          </label>
+
+
+          <input
+            type="file"
+            id="deliveryFileInput"
+            class="hidden"
+            multiple
+            onchange="handleDeliveryFiles(this)">
+
+
+          <div
+            id="deliveryFilesStatus"
+            class="delivery-files">
+            لم يتم اختيار ملفات.
+          </div>
+
+
+          <button
+            id="deliveryButton"
+            class="btn-action btn-success"
+            style="
+              width:100%;
+              margin-top:10px;
+              padding:12px;
+            "
+            onclick="deliverOrderToCustomer()">
+
+            🚀 إرسال التسليم للزبون وإكمال الطلب
+
           </button>
 
         </div>
@@ -1106,36 +1375,74 @@
         الخدمات الأكاديمية والهندسية
       </div>
 
+
       <div class="services-grid">
 
         <div
           class="service-btn"
           onclick="selectService('research', this)">
-          <span class="icon">📝</span>
-          <span class="title">تقارير وبحوث</span>
-          <small>مشاريع • تقارير • بحوث</small>
+
+          <span class="icon">
+            📝
+          </span>
+
+          <span class="title">
+            تقارير وبحوث
+          </span>
+
+          <small>
+            مشاريع • تقارير • بحوث
+          </small>
+
         </div>
+
 
         <div
           class="service-btn"
           onclick="selectService('autocad', this)">
-          <span class="icon">📐</span>
-          <span class="title">تصميم AutoCAD</span>
+
+          <span class="icon">
+            📐
+          </span>
+
+          <span class="title">
+            تصميم AutoCAD
+          </span>
+
         </div>
+
 
         <div
           class="service-btn"
           onclick="selectService('minitab', this)">
-          <span class="icon">📊</span>
-          <span class="title">تحليل Minitab</span>
+
+          <span class="icon">
+            📊
+          </span>
+
+          <span class="title">
+            تحليل Minitab
+          </span>
+
         </div>
+
 
         <div
           class="service-btn"
           onclick="selectService('formatting', this)">
-          <span class="icon">💻</span>
-          <span class="title">تنسيق وتصميم</span>
-          <small>PowerPoint / Word / PDF</small>
+
+          <span class="icon">
+            💻
+          </span>
+
+          <span class="title">
+            تنسيق وتصميم
+          </span>
+
+          <small>
+            PowerPoint / Word / PDF
+          </small>
+
         </div>
 
       </div>
@@ -1147,22 +1454,44 @@
         الخدمات المهنية
       </div>
 
+
       <div class="services-grid">
 
         <div
           class="service-btn"
           onclick="selectService('cv', this)">
-          <span class="icon">📄</span>
-          <span class="title">السيرة الذاتية CV</span>
-          <small>احترافي</small>
+
+          <span class="icon">
+            📄
+          </span>
+
+          <span class="title">
+            السيرة الذاتية CV
+          </span>
+
+          <small>
+            احترافي
+          </small>
+
         </div>
+
 
         <div
           class="service-btn"
           onclick="selectService('cv_ats', this)">
-          <span class="icon">🎯</span>
-          <span class="title">السيرة الذاتية ATS</span>
-          <small>متوافقة مع أنظمة ATS</small>
+
+          <span class="icon">
+            🎯
+          </span>
+
+          <span class="title">
+            السيرة الذاتية ATS
+          </span>
+
+          <small>
+            متوافقة مع أنظمة ATS
+          </small>
+
         </div>
 
       </div>
@@ -1174,20 +1503,36 @@
         التصميم والهوية البصرية
       </div>
 
+
       <div class="services-grid">
 
         <div
           class="service-btn"
           onclick="selectService('logo', this)">
-          <span class="icon">✒️</span>
-          <span class="title">تصميم Logo</span>
+
+          <span class="icon">
+            ✒️
+          </span>
+
+          <span class="title">
+            تصميم Logo
+          </span>
+
         </div>
+
 
         <div
           class="service-btn"
           onclick="selectService('identity', this)">
-          <span class="icon">🎨</span>
-          <span class="title">Logo + هوية بصرية</span>
+
+          <span class="icon">
+            🎨
+          </span>
+
+          <span class="title">
+            Logo + هوية بصرية
+          </span>
+
         </div>
 
       </div>
@@ -1195,7 +1540,9 @@
 
       <!-- DYNAMIC FIELDS -->
 
-      <div id="dynamicFields" class="hidden">
+      <div
+        id="dynamicFields"
+        class="hidden">
 
         <hr>
 
@@ -1258,8 +1605,15 @@
             </label>
 
             <select id="language">
-              <option value="العربية">العربية</option>
-              <option value="الإنكليزية">الإنكليزية</option>
+
+              <option value="العربية">
+                العربية
+              </option>
+
+              <option value="الإنكليزية">
+                الإنكليزية
+              </option>
+
             </select>
 
           </div>
@@ -1274,8 +1628,15 @@
             </label>
 
             <select id="autocadType">
-              <option value="Plan">Plan</option>
-              <option value="3D Model">3D Model</option>
+
+              <option value="Plan">
+                Plan
+              </option>
+
+              <option value="3D Model">
+                3D Model
+              </option>
+
             </select>
 
           </div>
@@ -1285,7 +1646,9 @@
 
         <!-- CV -->
 
-        <div id="cvFields" class="hidden">
+        <div
+          id="cvFields"
+          class="hidden">
 
           <div class="form-group">
 
@@ -1326,7 +1689,9 @@
 
         <!-- DESIGN -->
 
-        <div id="designFields" class="hidden">
+        <div
+          id="designFields"
+          class="hidden">
 
           <div class="form-group">
 
@@ -1407,11 +1772,14 @@
             إرفاق ملف / صورة (اختياري)
           </label>
 
+
           <div
             class="file-upload-box"
             onclick="document.getElementById('fileInput').click()">
 
-            <span style="font-size:28px;">📁</span>
+            <span style="font-size:28px;">
+              📁
+            </span>
 
             <div>
               اضغط لاختيار ملف
@@ -1419,9 +1787,11 @@
 
             <div
               id="fileStatus"
-              class="file-status"></div>
+              class="file-status">
+            </div>
 
           </div>
+
 
           <input
             type="file"
@@ -1434,14 +1804,17 @@
 
         <div
           id="errorBox"
-          class="error-box hidden"></div>
+          class="error-box hidden">
+        </div>
 
 
         <button
           id="submitButton"
           class="btn-submit"
           onclick="submitOrder()">
+
           إرسال الطلب 🚀
+
         </button>
 
       </div>
@@ -1454,19 +1827,25 @@
     <div
       id="successContainer"
       class="hidden"
-      style="text-align:center; padding:20px;">
+      style="
+        text-align:center;
+        padding:20px;
+      ">
 
       <div style="font-size:40px;">
         ✅
       </div>
 
+
       <h3>
         تم إرسال طلبك بنجاح!
       </h3>
 
+
       <p>
         رقم الطلب المرجعي:
       </p>
+
 
       <div
         id="orderBadge"
@@ -1481,8 +1860,10 @@
 
 
       <div class="info-box">
+
         احتفظ برقم الطلب لمتابعة حالته.
         يمكنك تحديث الحالة من الزر أدناه.
+
       </div>
 
 
@@ -1498,8 +1879,11 @@
             font-size:13px;
             font-weight:900;
           ">
+
           جاري تحميل حالة الطلب...
+
         </div>
+
 
         <div
           id="customerPaymentText"
@@ -1524,29 +1908,46 @@
           📋 عرض السعر المقدم لك
         </h4>
 
+
         <div id="quotBoxDetails"></div>
 
+
+        <!-- IMPORTANT:
+             Customer decision is now made in the Telegram bot.
+        -->
+
         <div
+          class="info-box"
           style="
-            display:grid;
-            grid-template-columns:1fr 1fr;
-            gap:8px;
-            margin-top:12px;
+            margin-bottom:0;
+            background:#fff;
+            border-color:#b9def1;
           ">
 
-          <button
-            id="acceptQuotationButton"
-            class="btn-action btn-success"
-            onclick="respondQuotation('accept')">
-            ✅ قبول العرض
-          </button>
+          <div style="
+            font-weight:900;
+            color:var(--sky-dark);
+            margin-bottom:5px;
+          ">
+            ✉️ طريقة الرد على عرض السعر
+          </div>
 
-          <button
-            id="rejectQuotationButton"
-            class="btn-action btn-danger"
-            onclick="respondQuotation('reject')">
-            ❌ رفض العرض
-          </button>
+          <div>
+            للقبول اكتب في محادثة البوت:
+            <b>موافق</b>
+          </div>
+
+          <div>
+            وللرفض اكتب:
+            <b>ارفض</b>
+          </div>
+
+          <div style="
+            margin-top:5px;
+            color:var(--muted);
+          ">
+            لا تحتاج إلى فتح التطبيق لاتخاذ القرار.
+          </div>
 
         </div>
 
@@ -1558,7 +1959,9 @@
         class="btn-submit"
         style="margin-top:15px;"
         onclick="refreshCustomerOrder()">
+
         🔄 تحديث حالة الطلب
+
       </button>
 
 
@@ -1569,7 +1972,9 @@
           background:#17324d;
         "
         onclick="closeApp()">
+
         إغلاق النافذة
+
       </button>
 
     </div>
@@ -1585,16 +1990,32 @@
 <script>
   "use strict";
 
+
   /*
    * ============================================================
    * NABA - Telegram Mini App Frontend
-   * Compatible with corrected FastAPI backend
+   * ============================================================
+   *
+   * Main backend:
+   * https://naba-88f2c996.fastapicloud.dev
+   *
+   * Telegram channel:
+   * https://t.me/ALNABASURVICE
+   *
+   * Customer quotation decision:
+   * Done from private Telegram bot chat.
+   *
+   * Final delivery:
+   * Admin uploads files here, then backend sends them to customer.
    * ============================================================
    */
 
+
   const tg = window.Telegram?.WebApp;
 
+
   if (!tg) {
+
     document.body.innerHTML = `
       <div style="
         padding:30px;
@@ -1602,12 +2023,23 @@
         font-family:system-ui;
         direction:rtl;
       ">
-        <h3>⚠️</h3>
-        <p>يجب فتح التطبيق من داخل Telegram.</p>
+
+        <h3>
+          ⚠️
+        </h3>
+
+        <p>
+          يجب فتح التطبيق من داخل Telegram.
+        </p>
+
       </div>
     `;
-    throw new Error("Telegram WebApp is not available.");
+
+    throw new Error(
+      "Telegram WebApp is not available."
+    );
   }
+
 
   tg.ready();
   tg.expand();
@@ -1617,11 +2049,17 @@
      CONFIG
      ============================================================ */
 
-  const API_BASE = "https://naba-88f2c996.fastapicloud.dev";
+  const API_BASE =
+    "https://naba-88f2c996.fastapicloud.dev";
 
-  const CHANNEL_URL = "https://t.me/ALNABASURVICE";
 
-  const MAX_FILE_SIZE_MB = 5;
+  const CHANNEL_URL =
+    "https://t.me/ALNABASURVICE";
+
+
+  const MAX_FILE_SIZE_MB =
+    5;
+
 
   const VALID_SERVICES = [
     "research",
@@ -1634,35 +2072,85 @@
     "identity"
   ];
 
+
   const SERVICE_NAMES = {
-    research: "مشاريع • تقارير • بحوث",
-    autocad: "رسم وتصميم AutoCAD",
-    minitab: "تحليل البيانات Minitab",
-    formatting: "تنسيق PowerPoint / Word / PDF",
-    cv: "سيرة ذاتية CV احترافية",
-    cv_ats: "سيرة ذاتية CV بنظام ATS",
-    logo: "تصميم Logo",
-    identity: "Logo + هوية بصرية"
+
+    research:
+      "مشاريع • تقارير • بحوث",
+
+    autocad:
+      "رسم وتصميم AutoCAD",
+
+    minitab:
+      "تحليل البيانات Minitab",
+
+    formatting:
+      "تنسيق PowerPoint / Word / PDF",
+
+    cv:
+      "سيرة ذاتية CV احترافية",
+
+    cv_ats:
+      "سيرة ذاتية CV بنظام ATS",
+
+    logo:
+      "تصميم Logo",
+
+    identity:
+      "Logo + هوية بصرية"
+
   };
+
 
   const STATUS_NAMES = {
-    NEW: "جديد",
-    UNDER_REVIEW: "تحت المراجعة",
-    WAITING_CUSTOMER: "بانتظار الزبون",
-    ACCEPTED: "مقبول",
-    READY_TO_START: "جاهز للبدء",
-    IN_PROGRESS: "قيد التنفيذ",
-    READY_FOR_DELIVERY: "جاهز للتسليم",
-    COMPLETED: "مكتمل",
-    REJECTED: "مرفوض",
-    CANCELLED: "ملغى"
+
+    NEW:
+      "جديد",
+
+    UNDER_REVIEW:
+      "تحت المراجعة",
+
+    WAITING_CUSTOMER:
+      "بانتظار الزبون",
+
+    ACCEPTED:
+      "مقبول",
+
+    READY_TO_START:
+      "جاهز للبدء",
+
+    IN_PROGRESS:
+      "قيد التنفيذ",
+
+    READY_FOR_DELIVERY:
+      "جاهز للتسليم",
+
+    COMPLETED:
+      "مكتمل",
+
+    REJECTED:
+      "مرفوض",
+
+    CANCELLED:
+      "ملغى"
+
   };
 
+
   const PAYMENT_STATUS_NAMES = {
-    UNPAID: "غير مدفوع",
-    PARTIALLY_PAID: "مدفوع جزئياً",
-    PAID: "مدفوع بالكامل",
-    REFUNDED: "مسترجع"
+
+    UNPAID:
+      "غير مدفوع",
+
+    PARTIALLY_PAID:
+      "مدفوع جزئياً",
+
+    PAID:
+      "مدفوع بالكامل",
+
+    REFUNDED:
+      "مسترجع"
+
   };
 
 
@@ -1671,11 +2159,19 @@
      ============================================================ */
 
   let selectedServiceType = "";
+
   let selectedFile = null;
+
+  let selectedDeliveryFiles = [];
+
   let activeOrderId = null;
+
   let searchTimeout = null;
+
   let customerOrderTimer = null;
+
   let adminAccessChecked = false;
+
   let adminIsAuthorized = false;
 
 
@@ -1684,161 +2180,352 @@
      ============================================================ */
 
   function getInitData() {
-    return String(tg.initData || "").trim();
+
+    return String(
+      tg.initData || ""
+    ).trim();
+
   }
 
 
   function getTelegramUserIdUnsafe() {
-    return String(tg.initDataUnsafe?.user?.id || "");
+
+    return String(
+      tg.initDataUnsafe?.user?.id || ""
+    );
+
   }
 
 
-  function showToast(message, duration = 3000) {
-    const toast = document.getElementById("toast");
+  function showToast(
+    message,
+    duration = 3000
+  ) {
+
+    const toast =
+      document.getElementById("toast");
+
 
     if (!toast) {
       return;
     }
 
-    toast.textContent = String(message || "");
-    toast.classList.add("visible");
 
-    clearTimeout(showToast.timer);
+    toast.textContent =
+      String(message || "");
 
-    showToast.timer = setTimeout(() => {
-      toast.classList.remove("visible");
-    }, duration);
+
+    toast.classList.add(
+      "visible"
+    );
+
+
+    clearTimeout(
+      showToast.timer
+    );
+
+
+    showToast.timer =
+      setTimeout(
+        () => {
+
+          toast.classList.remove(
+            "visible"
+          );
+
+        },
+        duration
+      );
+
   }
 
 
   function showError(message) {
-    const box = document.getElementById("errorBox");
+
+    const box =
+      document.getElementById(
+        "errorBox"
+      );
+
 
     if (!box) {
       return;
     }
 
-    box.textContent = String(message || "حدث خطأ غير معروف");
-    box.classList.remove("hidden");
+
+    box.textContent =
+      String(
+        message ||
+        "حدث خطأ غير معروف"
+      );
+
+
+    box.classList.remove(
+      "hidden"
+    );
+
   }
 
 
   function hideError() {
-    const box = document.getElementById("errorBox");
+
+    const box =
+      document.getElementById(
+        "errorBox"
+      );
+
 
     if (box) {
-      box.classList.add("hidden");
-      box.textContent = "";
+
+      box.classList.add(
+        "hidden"
+      );
+
+      box.textContent =
+        "";
+
     }
+
   }
 
 
   function escapeHtml(value) {
-    if (value === null || value === undefined) {
+
+    if (
+      value === null ||
+      value === undefined
+    ) {
       return "";
     }
 
+
     return String(value)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
+
+      .replace(
+        /&/g,
+        "&amp;"
+      )
+
+      .replace(
+        /</g,
+        "&lt;"
+      )
+
+      .replace(
+        />/g,
+        "&gt;"
+      )
+
+      .replace(
+        /"/g,
+        "&quot;"
+      )
+
+      .replace(
+        /'/g,
+        "&#039;"
+      );
+
   }
 
 
-  function formatMoney(value, currency = "") {
-    if (value === null || value === undefined || value === "") {
-      return "0 " + currency;
+  function formatMoney(
+    value,
+    currency = ""
+  ) {
+
+    if (
+      value === null ||
+      value === undefined ||
+      value === ""
+    ) {
+
+      return (
+        "0" +
+        (
+          currency
+            ? " " + escapeHtml(currency)
+            : ""
+        )
+      );
+
     }
 
-    const number = Number(value);
+
+    const number =
+      Number(value);
+
 
     if (!Number.isFinite(number)) {
-      return escapeHtml(value) + (currency ? " " + escapeHtml(currency) : "");
+
+      return (
+        escapeHtml(value) +
+        (
+          currency
+            ? " " + escapeHtml(currency)
+            : ""
+        )
+      );
+
     }
 
-    return number.toLocaleString("ar-IQ", {
-      maximumFractionDigits: 2
-    }) + (currency ? " " + currency : "");
+
+    return (
+      number.toLocaleString(
+        "ar-IQ",
+        {
+          maximumFractionDigits: 2
+        }
+      ) +
+      (
+        currency
+          ? " " + escapeHtml(currency)
+          : ""
+      )
+    );
+
   }
 
 
   function formatDate(value) {
+
     if (!value) {
       return "—";
     }
 
-    try {
-      const date = new Date(value);
 
-      if (Number.isNaN(date.getTime())) {
+    try {
+
+      const date =
+        new Date(value);
+
+
+      if (
+        Number.isNaN(
+          date.getTime()
+        )
+      ) {
+
         return String(value);
+
       }
 
-      return date.toLocaleString("ar-IQ", {
-        dateStyle: "medium",
-        timeStyle: "short"
-      });
+
+      return date.toLocaleString(
+        "ar-IQ",
+        {
+          dateStyle: "medium",
+          timeStyle: "short"
+        }
+      );
 
     } catch {
+
       return String(value);
+
     }
+
   }
 
 
   function serviceName(value) {
-    return SERVICE_NAMES[value] || value || "—";
+
+    return (
+      SERVICE_NAMES[value] ||
+      value ||
+      "—"
+    );
+
   }
 
 
   function statusName(value) {
-    return STATUS_NAMES[value] || value || "—";
+
+    return (
+      STATUS_NAMES[value] ||
+      value ||
+      "—"
+    );
+
   }
 
 
   function paymentStatusName(value) {
-    return PAYMENT_STATUS_NAMES[value] || value || "—";
+
+    return (
+      PAYMENT_STATUS_NAMES[value] ||
+      value ||
+      "—"
+    );
+
   }
 
 
   function statusClass(status) {
+
     if (
+
       status === "COMPLETED" ||
+
       status === "ACCEPTED" ||
+
       status === "READY_FOR_DELIVERY"
+
     ) {
+
       return "success";
+
     }
 
+
     if (
+
       status === "REJECTED" ||
+
       status === "CANCELLED"
+
     ) {
+
       return "danger";
+
     }
 
+
     if (
+
       status === "WAITING_CUSTOMER" ||
+
       status === "UNDER_REVIEW"
+
     ) {
+
       return "warning";
+
     }
+
 
     return "info";
+
   }
 
 
   function ensureTelegramAuth() {
-    const initData = getInitData();
+
+    const initData =
+      getInitData();
+
 
     if (!initData) {
+
       throw new Error(
         "تعذر التحقق من Telegram. افتح التطبيق من داخل Telegram وليس من المتصفح مباشرة."
       );
+
     }
 
+
     return initData;
+
   }
 
 
@@ -1846,102 +2533,237 @@
      API
      ============================================================ */
 
-  async function apiRequest(url, options = {}) {
+  async function apiRequest(
+    url,
+    options = {}
+  ) {
 
-    const initData = ensureTelegramAuth();
+    const initData =
+      ensureTelegramAuth();
+
 
     const requestOptions = {
+
       ...options,
+
       headers: {
+
         ...(options.headers || {}),
-        "X-Telegram-Init-Data": initData
+
+        "X-Telegram-Init-Data":
+          initData
+
       }
+
     };
+
 
     let response;
 
+
     try {
-      response = await fetch(API_BASE + url, requestOptions);
+
+      response =
+        await fetch(
+          API_BASE + url,
+          requestOptions
+        );
+
     } catch (error) {
+
       throw new Error(
         "تعذر الاتصال بالخادم. تحقق من الإنترنت وحاول مرة أخرى."
       );
+
     }
 
-    const contentType = response.headers.get("content-type") || "";
+
+    const contentType =
+      response.headers.get(
+        "content-type"
+      ) || "";
+
 
     let data = {};
 
-    if (contentType.includes("application/json")) {
-      data = await response.json().catch(() => ({}));
+
+    if (
+      contentType.includes(
+        "application/json"
+      )
+    ) {
+
+      data =
+        await response
+          .json()
+          .catch(
+            () => ({})
+          );
+
     } else {
-      const text = await response.text().catch(() => "");
-      data = text ? { detail: text } : {};
+
+      const text =
+        await response
+          .text()
+          .catch(
+            () => ""
+          );
+
+
+      data =
+        text
+          ? { detail: text }
+          : {};
+
     }
+
 
     if (!response.ok) {
 
-      let message = "حدث خطأ بالخادم.";
+      let message =
+        "حدث خطأ بالخادم.";
 
-      if (typeof data.detail === "string") {
-        message = data.detail;
-      } else if (Array.isArray(data.detail)) {
-        message = data.detail
-          .map(item => item.msg || JSON.stringify(item))
-          .join(" | ");
-      } else if (data.message) {
-        message = data.message;
+
+      if (
+        typeof data.detail ===
+        "string"
+      ) {
+
+        message =
+          data.detail;
+
+      } else if (
+        Array.isArray(
+          data.detail
+        )
+      ) {
+
+        message =
+          data.detail
+            .map(
+              item =>
+                item.msg ||
+                JSON.stringify(item)
+            )
+            .join(" | ");
+
+      } else if (
+        data.message
+      ) {
+
+        message =
+          data.message;
+
       }
 
-      throw new Error(message);
+
+      throw new Error(
+        message
+      );
+
     }
 
+
     return data;
+
   }
 
 
   async function apiDownload(url) {
 
-    const initData = ensureTelegramAuth();
+    const initData =
+      ensureTelegramAuth();
+
 
     let response;
 
+
     try {
-      response = await fetch(API_BASE + url, {
-        method: "GET",
-        headers: {
-          "X-Telegram-Init-Data": initData
-        }
-      });
+
+      response =
+        await fetch(
+          API_BASE + url,
+          {
+            method: "GET",
+
+            headers: {
+              "X-Telegram-Init-Data":
+                initData
+            }
+          }
+        );
+
     } catch {
-      throw new Error("تعذر الاتصال بالخادم.");
+
+      throw new Error(
+        "تعذر الاتصال بالخادم."
+      );
+
     }
+
 
     if (!response.ok) {
 
       const contentType =
-        response.headers.get("content-type") || "";
+        response.headers.get(
+          "content-type"
+        ) || "";
 
-      let message = "فشل تحميل الملف.";
 
-      if (contentType.includes("application/json")) {
-        const data = await response.json().catch(() => ({}));
+      let message =
+        "فشل تحميل الملف.";
 
-        if (typeof data.detail === "string") {
-          message = data.detail;
+
+      if (
+        contentType.includes(
+          "application/json"
+        )
+      ) {
+
+        const data =
+          await response
+            .json()
+            .catch(
+              () => ({})
+            );
+
+
+        if (
+          typeof data.detail ===
+          "string"
+        ) {
+
+          message =
+            data.detail;
+
         }
+
       } else {
-        const text = await response.text().catch(() => "");
+
+        const text =
+          await response
+            .text()
+            .catch(
+              () => ""
+            );
+
 
         if (text) {
           message = text;
         }
+
       }
 
-      throw new Error(message);
+
+      throw new Error(
+        message
+      );
+
     }
 
+
     return response;
+
   }
 
 
@@ -1955,41 +2777,77 @@
       return adminIsAuthorized;
     }
 
-    adminAccessChecked = true;
 
-    const button = document.getElementById("adminButton");
+    adminAccessChecked =
+      true;
+
+
+    const button =
+      document.getElementById(
+        "adminButton"
+      );
+
 
     try {
 
-      const data = await apiRequest("/api/admin/access");
+      const data =
+        await apiRequest(
+          "/api/admin/access"
+        );
 
-      adminIsAuthorized = Boolean(
-        data?.ok === true ||
-        data?.authorized === true ||
-        data?.is_admin === true
-      );
 
-      if (adminIsAuthorized && button) {
-        button.classList.add("visible");
+      adminIsAuthorized =
+        Boolean(
+
+          data?.ok === true ||
+
+          data?.authorized === true ||
+
+          data?.is_admin === true
+
+        );
+
+
+      if (
+        adminIsAuthorized &&
+        button
+      ) {
+
+        button.classList.add(
+          "visible"
+        );
+
       }
+
 
       return adminIsAuthorized;
 
     } catch (error) {
 
-      adminIsAuthorized = false;
+      adminIsAuthorized =
+        false;
+
 
       if (button) {
-        button.classList.remove("visible");
+
+        button.classList.remove(
+          "visible"
+        );
+
       }
 
+
       return false;
+
     }
+
   }
 
 
   function isAdmin() {
+
     return adminIsAuthorized;
+
   }
 
 
@@ -2001,25 +2859,49 @@
 
     if (!isAdmin()) {
 
-      const authorized = await initializeAdmin();
+      const authorized =
+        await initializeAdmin();
+
 
       if (!authorized) {
-        showToast("ليس لديك صلاحية الوصول إلى لوحة الأدمن.");
+
+        showToast(
+          "ليس لديك صلاحية الوصول إلى لوحة الأدمن."
+        );
+
         return;
+
       }
+
     }
 
-    const panel = document.getElementById("adminPanel");
+
+    const panel =
+      document.getElementById(
+        "adminPanel"
+      );
+
 
     if (!panel) {
       return;
     }
 
-    panel.classList.toggle("visible");
 
-    if (panel.classList.contains("visible")) {
+    panel.classList.toggle(
+      "visible"
+    );
+
+
+    if (
+      panel.classList.contains(
+        "visible"
+      )
+    ) {
+
       await loadAdminDashboard();
+
     }
+
   }
 
 
@@ -2027,54 +2909,105 @@
      SERVICE SELECTION
      ============================================================ */
 
-  function selectService(type, element) {
+  function selectService(
+    type,
+    element
+  ) {
 
-    if (!VALID_SERVICES.includes(type)) {
+    if (
+      !VALID_SERVICES.includes(type)
+    ) {
+
       return;
+
     }
 
-    selectedServiceType = type;
+
+    selectedServiceType =
+      type;
+
 
     document
-      .querySelectorAll(".service-btn")
-      .forEach(button => {
-        button.classList.remove("selected");
-      });
+      .querySelectorAll(
+        ".service-btn"
+      )
+      .forEach(
+        button => {
 
-    element.classList.add("selected");
+          button.classList.remove(
+            "selected"
+          );
+
+        }
+      );
+
+
+    element.classList.add(
+      "selected"
+    );
+
 
     document
-      .getElementById("dynamicFields")
-      .classList.remove("hidden");
+      .getElementById(
+        "dynamicFields"
+      )
+      .classList.remove(
+        "hidden"
+      );
+
 
     document
-      .getElementById("standardFields")
-      .classList.remove("hidden");
+      .getElementById(
+        "standardFields"
+      )
+      .classList.remove(
+        "hidden"
+      );
+
 
     document
-      .getElementById("cvFields")
-      .classList.add("hidden");
+      .getElementById(
+        "cvFields"
+      )
+      .classList.add(
+        "hidden"
+      );
+
 
     document
-      .getElementById("designFields")
-      .classList.add("hidden");
+      .getElementById(
+        "designFields"
+      )
+      .classList.add(
+        "hidden"
+      );
 
-
-    /*
-     * Reset optional groups.
-     */
 
     document
-      .getElementById("pageCountGroup")
-      .classList.add("hidden");
+      .getElementById(
+        "pageCountGroup"
+      )
+      .classList.add(
+        "hidden"
+      );
+
 
     document
-      .getElementById("languageGroup")
-      .classList.add("hidden");
+      .getElementById(
+        "languageGroup"
+      )
+      .classList.add(
+        "hidden"
+      );
+
 
     document
-      .getElementById("autocadGroup")
-      .classList.add("hidden");
+      .getElementById(
+        "autocadGroup"
+      )
+      .classList.add(
+        "hidden"
+      );
 
 
     /*
@@ -2082,18 +3015,32 @@
      */
 
     if (
+
       type === "research" ||
+
       type === "formatting" ||
+
       type === "minitab"
+
     ) {
 
       document
-        .getElementById("pageCountGroup")
-        .classList.remove("hidden");
+        .getElementById(
+          "pageCountGroup"
+        )
+        .classList.remove(
+          "hidden"
+        );
+
 
       document
-        .getElementById("languageGroup")
-        .classList.remove("hidden");
+        .getElementById(
+          "languageGroup"
+        )
+        .classList.remove(
+          "hidden"
+        );
+
     }
 
 
@@ -2101,15 +3048,27 @@
      * AutoCAD
      */
 
-    if (type === "autocad") {
+    if (
+      type === "autocad"
+    ) {
 
       document
-        .getElementById("pageCountGroup")
-        .classList.remove("hidden");
+        .getElementById(
+          "pageCountGroup"
+        )
+        .classList.remove(
+          "hidden"
+        );
+
 
       document
-        .getElementById("autocadGroup")
-        .classList.remove("hidden");
+        .getElementById(
+          "autocadGroup"
+        )
+        .classList.remove(
+          "hidden"
+        );
+
     }
 
 
@@ -2118,26 +3077,46 @@
      */
 
     if (
+
       type === "cv" ||
+
       type === "cv_ats"
+
     ) {
 
       document
-        .getElementById("standardFields")
-        .classList.add("hidden");
+        .getElementById(
+          "standardFields"
+        )
+        .classList.add(
+          "hidden"
+        );
+
 
       document
-        .getElementById("cvFields")
-        .classList.remove("hidden");
+        .getElementById(
+          "cvFields"
+        )
+        .classList.remove(
+          "hidden"
+        );
 
-      const cvType = document.getElementById("cvType");
+
+      const cvType =
+        document.getElementById(
+          "cvType"
+        );
+
 
       if (cvType) {
+
         cvType.value =
           type === "cv_ats"
             ? "CV ATS"
             : "CV احترافي";
+
       }
+
     }
 
 
@@ -2146,63 +3125,107 @@
      */
 
     if (
+
       type === "logo" ||
+
       type === "identity"
+
     ) {
 
       document
-        .getElementById("standardFields")
-        .classList.add("hidden");
+        .getElementById(
+          "standardFields"
+        )
+        .classList.add(
+          "hidden"
+        );
+
 
       document
-        .getElementById("designFields")
-        .classList.remove("hidden");
+        .getElementById(
+          "designFields"
+        )
+        .classList.remove(
+          "hidden"
+        );
+
     }
 
   }
 
 
   /* ============================================================
-     FILE
+     CUSTOMER FILE
      ============================================================ */
 
   function handleFileSelect(input) {
 
-    selectedFile = input.files?.[0] || null;
+    selectedFile =
+      input.files?.[0] ||
+      null;
+
 
     const status =
-      document.getElementById("fileStatus");
+      document.getElementById(
+        "fileStatus"
+      );
+
 
     if (!status) {
       return;
     }
 
+
     if (!selectedFile) {
-      status.textContent = "";
+
+      status.textContent =
+        "";
+
       return;
+
     }
 
+
     const maxBytes =
-      MAX_FILE_SIZE_MB * 1024 * 1024;
+      MAX_FILE_SIZE_MB *
+      1024 *
+      1024;
 
-    if (selectedFile.size > maxBytes) {
 
-      selectedFile = null;
-      input.value = "";
+    if (
+      selectedFile.size >
+      maxBytes
+    ) {
 
-      status.textContent = "";
+      selectedFile =
+        null;
+
+
+      input.value =
+        "";
+
+
+      status.textContent =
+        "";
+
 
       showError(
         `حجم الملف يتجاوز الحد المسموح ${MAX_FILE_SIZE_MB} MB.`
       );
 
+
       return;
+
     }
+
 
     hideError();
 
+
     status.textContent =
-      "✓ " + selectedFile.name;
+      "✓ " +
+      selectedFile.name;
+
   }
 
 
@@ -2213,11 +3236,24 @@
   function validateOrder() {
 
     if (!selectedServiceType) {
-      throw new Error("يرجى اختيار الخدمة أولاً.");
+
+      throw new Error(
+        "يرجى اختيار الخدمة أولاً."
+      );
+
     }
 
-    if (!VALID_SERVICES.includes(selectedServiceType)) {
-      throw new Error("نوع الخدمة غير صالح.");
+
+    if (
+      !VALID_SERVICES.includes(
+        selectedServiceType
+      )
+    ) {
+
+      throw new Error(
+        "نوع الخدمة غير صالح."
+      );
+
     }
 
 
@@ -2226,23 +3262,53 @@
      */
 
     if (
-      !["cv", "cv_ats", "logo", "identity"]
-        .includes(selectedServiceType)
+
+      ![
+        "cv",
+        "cv_ats",
+        "logo",
+        "identity"
+      ].includes(
+        selectedServiceType
+      )
+
     ) {
 
       const department =
-        document.getElementById("department")?.value.trim();
+        document
+          .getElementById(
+            "department"
+          )
+          ?.value
+          .trim();
+
 
       const title =
-        document.getElementById("title")?.value.trim();
+        document
+          .getElementById(
+            "title"
+          )
+          ?.value
+          .trim();
+
 
       if (!department) {
-        throw new Error("يرجى إدخال التخصص أو الكلية.");
+
+        throw new Error(
+          "يرجى إدخال التخصص أو الكلية."
+        );
+
       }
 
+
       if (!title) {
-        throw new Error("يرجى إدخال عنوان العمل أو اسم المادة.");
+
+        throw new Error(
+          "يرجى إدخال عنوان العمل أو اسم المادة."
+        );
+
       }
+
     }
 
 
@@ -2251,16 +3317,30 @@
      */
 
     if (
+
       selectedServiceType === "cv" ||
+
       selectedServiceType === "cv_ats"
+
     ) {
 
       const cvTarget =
-        document.getElementById("cvTarget")?.value.trim();
+        document
+          .getElementById(
+            "cvTarget"
+          )
+          ?.value
+          .trim();
+
 
       if (!cvTarget) {
-        throw new Error("يرجى إدخال الوظيفة المستهدفة.");
+
+        throw new Error(
+          "يرجى إدخال الوظيفة المستهدفة."
+        );
+
       }
+
     }
 
 
@@ -2269,30 +3349,66 @@
      */
 
     if (
+
       selectedServiceType === "logo" ||
+
       selectedServiceType === "identity"
+
     ) {
 
       const project =
-        document.getElementById("designProject")?.value.trim();
+        document
+          .getElementById(
+            "designProject"
+          )
+          ?.value
+          .trim();
+
 
       const business =
-        document.getElementById("designBusiness")?.value.trim();
+        document
+          .getElementById(
+            "designBusiness"
+          )
+          ?.value
+          .trim();
+
 
       const idea =
-        document.getElementById("designIdea")?.value.trim();
+        document
+          .getElementById(
+            "designIdea"
+          )
+          ?.value
+          .trim();
+
 
       if (!project) {
-        throw new Error("يرجى إدخال اسم المشروع أو العلامة.");
+
+        throw new Error(
+          "يرجى إدخال اسم المشروع أو العلامة."
+        );
+
       }
+
 
       if (!business) {
-        throw new Error("يرجى إدخال مجال النشاط.");
+
+        throw new Error(
+          "يرجى إدخال مجال النشاط."
+        );
+
       }
 
+
       if (!idea) {
-        throw new Error("يرجى إدخال فكرة التصميم.");
+
+        throw new Error(
+          "يرجى إدخال فكرة التصميم."
+        );
+
       }
+
     }
 
 
@@ -2301,25 +3417,48 @@
      */
 
     const deadlineValue =
-      document.getElementById("deadline")?.value;
+      document
+        .getElementById(
+          "deadline"
+        )
+        ?.value;
+
 
     if (!deadlineValue) {
-      throw new Error("يرجى تحديد الموعد النهائي.");
+
+      throw new Error(
+        "يرجى تحديد الموعد النهائي."
+      );
+
     }
 
+
     const deadlineDate =
-      new Date(deadlineValue);
+      new Date(
+        deadlineValue
+      );
+
 
     if (
-      Number.isNaN(deadlineDate.getTime()) ||
-      deadlineDate.getTime() <= Date.now()
+
+      Number.isNaN(
+        deadlineDate.getTime()
+      ) ||
+
+      deadlineDate.getTime() <=
+      Date.now()
+
     ) {
+
       throw new Error(
         "الموعد النهائي يجب أن يكون في المستقبل."
       );
+
     }
 
+
     return true;
+
   }
 
 
@@ -2327,13 +3466,23 @@
      BUILD ORDER PAYLOAD
      ============================================================ */
 
-  function buildOrderPayload(attachmentToken) {
+  function buildOrderPayload(
+    attachmentToken
+  ) {
 
     const deadlineValue =
-      document.getElementById("deadline").value;
+      document
+        .getElementById(
+          "deadline"
+        )
+        .value;
+
 
     const deadlineDate =
-      new Date(deadlineValue);
+      new Date(
+        deadlineValue
+      );
+
 
     const serviceDetails = {};
 
@@ -2343,24 +3492,46 @@
      */
 
     if (
+
       selectedServiceType === "research" ||
+
       selectedServiceType === "minitab" ||
+
       selectedServiceType === "formatting"
+
     ) {
 
       const pageCount =
-        document.getElementById("pageCount")?.value;
+        document
+          .getElementById(
+            "pageCount"
+          )
+          ?.value;
+
 
       const language =
-        document.getElementById("language")?.value;
+        document
+          .getElementById(
+            "language"
+          )
+          ?.value;
+
 
       if (pageCount) {
-        serviceDetails.page_count = String(pageCount);
+
+        serviceDetails.page_count =
+          String(pageCount);
+
       }
 
+
       if (language) {
-        serviceDetails.language = String(language);
+
+        serviceDetails.language =
+          String(language);
+
       }
+
     }
 
 
@@ -2368,23 +3539,41 @@
      * AutoCAD
      */
 
-    if (selectedServiceType === "autocad") {
+    if (
+      selectedServiceType === "autocad"
+    ) {
 
       const autocadType =
-        document.getElementById("autocadType")?.value;
+        document
+          .getElementById(
+            "autocadType"
+          )
+          ?.value;
+
 
       const pageCount =
-        document.getElementById("pageCount")?.value;
+        document
+          .getElementById(
+            "pageCount"
+          )
+          ?.value;
+
 
       if (autocadType) {
+
         serviceDetails.autocad_type =
           String(autocadType);
+
       }
 
+
       if (pageCount) {
+
         serviceDetails.page_count =
           String(pageCount);
+
       }
+
     }
 
 
@@ -2393,21 +3582,41 @@
      */
 
     if (
+
       selectedServiceType === "cv" ||
+
       selectedServiceType === "cv_ats"
+
     ) {
 
       const cvType =
-        document.getElementById("cvType")?.value;
+        document
+          .getElementById(
+            "cvType"
+          )
+          ?.value;
+
 
       const cvTarget =
-        document.getElementById("cvTarget")?.value.trim();
+        document
+          .getElementById(
+            "cvTarget"
+          )
+          ?.value
+          .trim();
+
 
       serviceDetails.cv_type =
-        String(cvType || "");
+        String(
+          cvType || ""
+        );
+
 
       serviceDetails.target_position =
-        String(cvTarget || "");
+        String(
+          cvTarget || ""
+        );
+
     }
 
 
@@ -2416,102 +3625,224 @@
      */
 
     if (
+
       selectedServiceType === "logo" ||
+
       selectedServiceType === "identity"
+
     ) {
 
       serviceDetails.project_name =
-        document.getElementById("designProject")?.value.trim() || "";
+        String(
+          document
+            .getElementById(
+              "designProject"
+            )
+            ?.value
+            .trim() ||
+          ""
+        );
+
 
       serviceDetails.business_field =
-        document.getElementById("designBusiness")?.value.trim() || "";
+        String(
+          document
+            .getElementById(
+              "designBusiness"
+            )
+            ?.value
+            .trim() ||
+          ""
+        );
+
 
       serviceDetails.design_idea =
-        document.getElementById("designIdea")?.value.trim() || "";
+        String(
+          document
+            .getElementById(
+              "designIdea"
+            )
+            ?.value
+            .trim() ||
+          ""
+        );
+
     }
 
 
     const department =
-      document.getElementById("department")?.value.trim() || "General";
+      document
+        .getElementById(
+          "department"
+        )
+        ?.value
+        .trim() ||
+      "General";
+
 
     const title =
-      document.getElementById("title")?.value.trim()
-      || serviceName(selectedServiceType);
+      document
+        .getElementById(
+          "title"
+        )
+        ?.value
+        .trim() ||
+      serviceName(
+        selectedServiceType
+      );
 
 
     const notes =
-      document.getElementById("notes")?.value.trim() || "";
+      document
+        .getElementById(
+          "notes"
+        )
+        ?.value
+        .trim() ||
+      "";
 
 
     /*
-     * Backend OrderIn expects:
+     * IMPORTANT:
      *
-     * service_type
-     * department
-     * title
-     * page_count
-     * language
-     * autocad_type
-     * deadline
-     * notes
-     * attachment_token
-     * service_details
+     * The backend OrderIn expects these values as strings.
+     *
+     * Previously page_count was sent as number/null.
+     * That caused:
+     *
+     * Input should be a valid string
+     *
+     * Therefore all optional string fields are now
+     * always sent as strings.
      */
 
-    let pageCount = null;
-    let language = null;
-    let autocadType = null;
+    let pageCount = "";
+
+    let language = "";
+
+    let autocadType = "";
 
 
     if (
+
       selectedServiceType === "research" ||
+
       selectedServiceType === "minitab" ||
+
       selectedServiceType === "formatting" ||
+
       selectedServiceType === "autocad"
+
     ) {
 
       const pageCountValue =
-        document.getElementById("pageCount")?.value;
+        document
+          .getElementById(
+            "pageCount"
+          )
+          ?.value;
+
 
       if (pageCountValue) {
+
         pageCount =
-          parseInt(pageCountValue, 10);
+          String(pageCountValue);
+
       }
+
     }
 
 
     if (
+
       selectedServiceType === "research" ||
+
       selectedServiceType === "minitab" ||
+
       selectedServiceType === "formatting"
+
     ) {
 
       language =
-        document.getElementById("language")?.value || null;
+        String(
+          document
+            .getElementById(
+              "language"
+            )
+            ?.value ||
+          ""
+        );
+
     }
 
 
-    if (selectedServiceType === "autocad") {
+    if (
+      selectedServiceType === "autocad"
+    ) {
 
       autocadType =
-        document.getElementById("autocadType")?.value || null;
+        String(
+          document
+            .getElementById(
+              "autocadType"
+            )
+            ?.value ||
+          ""
+        );
+
     }
 
 
     return {
-      service_type: selectedServiceType,
-      department,
-      title,
-      page_count: Number.isFinite(pageCount)
-        ? pageCount
-        : null,
-      language,
-      autocad_type: autocadType,
-      deadline: deadlineDate.toISOString(),
-      notes,
-      attachment_token: attachmentToken || null,
-      service_details: serviceDetails
+
+      service_type:
+        String(
+          selectedServiceType
+        ),
+
+      department:
+        String(
+          department
+        ),
+
+      title:
+        String(
+          title
+        ),
+
+      page_count:
+        String(
+          pageCount
+        ),
+
+      language:
+        String(
+          language
+        ),
+
+      autocad_type:
+        String(
+          autocadType
+        ),
+
+      deadline:
+        deadlineDate.toISOString(),
+
+      notes:
+        String(
+          notes
+        ),
+
+      attachment_token:
+        String(
+          attachmentToken || ""
+        ),
+
+      service_details:
+        serviceDetails
+
     };
+
   }
 
 
@@ -2524,24 +3855,46 @@
     const storageKey =
       "naba_order_idempotency_key";
 
+
     let key = null;
 
+
     try {
-      key = sessionStorage.getItem(storageKey);
+
+      key =
+        sessionStorage.getItem(
+          storageKey
+        );
+
 
       if (!key) {
 
-        if (window.crypto?.randomUUID) {
-          key = "NABA-" + crypto.randomUUID();
+        if (
+          window.crypto?.randomUUID
+        ) {
+
+          key =
+            "NABA-" +
+            crypto.randomUUID();
+
         } else {
+
           key =
             "NABA-" +
             Date.now() +
             "-" +
-            Math.random().toString(36).slice(2);
+            Math.random()
+              .toString(36)
+              .slice(2);
+
         }
 
-        sessionStorage.setItem(storageKey, key);
+
+        sessionStorage.setItem(
+          storageKey,
+          key
+        );
+
       }
 
     } catch {
@@ -2550,22 +3903,32 @@
         "NABA-" +
         Date.now() +
         "-" +
-        Math.random().toString(36).slice(2);
+        Math.random()
+          .toString(36)
+          .slice(2);
+
     }
 
+
     return key;
+
   }
 
 
   function clearSubmissionIdempotencyKey() {
 
     try {
+
       sessionStorage.removeItem(
         "naba_order_idempotency_key"
       );
+
     } catch {
+
       // Ignore storage errors.
+
     }
+
   }
 
 
@@ -2576,31 +3939,44 @@
   async function submitOrder() {
 
     const button =
-      document.getElementById("submitButton");
+      document.getElementById(
+        "submitButton"
+      );
+
 
     hideError();
+
 
     try {
 
       validateOrder();
 
-      button.disabled = true;
-      button.textContent = "جاري إرسال الطلب...";
+
+      button.disabled =
+        true;
+
+
+      button.textContent =
+        "جاري إرسال الطلب...";
 
 
       /*
        * Upload first
        */
 
-      let attachmentToken = "";
+      let attachmentToken =
+        "";
+
 
       if (selectedFile) {
 
         button.textContent =
           "جاري رفع الملف...";
 
+
         const formData =
           new FormData();
+
 
         formData.append(
           "file",
@@ -2620,13 +3996,20 @@
 
 
         attachmentToken =
-          uploadResponse?.token || "";
+          String(
+            uploadResponse?.token ||
+            ""
+          );
+
 
         if (!attachmentToken) {
+
           throw new Error(
             "تم رفع الملف ولكن لم يتم استلام رمز المرفق."
           );
+
         }
+
       }
 
 
@@ -2649,20 +4032,31 @@
           "/api/orders",
           {
             method: "POST",
+
             headers: {
-              "Content-Type": "application/json",
+              "Content-Type":
+                "application/json",
+
               "Idempotency-Key":
                 getSubmissionIdempotencyKey()
+
             },
-            body: JSON.stringify(payload)
+
+            body:
+              JSON.stringify(
+                payload
+              )
+
           }
         );
 
 
       if (!response?.order_id) {
+
         throw new Error(
           "تم تنفيذ الطلب ولكن لم يتم استلام رقم الطلب."
         );
+
       }
 
 
@@ -2671,32 +4065,53 @@
        */
 
       activeOrderId =
-        response.order_id;
+        String(
+          response.order_id
+        );
+
 
       clearSubmissionIdempotencyKey();
 
-      document
-        .getElementById("formContainer")
-        .classList.add("hidden");
 
       document
-        .getElementById("orderBadge")
+        .getElementById(
+          "formContainer"
+        )
+        .classList.add(
+          "hidden"
+        );
+
+
+      document
+        .getElementById(
+          "orderBadge"
+        )
         .textContent =
-        response.order_id;
+        activeOrderId;
+
 
       document
-        .getElementById("successContainer")
-        .classList.remove("hidden");
+        .getElementById(
+          "successContainer"
+        )
+        .classList.remove(
+          "hidden"
+        );
 
 
       showToast(
+
         response.delivered === false
+
           ? "تم إنشاء الطلب، وسيتم إعادة محاولة الإرسال."
+
           : "تم إرسال الطلب بنجاح."
+
       );
 
 
       await refreshCustomerOrder();
+
 
       startCustomerOrderPolling();
 
@@ -2704,14 +4119,23 @@
     } catch (error) {
 
       showError(
+
         error?.message ||
+
         "حدث خطأ أثناء إرسال الطلب."
+
       );
 
-      button.disabled = false;
+
+      button.disabled =
+        false;
+
+
       button.textContent =
         "إرسال الطلب 🚀";
+
     }
+
   }
 
 
@@ -2725,15 +4149,18 @@
       return;
     }
 
+
     const statusText =
       document.getElementById(
         "customerStatusText"
       );
 
+
     const paymentText =
       document.getElementById(
         "customerPaymentText"
       );
+
 
     try {
 
@@ -2742,28 +4169,38 @@
           `/api/orders/${encodeURIComponent(activeOrderId)}`
         );
 
+
       const order =
-        data?.order || data;
+        data?.order ||
+        data;
 
 
       if (!order) {
+
         throw new Error(
           "لم يتم العثور على بيانات الطلب."
         );
+
       }
 
 
       statusText.textContent =
         "الحالة: " +
-        statusName(order.order_status);
+        statusName(
+          order.order_status
+        );
 
 
       paymentText.textContent =
         "حالة الدفع: " +
-        paymentStatusName(order.payment_status);
+        paymentStatusName(
+          order.payment_status
+        );
 
 
-      renderCustomerQuotation(order);
+      renderCustomerQuotation(
+        order
+      );
 
 
     } catch (error) {
@@ -2771,23 +4208,35 @@
       statusText.textContent =
         "تعذر تحديث حالة الطلب.";
 
+
       paymentText.textContent =
-        error?.message || "";
+        error?.message ||
+        "";
+
     }
+
   }
 
 
-  function renderCustomerQuotation(order) {
+  /* ============================================================
+     CUSTOMER QUOTATION
+     ============================================================ */
+
+  function renderCustomerQuotation(
+    order
+  ) {
 
     const box =
       document.getElementById(
         "customerQuotBox"
       );
 
+
     const details =
       document.getElementById(
         "quotBoxDetails"
       );
+
 
     if (!box || !details) {
       return;
@@ -2795,163 +4244,202 @@
 
 
     /*
-     * Quote is actionable only when the backend
-     * says WAITING_CUSTOMER.
+     * Backend may expose quotation values
+     * through quotation_price / quotation_currency.
      */
 
-    const canRespond =
-      order.order_status === "WAITING_CUSTOMER";
+    const quotationPrice =
+      order.quotation_price ??
+      order.price;
 
 
-    if (
-      !order.price ||
-      !canRespond
-    ) {
+    const quotationCurrency =
+      order.quotation_currency ||
+      order.currency ||
+      "IQD";
 
-      box.classList.add("hidden");
+
+    const hasQuotation =
+      quotationPrice !== null &&
+      quotationPrice !== undefined &&
+      quotationPrice !== "" &&
+      Number.isFinite(
+        Number(
+          quotationPrice
+        )
+      );
+
+
+    if (!hasQuotation) {
+
+      box.classList.add(
+        "hidden"
+      );
 
       return;
+
     }
 
 
-    const currency =
-      order.currency || "IQD";
+    /*
+     * The quotation is displayed when
+     * it exists and customer has not
+     * completed/rejected the order.
+     */
+
+    const hiddenStatuses = [
+
+      "COMPLETED",
+
+      "CANCELLED",
+
+      "REJECTED"
+
+    ];
+
+
+    if (
+      hiddenStatuses.includes(
+        order.order_status
+      )
+    ) {
+
+      box.classList.add(
+        "hidden"
+      );
+
+      return;
+
+    }
 
 
     details.innerHTML = `
 
       <div class="quotation-row">
-        <span>السعر</span>
+
+        <span>
+          السعر
+        </span>
+
         <strong>
-          ${formatMoney(order.price, currency)}
+          ${formatMoney(
+            quotationPrice,
+            quotationCurrency
+          )}
         </strong>
+
       </div>
 
-      <div class="quotation-row">
-        <span>تاريخ التسليم</span>
-        <strong>
-          ${escapeHtml(order.delivery_date || "—")}
-        </strong>
-      </div>
 
       <div class="quotation-row">
-        <span>وقت التسليم</span>
+
+        <span>
+          تاريخ التسليم
+        </span>
+
         <strong>
-          ${escapeHtml(order.delivery_time || "—")}
+          ${escapeHtml(
+            order.delivery_date ||
+            "—"
+          )}
         </strong>
+
       </div>
 
+
       <div class="quotation-row">
-        <span>ملاحظات</span>
+
+        <span>
+          وقت التسليم
+        </span>
+
         <strong>
-          ${escapeHtml(order.quotation_notes || "لا توجد")}
+          ${escapeHtml(
+            order.delivery_time ||
+            "—"
+          )}
         </strong>
+
+      </div>
+
+
+      <div class="quotation-row">
+
+        <span>
+          ملاحظات
+        </span>
+
+        <strong>
+          ${escapeHtml(
+            order.quotation_notes ||
+            order.notes ||
+            "لا توجد"
+          )}
+        </strong>
+
       </div>
 
     `;
 
 
-    box.classList.remove("hidden");
+    box.classList.remove(
+      "hidden"
+    );
+
   }
 
+
+  /* ============================================================
+     CUSTOMER ORDER POLLING
+     ============================================================ */
 
   function startCustomerOrderPolling() {
 
     stopCustomerOrderPolling();
 
+
     customerOrderTimer =
       setInterval(
+
         async () => {
 
           if (!activeOrderId) {
             return;
           }
 
+
           try {
+
             await refreshCustomerOrder();
+
           } catch {
+
             // Silent background refresh failure.
+
           }
 
         },
+
         15000
+
       );
+
   }
 
 
   function stopCustomerOrderPolling() {
 
     if (customerOrderTimer) {
-      clearInterval(customerOrderTimer);
-      customerOrderTimer = null;
-    }
-  }
 
+      clearInterval(
+        customerOrderTimer
+      );
 
-  /* ============================================================
-     CUSTOMER QUOTATION RESPONSE
-     ============================================================ */
+      customerOrderTimer =
+        null;
 
-  async function respondQuotation(action) {
-
-    if (!activeOrderId) {
-      return;
     }
 
-
-    const acceptButton =
-      document.getElementById(
-        "acceptQuotationButton"
-      );
-
-    const rejectButton =
-      document.getElementById(
-        "rejectQuotationButton"
-      );
-
-
-    acceptButton.disabled = true;
-    rejectButton.disabled = true;
-
-
-    try {
-
-      const endpoint =
-        action === "accept"
-          ? "accept_quotation"
-          : "reject_quotation";
-
-
-      await apiRequest(
-        `/api/orders/${encodeURIComponent(activeOrderId)}/${endpoint}`,
-        {
-          method: "POST"
-        }
-      );
-
-
-      showToast(
-        action === "accept"
-          ? "تم قبول عرض السعر."
-          : "تم رفض عرض السعر."
-      );
-
-
-      await refreshCustomerOrder();
-
-
-    } catch (error) {
-
-      showToast(
-        error?.message ||
-        "تعذر تنفيذ القرار."
-      );
-
-    } finally {
-
-      acceptButton.disabled = false;
-      rejectButton.disabled = false;
-    }
   }
 
 
@@ -2966,9 +4454,11 @@
       const authorized =
         await initializeAdmin();
 
+
       if (!authorized) {
         return;
       }
+
     }
 
 
@@ -2981,34 +4471,40 @@
 
 
       const summary =
-        data?.summary || {};
+        data?.summary ||
+        {};
 
 
       document.getElementById(
         "statTotal"
       ).textContent =
-        summary.total_orders ?? 0;
+        summary.total_orders ??
+        0;
 
 
       document.getElementById(
         "statNew"
       ).textContent =
-        summary.new_orders ?? 0;
+        summary.new_orders ??
+        0;
 
 
       document.getElementById(
         "statProcessing"
       ).textContent =
-        summary.processing_orders ?? 0;
+        summary.processing_orders ??
+        0;
 
 
       document.getElementById(
         "statCompleted"
       ).textContent =
-        summary.completed_orders ?? 0;
+        summary.completed_orders ??
+        0;
 
 
       await loadAdminOrders();
+
 
     } catch (error) {
 
@@ -3016,7 +4512,9 @@
         error?.message ||
         "تعذر تحميل لوحة الأدمن."
       );
+
     }
+
   }
 
 
@@ -3026,13 +4524,18 @@
 
   function debounceSearch() {
 
-    clearTimeout(searchTimeout);
+    clearTimeout(
+      searchTimeout
+    );
+
 
     searchTimeout =
       setTimeout(
-        () => loadAdminOrders(),
+        () =>
+          loadAdminOrders(),
         400
       );
+
   }
 
 
@@ -3045,20 +4548,26 @@
 
     const q =
       document
-        .getElementById("adminSearchInput")
+        .getElementById(
+          "adminSearchInput"
+        )
         .value
         .trim();
 
 
     const status =
       document
-        .getElementById("adminStatusFilter")
+        .getElementById(
+          "adminStatusFilter"
+        )
         .value;
 
 
     const service =
       document
-        .getElementById("adminServiceFilter")
+        .getElementById(
+          "adminServiceFilter"
+        )
         .value;
 
 
@@ -3077,20 +4586,45 @@
       const params =
         new URLSearchParams();
 
+
       if (q) {
-        params.set("q", q);
+        params.set(
+          "q",
+          q
+        );
       }
+
 
       if (status) {
-        params.set("status", status);
+
+        params.set(
+          "status",
+          status
+        );
+
       }
+
 
       if (service) {
-        params.set("service_type", service);
+
+        params.set(
+          "service_type",
+          service
+        );
+
       }
 
-      params.set("limit", "50");
-      params.set("offset", "0");
+
+      params.set(
+        "limit",
+        "50"
+      );
+
+
+      params.set(
+        "offset",
+        "0"
+      );
 
 
       const data =
@@ -3100,12 +4634,15 @@
 
 
       const orders =
-        Array.isArray(data?.orders)
+        Array.isArray(
+          data?.orders
+        )
           ? data.orders
           : [];
 
 
-      list.innerHTML = "";
+      list.innerHTML =
+        "";
 
 
       if (!orders.length) {
@@ -3113,101 +4650,144 @@
         list.innerHTML =
           '<div class="empty-state">لا توجد نتائج.</div>';
 
+
         return;
+
       }
 
 
-      orders.forEach(order => {
+      orders.forEach(
+        order => {
 
-        const row =
-          document.createElement("div");
-
-
-        row.className =
-          "order-row";
-
-
-        row.onclick =
-          () => openModal(order.order_id);
+          const row =
+            document.createElement(
+              "div"
+            );
 
 
-        const status =
-          order.order_status || "";
+          row.className =
+            "order-row";
 
 
-        const username =
-          order.username ||
-          order.user_id ||
-          "—";
+          row.onclick =
+            () =>
+              openModal(
+                order.order_id
+              );
 
 
-        row.innerHTML = `
+          const status =
+            order.order_status ||
+            "";
 
-          <div style="
-            display:flex;
-            justify-content:space-between;
-            align-items:center;
-            gap:8px;
-          ">
 
-            <b style="color:var(--sky-dark);">
-              ${escapeHtml(order.order_id)}
-            </b>
+          const username =
+            order.username ||
+            order.user_id ||
+            "—";
 
-            <span class="
-              order-badge
-              ${statusClass(status)}
+
+          row.innerHTML = `
+
+            <div style="
+              display:flex;
+              justify-content:space-between;
+              align-items:center;
+              gap:8px;
             ">
-              ${escapeHtml(statusName(status))}
-            </span>
 
-          </div>
-
-
-          <div style="
-            margin-top:5px;
-            font-weight:800;
-          ">
-            ${escapeHtml(order.title || "بدون عنوان")}
-          </div>
+              <b style="
+                color:var(--sky-dark);
+              ">
+                ${escapeHtml(
+                  order.order_id
+                )}
+              </b>
 
 
-          <div style="
-            color:var(--muted);
-            font-size:10px;
-            margin-top:3px;
-          ">
-            ${escapeHtml(serviceName(order.service_type))}
-          </div>
+              <span class="
+                order-badge
+                ${statusClass(status)}
+              ">
+
+                ${escapeHtml(
+                  statusName(status)
+                )}
+
+              </span>
+
+            </div>
 
 
-          <div style="
-            color:var(--muted);
-            font-size:10px;
-            margin-top:3px;
-          ">
-            الزبون:
-            ${escapeHtml(username)}
-          </div>
+            <div style="
+              margin-top:5px;
+              font-weight:800;
+            ">
 
-        `;
+              ${escapeHtml(
+                order.title ||
+                "بدون عنوان"
+              )}
+
+            </div>
 
 
-        list.appendChild(row);
-      });
+            <div style="
+              color:var(--muted);
+              font-size:10px;
+              margin-top:3px;
+            ">
+
+              ${escapeHtml(
+                serviceName(
+                  order.service_type
+                )
+              )}
+
+            </div>
+
+
+            <div style="
+              color:var(--muted);
+              font-size:10px;
+              margin-top:3px;
+            ">
+
+              الزبون:
+              ${escapeHtml(
+                username
+              )}
+
+            </div>
+
+          `;
+
+
+          list.appendChild(
+            row
+          );
+
+        }
+      );
 
 
     } catch (error) {
 
       list.innerHTML = `
+
         <div class="error-box">
+
           ${escapeHtml(
             error?.message ||
             "تعذر تحميل الطلبات."
           )}
+
         </div>
+
       `;
+
     }
+
   }
 
 
@@ -3215,7 +4795,9 @@
      ADMIN MODAL
      ============================================================ */
 
-  async function openModal(orderId) {
+  async function openModal(
+    orderId
+  ) {
 
     if (!isAdmin()) {
       return;
@@ -3223,7 +4805,9 @@
 
 
     activeOrderId =
-      String(orderId);
+      String(
+        orderId
+      );
 
 
     document.getElementById(
@@ -3234,7 +4818,9 @@
 
     document.getElementById(
       "orderModal"
-    ).classList.remove("hidden");
+    ).classList.remove(
+      "hidden"
+    );
 
 
     const content =
@@ -3247,6 +4833,13 @@
       '<div class="empty-state">⏳ جاري تحميل البيانات...</div>';
 
 
+    /*
+     * Reset delivery section before loading.
+     */
+
+    hideDeliverySection();
+
+
     try {
 
       const data =
@@ -3256,17 +4849,22 @@
 
 
       const order =
-        data?.order || {};
+        data?.order ||
+        {};
 
 
       const payments =
-        Array.isArray(data?.payments)
+        Array.isArray(
+          data?.payments
+        )
           ? data.payments
           : [];
 
 
       const auditLogs =
-        Array.isArray(data?.audit_logs)
+        Array.isArray(
+          data?.audit_logs
+        )
           ? data.audit_logs
           : [];
 
@@ -3279,7 +4877,7 @@
 
 
       /*
-       * Pre-fill fields
+       * Pre-fill quotation currency.
        */
 
       const quoteCurrency =
@@ -3287,27 +4885,113 @@
           "quotCurrency"
         );
 
+
       if (quoteCurrency) {
+
         quoteCurrency.value =
-          order.currency || "IQD";
+          order.quotation_currency ||
+          order.currency ||
+          "IQD";
+
       }
 
+
+      /*
+       * Pre-fill quotation values.
+       */
+
+      const quotePrice =
+        document.getElementById(
+          "quotPrice"
+        );
+
+
+      if (quotePrice) {
+
+        quotePrice.value =
+          order.quotation_price ??
+          order.price ??
+          "";
+
+      }
+
+
+      const quoteDate =
+        document.getElementById(
+          "quotDate"
+        );
+
+
+      if (quoteDate) {
+
+        quoteDate.value =
+          normalizeDateInput(
+            order.delivery_date
+          );
+
+      }
+
+
+      const quoteTime =
+        document.getElementById(
+          "quotTime"
+        );
+
+
+      if (quoteTime) {
+
+        quoteTime.value =
+          normalizeTimeInput(
+            order.delivery_time
+          );
+
+      }
+
+
+      const quoteNotes =
+        document.getElementById(
+          "quotNotes"
+        );
+
+
+      if (quoteNotes) {
+
+        quoteNotes.value =
+          order.quotation_notes ||
+          "";
+
+      }
+
+
+      /*
+       * Payment currency.
+       */
 
       const paymentCurrency =
         document.getElementById(
           "payCurrency"
         );
 
+
       if (paymentCurrency) {
+
         paymentCurrency.value =
-          order.currency || "IQD";
+          order.currency ||
+          order.quotation_currency ||
+          "IQD";
+
       }
 
+
+      /*
+       * Status.
+       */
 
       const statusSelect =
         document.getElementById(
           "updateStatusSelect"
         );
+
 
       if (statusSelect) {
 
@@ -3316,27 +5000,190 @@
             statusSelect.options
           ).some(
             option =>
-              option.value === order.order_status
+              option.value ===
+              order.order_status
           );
 
+
         if (existing) {
+
           statusSelect.value =
             order.order_status;
+
         }
+
+      }
+
+
+      /*
+       * Delivery section.
+       */
+
+      if (
+        order.order_status ===
+        "READY_FOR_DELIVERY"
+      ) {
+
+        showDeliverySection();
+
+      } else {
+
+        hideDeliverySection();
+
       }
 
 
     } catch (error) {
 
       content.innerHTML = `
+
         <div class="error-box">
+
           ${escapeHtml(
             error?.message ||
             "تعذر تحميل تفاصيل الطلب."
           )}
+
         </div>
+
       `;
+
     }
+
+  }
+
+
+  function normalizeDateInput(
+    value
+  ) {
+
+    if (!value) {
+      return "";
+    }
+
+
+    const stringValue =
+      String(value);
+
+
+    /*
+     * Already YYYY-MM-DD.
+     */
+
+    if (
+      /^\d{4}-\d{2}-\d{2}$/.test(
+        stringValue
+      )
+    ) {
+
+      return stringValue;
+
+    }
+
+
+    /*
+     * ISO date/time.
+     */
+
+    const date =
+      new Date(
+        stringValue
+      );
+
+
+    if (
+      Number.isNaN(
+        date.getTime()
+      )
+    ) {
+
+      return "";
+
+    }
+
+
+    const year =
+      date.getFullYear()
+        .toString()
+        .padStart(4, "0");
+
+
+    const month =
+      String(
+        date.getMonth() + 1
+      ).padStart(
+        2,
+        "0"
+      );
+
+
+    const day =
+      String(
+        date.getDate()
+      ).padStart(
+        2,
+        "0"
+      );
+
+
+    return (
+      year +
+      "-" +
+      month +
+      "-" +
+      day
+    );
+
+  }
+
+
+  function normalizeTimeInput(
+    value
+  ) {
+
+    if (!value) {
+      return "";
+    }
+
+
+    const stringValue =
+      String(value);
+
+
+    if (
+      /^\d{2}:\d{2}$/.test(
+        stringValue
+      )
+    ) {
+
+      return stringValue;
+
+    }
+
+
+    /*
+     * Handle HH:MM:SS.
+     */
+
+    const timeMatch =
+      stringValue.match(
+        /^(\d{2}):(\d{2})/
+      );
+
+
+    if (timeMatch) {
+
+      return (
+        timeMatch[1] +
+        ":" +
+        timeMatch[2]
+      );
+
+    }
+
+
+    return "";
+
   }
 
 
@@ -3365,36 +5212,54 @@
     if (payments.length) {
 
       paymentsHtml =
-        payments.map(
-          payment => `
-            <div class="activity-item">
+        payments
+          .map(
+            payment => `
 
-              <b>
-                ${formatMoney(
-                  payment.amount,
-                  payment.currency || order.currency || "IQD"
-                )}
-              </b>
+              <div class="activity-item">
 
-              <span>
-                — ${escapeHtml(
-                  payment.payment_method || "يدوي"
-                )}
-              </span>
+                <b>
 
-              <div style="
-                color:var(--muted);
-                font-size:10px;
-                margin-top:3px;
-              ">
-                ${escapeHtml(
-                  formatDate(payment.created_at)
-                )}
+                  ${formatMoney(
+                    payment.amount,
+                    payment.currency ||
+                    order.currency ||
+                    "IQD"
+                  )}
+
+                </b>
+
+
+                <span>
+
+                  — ${escapeHtml(
+                    payment.payment_method ||
+                    "يدوي"
+                  )}
+
+                </span>
+
+
+                <div style="
+                  color:var(--muted);
+                  font-size:10px;
+                  margin-top:3px;
+                ">
+
+                  ${escapeHtml(
+                    formatDate(
+                      payment.created_at
+                    )
+                  )}
+
+                </div>
+
               </div>
 
-            </div>
-          `
-        ).join("");
+            `
+          )
+          .join("");
+
     }
 
 
@@ -3406,72 +5271,124 @@
 
       auditHtml =
         auditLogs
-          .slice(0, 20)
+          .slice(
+            0,
+            20
+          )
           .map(
             log => `
+
               <div class="activity-item">
 
                 <b>
+
                   ${escapeHtml(
                     log.action ||
                     log.event_type ||
                     "نشاط"
                   )}
+
                 </b>
+
 
                 <div style="
                   color:var(--muted);
                   margin-top:3px;
                 ">
+
                   ${escapeHtml(
                     log.description ||
                     log.message ||
                     ""
                   )}
+
                 </div>
+
 
                 <div style="
                   color:var(--muted);
                   font-size:10px;
                   margin-top:3px;
                 ">
+
                   ${escapeHtml(
                     formatDate(
-                      log.created_at
+                      log.created_at ||
+                      log.timestamp
                     )
                   )}
+
                 </div>
 
               </div>
+
             `
           )
           .join("");
+
     }
 
 
     const serviceDetailsHtml =
-      Object.keys(serviceDetails).length
-        ? Object.entries(serviceDetails)
-            .map(
-              ([key, value]) => `
-                <div class="detail-item">
-                  <div class="detail-label">
-                    ${escapeHtml(key)}
-                  </div>
-                  <div class="detail-value">
-                    ${escapeHtml(value)}
-                  </div>
+      Object.keys(
+        serviceDetails
+      ).length
+
+        ? Object.entries(
+            serviceDetails
+          )
+          .map(
+            ([key, value]) => `
+
+              <div class="detail-item">
+
+                <div class="detail-label">
+
+                  ${escapeHtml(
+                    key
+                  )}
+
                 </div>
-              `
-            )
-            .join("")
-        : `
-            <div class="detail-item full">
-              <div class="detail-value">
-                لا توجد تفاصيل إضافية
+
+
+                <div class="detail-value">
+
+                  ${escapeHtml(
+                    value
+                  )}
+
+                </div>
+
               </div>
+
+            `
+          )
+          .join("")
+
+        : `
+
+            <div class="detail-item full">
+
+              <div class="detail-value">
+
+                لا توجد تفاصيل إضافية
+
+              </div>
+
             </div>
+
           `;
+
+
+    const quotationPrice =
+      order.quotation_price ??
+      order.price;
+
+
+    const quotationCurrency =
+      order.quotation_currency ||
+      order.currency ||
+      "IQD";
 
 
     content.innerHTML = `
@@ -3479,235 +5396,457 @@
       <div class="detail-grid">
 
         <div class="detail-item">
+
           <div class="detail-label">
             الخدمة
           </div>
+
           <div class="detail-value">
+
             ${escapeHtml(
-              serviceName(order.service_type)
+              serviceName(
+                order.service_type
+              )
             )}
+
           </div>
+
         </div>
 
 
         <div class="detail-item">
+
           <div class="detail-label">
             الحالة
           </div>
+
           <div class="detail-value">
+
             ${escapeHtml(
-              statusName(order.order_status)
+              statusName(
+                order.order_status
+              )
             )}
+
           </div>
+
         </div>
 
 
         <div class="detail-item">
+
           <div class="detail-label">
             التخصص
           </div>
+
           <div class="detail-value">
+
             ${escapeHtml(
-              order.department || "—"
+              order.department ||
+              "—"
             )}
+
           </div>
+
         </div>
 
 
         <div class="detail-item">
+
           <div class="detail-label">
             الزبون
           </div>
+
           <div class="detail-value">
+
             ${escapeHtml(
               order.username ||
               order.user_id ||
               "—"
             )}
+
           </div>
+
         </div>
 
 
         <div class="detail-item full">
+
           <div class="detail-label">
             العنوان
           </div>
+
           <div class="detail-value">
+
             ${escapeHtml(
-              order.title || "—"
+              order.title ||
+              "—"
             )}
+
           </div>
+
         </div>
 
 
         <div class="detail-item">
+
           <div class="detail-label">
             الموعد النهائي
           </div>
+
           <div class="detail-value">
+
             ${escapeHtml(
-              formatDate(order.deadline)
+              formatDate(
+                order.deadline
+              )
             )}
+
           </div>
+
         </div>
 
 
         <div class="detail-item">
+
           <div class="detail-label">
             قرار الزبون
           </div>
+
           <div class="detail-value">
+
             ${escapeHtml(
-              order.customer_decision || "WAITING"
+              order.customer_decision ||
+              "PENDING"
             )}
+
           </div>
+
         </div>
 
 
         <div class="detail-item">
+
+          <div class="detail-label">
+            عرض السعر
+          </div>
+
+          <div class="detail-value">
+
+            ${formatMoney(
+              quotationPrice,
+              quotationCurrency
+            )}
+
+          </div>
+
+        </div>
+
+
+        <div class="detail-item">
+
           <div class="detail-label">
             السعر
           </div>
+
           <div class="detail-value">
+
             ${formatMoney(
               order.price,
-              order.currency || "IQD"
+              order.currency ||
+              quotationCurrency
             )}
+
           </div>
+
         </div>
 
 
         <div class="detail-item">
+
           <div class="detail-label">
             المدفوع
           </div>
+
           <div class="detail-value">
+
             ${formatMoney(
               order.deposit,
-              order.currency || "IQD"
+              order.currency ||
+              quotationCurrency
             )}
+
           </div>
+
         </div>
 
 
         <div class="detail-item">
+
           <div class="detail-label">
             المتبقي
           </div>
+
           <div class="detail-value">
+
             ${formatMoney(
               order.remaining_balance,
-              order.currency || "IQD"
+              order.currency ||
+              quotationCurrency
             )}
+
           </div>
+
         </div>
 
 
         <div class="detail-item">
+
           <div class="detail-label">
             حالة الدفع
           </div>
+
           <div class="detail-value">
+
             ${escapeHtml(
               paymentStatusName(
                 order.payment_status
               )
             )}
+
           </div>
+
         </div>
 
 
-        <div class="detail-item full">
+        <div class="detail-item">
+
           <div class="detail-label">
-            الملاحظات
+            تاريخ التسليم
           </div>
+
           <div class="detail-value">
+
             ${escapeHtml(
-              order.notes || "لا توجد"
+              order.delivery_date ||
+              "—"
             )}
+
           </div>
+
+        </div>
+
+
+        <div class="detail-item">
+
+          <div class="detail-label">
+            وقت التسليم
+          </div>
+
+          <div class="detail-value">
+
+            ${escapeHtml(
+              order.delivery_time ||
+              "—"
+            )}
+
+          </div>
+
         </div>
 
 
         <div class="detail-item full">
+
+          <div class="detail-label">
+            ملاحظات
+          </div>
+
+          <div class="detail-value">
+
+            ${escapeHtml(
+              order.notes ||
+              "لا توجد"
+            )}
+
+          </div>
+
+        </div>
+
+
+        <div class="detail-item full">
+
+          <div class="detail-label">
+            ملاحظات عرض السعر
+          </div>
+
+          <div class="detail-value">
+
+            ${escapeHtml(
+              order.quotation_notes ||
+              "لا توجد"
+            )}
+
+          </div>
+
+        </div>
+
+
+        <div class="detail-item full">
+
           <div class="detail-label">
             ملاحظات الأدمن
           </div>
+
           <div class="detail-value">
+
             ${escapeHtml(
-              order.admin_note || "لا توجد"
+              order.admin_note ||
+              "لا توجد"
             )}
+
           </div>
+
         </div>
 
       </div>
 
 
-      <h4 style="margin:18px 0 8px;">
+      <h4 style="
+        margin:18px 0 8px;
+      ">
         ⚙️ تفاصيل الخدمة
       </h4>
 
+
       <div class="detail-grid">
+
         ${serviceDetailsHtml}
+
       </div>
 
 
-      <h4 style="margin:18px 0 8px;">
+      <h4 style="
+        margin:18px 0 8px;
+      ">
         💵 سجل الدفعات
       </h4>
+
 
       ${paymentsHtml}
 
 
-      <h4 style="margin:18px 0 8px;">
+      <h4 style="
+        margin:18px 0 8px;
+      ">
         📜 سجل النشاط
       </h4>
+
 
       ${auditHtml}
 
     `;
+
   }
 
 
-  function parseServiceDetails(value) {
+  function parseServiceDetails(
+    value
+  ) {
 
     if (!value) {
       return {};
     }
 
-    if (typeof value === "object") {
+
+    if (
+      typeof value ===
+      "object"
+    ) {
+
       return value;
+
     }
 
-    if (typeof value === "string") {
+
+    if (
+      typeof value ===
+      "string"
+    ) {
 
       try {
+
         const parsed =
-          JSON.parse(value);
+          JSON.parse(
+            value
+          );
+
 
         return (
+
           parsed &&
-          typeof parsed === "object"
+
+          typeof parsed ===
+          "object"
+
         )
           ? parsed
           : {};
 
       } catch {
+
         return {
           details: value
         };
+
       }
+
     }
 
+
     return {};
+
   }
 
 
   function closeModal() {
 
     document
-      .getElementById("orderModal")
-      .classList.add("hidden");
+      .getElementById(
+        "orderModal"
+      )
+      .classList.add(
+        "hidden"
+      );
+
+
+    selectedDeliveryFiles =
+      [];
+
+
+    const input =
+      document.getElementById(
+        "deliveryFileInput"
+      );
+
+
+    if (input) {
+      input.value = "";
+    }
+
+
+    const status =
+      document.getElementById(
+        "deliveryFilesStatus"
+      );
+
+
+    if (status) {
+
+      status.textContent =
+        "لم يتم اختيار ملفات.";
+
+    }
+
   }
 
 
@@ -3718,15 +5857,23 @@
   async function submitQuotation() {
 
     if (!activeOrderId) {
-      showToast("لم يتم تحديد الطلب.");
+
+      showToast(
+        "لم يتم تحديد الطلب."
+      );
+
       return;
+
     }
 
 
     const priceValue =
-      document.getElementById(
-        "quotPrice"
-      ).value.trim();
+      document
+        .getElementById(
+          "quotPrice"
+        )
+        .value
+        .trim();
 
 
     const currency =
@@ -3748,30 +5895,53 @@
 
 
     const notes =
-      document.getElementById(
-        "quotNotes"
-      ).value.trim();
+      document
+        .getElementById(
+          "quotNotes"
+        )
+        .value
+        .trim();
 
 
     const price =
-      Number(priceValue);
+      Number(
+        priceValue
+      );
 
 
-    if (!Number.isFinite(price) || price <= 0) {
-      showToast("أدخل سعراً صحيحاً.");
+    if (
+      !Number.isFinite(price) ||
+      price <= 0
+    ) {
+
+      showToast(
+        "أدخل سعراً صحيحاً."
+      );
+
       return;
+
     }
 
 
     if (!date) {
-      showToast("حدد تاريخ التسليم.");
+
+      showToast(
+        "حدد تاريخ التسليم."
+      );
+
       return;
+
     }
 
 
     if (!time) {
-      showToast("حدد وقت التسليم.");
+
+      showToast(
+        "حدد وقت التسليم."
+      );
+
       return;
+
     }
 
 
@@ -3781,7 +5951,10 @@
       );
 
 
-    button.disabled = true;
+    button.disabled =
+      true;
+
+
     button.textContent =
       "جاري إرسال العرض...";
 
@@ -3789,21 +5962,39 @@
     try {
 
       await apiRequest(
+
         `/api/admin/orders/${encodeURIComponent(activeOrderId)}/quotation`,
+
         {
+
           method: "POST",
+
           headers: {
+
             "Content-Type":
               "application/json"
+
           },
-          body: JSON.stringify({
-            price,
-            currency,
-            delivery_date: date,
-            delivery_time: time,
-            notes
-          })
+
+          body:
+            JSON.stringify({
+
+              price,
+
+              currency,
+
+              delivery_date:
+                date,
+
+              delivery_time:
+                time,
+
+              notes
+
+            })
+
         }
+
       );
 
 
@@ -3812,7 +6003,11 @@
       );
 
 
-      await openModal(activeOrderId);
+      await openModal(
+        activeOrderId
+      );
+
+
       await loadAdminDashboard();
 
 
@@ -3823,12 +6018,18 @@
         "تعذر إرسال عرض السعر."
       );
 
+
     } finally {
 
-      button.disabled = false;
+      button.disabled =
+        false;
+
+
       button.textContent =
         "إرسال العرض للزبون 🚀";
+
     }
+
   }
 
 
@@ -3844,20 +6045,53 @@
 
 
     const status =
-      document.getElementById(
-        "updateStatusSelect"
-      ).value;
+      document
+        .getElementById(
+          "updateStatusSelect"
+        )
+        .value;
 
 
     const adminNote =
-      document.getElementById(
-        "statusAdminNote"
-      ).value.trim();
+      document
+        .getElementById(
+          "statusAdminNote"
+        )
+        .value
+        .trim();
 
 
     if (!status) {
-      showToast("حدد الحالة.");
+
+      showToast(
+        "حدد الحالة."
+      );
+
       return;
+
+    }
+
+
+    /*
+     * IMPORTANT:
+     *
+     * The COMPLETED status should normally be reached
+     * through the final delivery endpoint.
+     *
+     * We prevent the frontend from manually marking
+     * an order completed.
+     */
+
+    if (
+      status === "COMPLETED"
+    ) {
+
+      showToast(
+        "لا يمكن إكمال الطلب من تغيير الحالة. استخدم زر التسليم النهائي للزبون."
+      );
+
+      return;
+
     }
 
 
@@ -3867,7 +6101,10 @@
       );
 
 
-    button.disabled = true;
+    button.disabled =
+      true;
+
+
     button.textContent =
       "جاري التحديث...";
 
@@ -3875,18 +6112,32 @@
     try {
 
       await apiRequest(
+
         `/api/admin/orders/${encodeURIComponent(activeOrderId)}/status`,
+
         {
+
           method: "POST",
+
           headers: {
+
             "Content-Type":
               "application/json"
+
           },
-          body: JSON.stringify({
-            status,
-            admin_note: adminNote
-          })
+
+          body:
+            JSON.stringify({
+
+              status,
+
+              admin_note:
+                adminNote
+
+            })
+
         }
+
       );
 
 
@@ -3895,7 +6146,11 @@
       );
 
 
-      await openModal(activeOrderId);
+      await openModal(
+        activeOrderId
+      );
+
+
       await loadAdminDashboard();
 
 
@@ -3906,12 +6161,18 @@
         "تعذر تحديث الحالة."
       );
 
+
     } finally {
 
-      button.disabled = false;
+      button.disabled =
+        false;
+
+
       button.textContent =
         "تحديث الحالة";
+
     }
+
   }
 
 
@@ -3927,13 +6188,18 @@
 
 
     const amountValue =
-      document.getElementById(
-        "payAmount"
-      ).value.trim();
+      document
+        .getElementById(
+          "payAmount"
+        )
+        .value
+        .trim();
 
 
     const amount =
-      Number(amountValue);
+      Number(
+        amountValue
+      );
 
 
     const currency =
@@ -3943,15 +6209,26 @@
 
 
     const paymentMethod =
-      document.getElementById(
-        "payMethod"
-      ).value.trim() ||
+      document
+        .getElementById(
+          "payMethod"
+        )
+        .value
+        .trim() ||
       "يدوي";
 
 
-    if (!Number.isFinite(amount) || amount <= 0) {
-      showToast("أدخل مبلغ دفعة صحيح.");
+    if (
+      !Number.isFinite(amount) ||
+      amount <= 0
+    ) {
+
+      showToast(
+        "أدخل مبلغ دفعة صحيح."
+      );
+
       return;
+
     }
 
 
@@ -3961,7 +6238,10 @@
       );
 
 
-    button.disabled = true;
+    button.disabled =
+      true;
+
+
     button.textContent =
       "جاري التسجيل...";
 
@@ -3969,25 +6249,41 @@
     try {
 
       await apiRequest(
+
         `/api/admin/orders/${encodeURIComponent(activeOrderId)}/payments`,
+
         {
+
           method: "POST",
+
           headers: {
+
             "Content-Type":
               "application/json"
+
           },
-          body: JSON.stringify({
-            amount,
-            currency,
-            payment_method: paymentMethod
-          })
+
+          body:
+            JSON.stringify({
+
+              amount,
+
+              currency,
+
+              payment_method:
+                paymentMethod
+
+            })
+
         }
+
       );
 
 
       document.getElementById(
         "payAmount"
-      ).value = "";
+      ).value =
+        "";
 
 
       showToast(
@@ -3995,7 +6291,11 @@
       );
 
 
-      await openModal(activeOrderId);
+      await openModal(
+        activeOrderId
+      );
+
+
       await loadAdminDashboard();
 
 
@@ -4006,12 +6306,18 @@
         "تعذر تسجيل الدفعة."
       );
 
+
     } finally {
 
-      button.disabled = false;
+      button.disabled =
+        false;
+
+
       button.textContent =
         "تسجيل الدفعة 💵";
+
     }
+
   }
 
 
@@ -4037,8 +6343,13 @@
 
 
     if (!note) {
-      showToast("أدخل الملاحظة أولاً.");
+
+      showToast(
+        "أدخل الملاحظة أولاً."
+      );
+
       return;
+
     }
 
 
@@ -4048,7 +6359,10 @@
       );
 
 
-    button.disabled = true;
+    button.disabled =
+      true;
+
+
     button.textContent =
       "جاري الحفظ...";
 
@@ -4056,21 +6370,35 @@
     try {
 
       await apiRequest(
+
         `/api/admin/orders/${encodeURIComponent(activeOrderId)}/notes`,
+
         {
+
           method: "POST",
+
           headers: {
+
             "Content-Type":
               "application/json"
+
           },
-          body: JSON.stringify({
-            admin_note: note
-          })
+
+          body:
+            JSON.stringify({
+
+              admin_note:
+                note
+
+            })
+
         }
+
       );
 
 
-      input.value = "";
+      input.value =
+        "";
 
 
       showToast(
@@ -4078,7 +6406,9 @@
       );
 
 
-      await openModal(activeOrderId);
+      await openModal(
+        activeOrderId
+      );
 
 
     } catch (error) {
@@ -4088,12 +6418,411 @@
         "تعذر حفظ الملاحظة."
       );
 
+
     } finally {
 
-      button.disabled = false;
+      button.disabled =
+        false;
+
+
       button.textContent =
         "حفظ الملاحظة";
+
     }
+
+  }
+
+
+  /* ============================================================
+     FINAL DELIVERY
+     ============================================================ */
+
+  function showDeliverySection() {
+
+    const section =
+      document.getElementById(
+        "deliverySection"
+      );
+
+
+    if (!section) {
+      return;
+    }
+
+
+    section.classList.remove(
+      "hidden"
+    );
+
+
+    updateDeliveryFilesStatus();
+
+  }
+
+
+  function hideDeliverySection() {
+
+    const section =
+      document.getElementById(
+        "deliverySection"
+      );
+
+
+    if (!section) {
+      return;
+    }
+
+
+    section.classList.add(
+      "hidden"
+    );
+
+  }
+
+
+  function handleDeliveryFiles(
+    input
+  ) {
+
+    selectedDeliveryFiles =
+      Array.from(
+        input.files || []
+      );
+
+
+    updateDeliveryFilesStatus();
+
+  }
+
+
+  function updateDeliveryFilesStatus() {
+
+    const status =
+      document.getElementById(
+        "deliveryFilesStatus"
+      );
+
+
+    if (!status) {
+      return;
+    }
+
+
+    if (
+      !selectedDeliveryFiles.length
+    ) {
+
+      status.textContent =
+        "لم يتم اختيار ملفات.";
+
+      return;
+
+    }
+
+
+    const totalSize =
+      selectedDeliveryFiles.reduce(
+        (total, file) =>
+          total +
+          Number(
+            file.size || 0
+          ),
+        0
+      );
+
+
+    const totalMB =
+      totalSize /
+      1024 /
+      1024;
+
+
+    status.innerHTML = `
+
+      <div style="
+        color:var(--success);
+        font-weight:900;
+      ">
+
+        ✓ تم اختيار
+        ${selectedDeliveryFiles.length}
+        ملف
+
+      </div>
+
+
+      <div>
+
+        ${selectedDeliveryFiles
+          .map(
+            file =>
+              escapeHtml(
+                file.name
+              )
+          )
+          .join("<br>")}
+
+      </div>
+
+
+      <div style="
+        margin-top:4px;
+      ">
+
+        الحجم الإجمالي:
+        ${totalMB.toFixed(2)}
+        MB
+
+      </div>
+
+    `;
+
+  }
+
+
+  async function uploadDeliveryFiles() {
+
+    if (!activeOrderId) {
+
+      throw new Error(
+        "لم يتم تحديد الطلب."
+      );
+
+    }
+
+
+    if (
+      !selectedDeliveryFiles.length
+    ) {
+
+      throw new Error(
+        "اختر ملفاً واحداً على الأقل للتسليم."
+      );
+
+    }
+
+
+    const uploaded =
+      [];
+
+
+    for (
+      let index = 0;
+      index <
+      selectedDeliveryFiles.length;
+      index++
+    ) {
+
+      const file =
+        selectedDeliveryFiles[index];
+
+
+      /*
+       * Protect against accidental huge files.
+       *
+       * Backend should also enforce its own limits.
+       */
+
+      const maxBytes =
+        MAX_FILE_SIZE_MB *
+        1024 *
+        1024;
+
+
+      if (
+        file.size >
+        maxBytes
+      ) {
+
+        throw new Error(
+          `الملف "${file.name}" يتجاوز ${MAX_FILE_SIZE_MB} MB.`
+        );
+
+      }
+
+
+      const formData =
+        new FormData();
+
+
+      formData.append(
+        "file",
+        file,
+        file.name
+      );
+
+
+      const response =
+        await apiRequest(
+
+          `/api/admin/orders/${encodeURIComponent(activeOrderId)}/delivery-upload`,
+
+          {
+
+            method: "POST",
+
+            body:
+              formData
+
+          }
+
+        );
+
+
+      uploaded.push(
+        response
+      );
+
+    }
+
+
+    return uploaded;
+
+  }
+
+
+  async function deliverOrderToCustomer() {
+
+    if (!activeOrderId) {
+
+      showToast(
+        "لم يتم تحديد الطلب."
+      );
+
+      return;
+
+    }
+
+
+    if (
+      !selectedDeliveryFiles.length
+    ) {
+
+      showToast(
+        "اختر ملفات التسليم أولاً."
+      );
+
+      return;
+
+    }
+
+
+    const button =
+      document.getElementById(
+        "deliveryButton"
+      );
+
+
+    button.disabled =
+      true;
+
+
+    button.textContent =
+      "جاري رفع ملفات التسليم...";
+
+
+    try {
+
+      /*
+       * First upload all final files.
+       */
+
+      await uploadDeliveryFiles();
+
+
+      button.textContent =
+        "جاري إرسال التسليم للزبون...";
+
+
+      /*
+       * Then ask backend to send all delivery
+       * attachments to the customer and complete
+       * the order.
+       */
+
+      const response =
+        await apiRequest(
+
+          `/api/admin/orders/${encodeURIComponent(activeOrderId)}/deliver`,
+
+          {
+
+            method: "POST"
+
+          }
+
+        );
+
+
+      /*
+       * Backend is responsible for:
+       *
+       * 1. Validating READY_FOR_DELIVERY.
+       * 2. Finding delivery attachments.
+       * 3. Sending files to customer's private chat.
+       * 4. Sending professional completion message.
+       * 5. Updating order to COMPLETED only after success.
+       * 6. Writing audit log.
+       */
+
+      showToast(
+
+        response?.message ||
+
+        "تم إرسال التسليم للزبون وإكمال الطلب بنجاح."
+
+      );
+
+
+      selectedDeliveryFiles =
+        [];
+
+
+      const input =
+        document.getElementById(
+          "deliveryFileInput"
+        );
+
+
+      if (input) {
+        input.value =
+          "";
+      }
+
+
+      updateDeliveryFilesStatus();
+
+
+      await openModal(
+        activeOrderId
+      );
+
+
+      await loadAdminDashboard();
+
+
+    } catch (error) {
+
+      showToast(
+
+        error?.message ||
+
+        "تعذر إرسال التسليم للزبون."
+
+      );
+
+
+    } finally {
+
+      button.disabled =
+        false;
+
+
+      button.textContent =
+        "🚀 إرسال التسليم للزبون وإكمال الطلب";
+
+    }
+
   }
 
 
@@ -4104,8 +6833,13 @@
   async function exportExcel() {
 
     if (!isAdmin()) {
-      showToast("ليس لديك صلاحية.");
+
+      showToast(
+        "ليس لديك صلاحية."
+      );
+
       return;
+
     }
 
 
@@ -4126,37 +6860,59 @@
         await response.blob();
 
 
-      if (!blob || blob.size === 0) {
+      if (
+        !blob ||
+        blob.size === 0
+      ) {
+
         throw new Error(
           "تم استلام ملف فارغ."
         );
+
       }
 
 
       const url =
-        URL.createObjectURL(blob);
+        URL.createObjectURL(
+          blob
+        );
 
 
       const anchor =
-        document.createElement("a");
+        document.createElement(
+          "a"
+        );
 
 
-      anchor.href = url;
+      anchor.href =
+        url;
+
 
       anchor.download =
         "NABA_Orders.xlsx";
 
 
-      document.body.appendChild(anchor);
+      document.body.appendChild(
+        anchor
+      );
+
 
       anchor.click();
+
 
       anchor.remove();
 
 
-      setTimeout(() => {
-        URL.revokeObjectURL(url);
-      }, 1000);
+      setTimeout(
+        () => {
+
+          URL.revokeObjectURL(
+            url
+          );
+
+        },
+        1000
+      );
 
 
       showToast(
@@ -4170,7 +6926,9 @@
         error?.message ||
         "تعذر تصدير Excel."
       );
+
     }
+
   }
 
 
@@ -4182,11 +6940,17 @@
 
     stopCustomerOrderPolling();
 
+
     try {
+
       tg.close();
+
     } catch {
+
       window.close();
+
     }
+
   }
 
 
@@ -4195,13 +6959,20 @@
      ============================================================ */
 
   document
-    .getElementById("orderModal")
+    .getElementById(
+      "orderModal"
+    )
     .addEventListener(
       "click",
       function(event) {
 
-        if (event.target === this) {
+        if (
+          event.target ===
+          this
+        ) {
+
           closeModal();
+
         }
 
       }
@@ -4226,7 +6997,9 @@
           "افتح التطبيق من داخل Telegram حتى يتم التحقق من الحساب."
         );
 
+
         return;
+
       }
 
 
@@ -4254,13 +7027,19 @@
         const local =
           new Date(
             now.getTime() -
-            now.getTimezoneOffset() * 60000
+            now.getTimezoneOffset() *
+            60000
           )
             .toISOString()
-            .slice(0, 16);
+            .slice(
+              0,
+              16
+            );
 
 
-        deadline.min = local;
+        deadline.min =
+          local;
+
       }
 
 
@@ -4277,7 +7056,9 @@
         "NABA initialization error:",
         error
       );
+
     }
+
   }
 
 
