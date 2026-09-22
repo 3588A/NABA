@@ -41,6 +41,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppI
 from telegram.error import TelegramError
 from telegram.ext import (
     ApplicationBuilder,
+    CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
     MessageHandler,
@@ -365,6 +366,22 @@ def init_db():
             """
         )
 
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS channel_message_links (
+                channel_id BIGINT NOT NULL,
+                channel_message_id BIGINT NOT NULL,
+                order_id TEXT NOT NULL
+                    REFERENCES orders(order_id)
+                    ON DELETE CASCADE,
+                user_id BIGINT NOT NULL,
+                message_kind TEXT NOT NULL DEFAULT 'CUSTOMER',
+                created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (channel_id, channel_message_id)
+            )
+            """
+        )
+
         # -----------------------------
         # Orders migrations
         # -----------------------------
@@ -634,6 +651,10 @@ def init_db():
             """
             CREATE INDEX IF NOT EXISTS attachments_order_id_idx
             ON attachments(order_id)
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS channel_message_links_order_idx
+            ON channel_message_links(order_id)
             """,
         ]
 
@@ -1499,6 +1520,43 @@ async def send_channel_text(
         return None
 
 
+def save_channel_message_link(
+    channel_message_id: int,
+    order_id: str,
+    user_id: int,
+    message_kind: str = "CUSTOMER",
+):
+    channel = parse_channel_id()
+    if channel is None:
+        return
+
+    with db() as conn:
+        conn.execute(
+            """
+            INSERT INTO channel_message_links(
+                channel_id,
+                channel_message_id,
+                order_id,
+                user_id,
+                message_kind
+            )
+            VALUES(%s, %s, %s, %s, %s)
+            ON CONFLICT (channel_id, channel_message_id)
+            DO UPDATE SET
+                order_id=EXCLUDED.order_id,
+                user_id=EXCLUDED.user_id,
+                message_kind=EXCLUDED.message_kind
+            """,
+            (
+                channel,
+                channel_message_id,
+                order_id,
+                user_id,
+                message_kind,
+            ),
+        )
+
+
 async def send_to_chat(
     chat_id,
     text: str,
@@ -1703,12 +1761,14 @@ async def deliver_order(
 async def notify_customer(
     user_id: int,
     text: str,
+    reply_markup=None,
 ):
     try:
         await telegram_app.bot.send_message(
             chat_id=user_id,
             text=text,
             parse_mode="HTML",
+            reply_markup=reply_markup,
         )
         return True
     except TelegramError:
@@ -1812,6 +1872,7 @@ def get_latest_active_order(
 async def handle_customer_quotation_decision(
     user_id: int,
     accepted: bool,
+    order_id: Optional[str] = None,
 ):
     with db() as conn:
 
@@ -1820,13 +1881,14 @@ async def handle_customer_quotation_decision(
             SELECT *
             FROM orders
             WHERE user_id=%s
+              AND (%s IS NULL OR order_id=%s)
               AND order_status='WAITING_CUSTOMER'
               AND customer_decision='PENDING'
             ORDER BY created_at DESC
             LIMIT 1
             FOR UPDATE
             """,
-            (user_id,),
+            (user_id, order_id, order_id),
         ).fetchone()
 
         if not order:
@@ -1840,7 +1902,7 @@ async def handle_customer_quotation_decision(
             else "REJECTED"
         )
 
-        new_status = decision
+        new_status = "ACCEPTED" if accepted else "CANCELLED"
 
         conn.execute(
             """
@@ -1902,6 +1964,38 @@ async def handle_customer_quotation_decision(
     )
 
     return True
+
+
+async def quotation_callback_handler(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+    query = update.callback_query
+    if not query or not query.from_user:
+        return
+
+    parts = (query.data or "").split(":", 2)
+    if len(parts) != 3 or parts[0] != "quotation":
+        return
+    if parts[1] not in {"accept", "reject"}:
+        return
+
+    handled = await handle_customer_quotation_decision(
+        query.from_user.id,
+        parts[1] == "accept",
+        parts[2],
+    )
+    await query.answer(
+        "تم تسجيل القرار"
+        if handled
+        else "العرض غير متاح أو تم اتخاذ القرار مسبقًا",
+        show_alert=True,
+    )
+    if handled:
+        try:
+            await query.edit_message_reply_markup(reply_markup=None)
+        except TelegramError:
+            logger.info("Could not remove quotation buttons", exc_info=True)
 
 
 async def customer_private_message_handler(
@@ -1993,6 +2087,13 @@ async def customer_private_message_handler(
     )
 
     if sent:
+        await asyncio.to_thread(
+            save_channel_message_link,
+            sent.message_id,
+            order_id,
+            user.id,
+            "CUSTOMER_MESSAGE",
+        )
         await notify_customer(
             user.id,
             "✅ تم إرسال رسالتك إلى الكادر.",
@@ -2129,18 +2230,26 @@ async def channel_post_handler(
     منشور القناة وليس هوية الأدمن البشري.
     """
 
-    message = update.channel_post
+    message = update.channel_post or update.message
 
     if not message:
         return
+
+    # رسائل مجموعة النقاش تصل كـ message، ولا نعتمد فيها إلا على حساب المدير.
+    if update.message:
+        if (
+            not update.effective_user
+            or update.effective_user.id != ADMIN_TELEGRAM_ID
+        ):
+            return
 
     channel = parse_channel_id()
 
     if channel is None or not message.chat:
         return
 
-    # يجب أن يكون الرد صادرًا من القناة المحددة فقط.
-    if int(message.chat.id) != int(channel):
+    # المنشور المباشر يجب أن يكون من القناة المحددة.
+    if update.channel_post and int(message.chat.id) != int(channel):
         return
 
     # يجب أن يكون المنشور Reply على رسالة سابقة.
@@ -2227,6 +2336,19 @@ async def channel_post_handler(
                     list(candidate_message_ids),
                 ),
             ).fetchone()
+
+            if not order:
+                order = conn.execute(
+                    """
+                    SELECT order_id, user_id
+                    FROM channel_message_links
+                    WHERE channel_id=%s
+                      AND channel_message_id = ANY(%s)
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                    """,
+                    (channel, list(candidate_message_ids)),
+                ).fetchone()
 
         if not order:
             logger.warning(
@@ -2585,6 +2707,13 @@ telegram_app.add_handler(
 )
 
 telegram_app.add_handler(
+    CallbackQueryHandler(
+        quotation_callback_handler,
+        pattern=r"^quotation:(accept|reject):",
+    )
+)
+
+telegram_app.add_handler(
     MessageHandler(
         filters.ChatType.CHANNEL,
         channel_post_handler,
@@ -2632,6 +2761,7 @@ async def lifespan(_: FastAPI):
                 "message",
                 "channel_post",
                 "edited_channel_post",
+                "callback_query",
             ],
         )
 
@@ -3053,9 +3183,16 @@ async def submit_order(
             )
 
     # IMPORTANT:
-    # No automatic customer notification here.
-    # Customer receives notification ONLY for quotation
-    # and final delivery.
+    confirmation = (
+        "✅ <b>تم استلام طلبك</b>\n\n"
+        f"🆔 <b>رقم الطلب:</b> <code>{html.escape(order['order_id'])}</code>\n"
+        "سيتم التواصل معك من قبل الكادر."
+    )
+    if not delivered:
+        confirmation += (
+            "\n\n⚠️ تم حفظ الطلب، وسيعيد النظام محاولة إرساله للكادر."
+        )
+    await notify_customer(user["id"], confirmation)
 
     if not delivered:
         try:
@@ -3251,7 +3388,7 @@ async def reject_quotation(
             SET
                 customer_decision='REJECTED',
                 customer_decision_at=CURRENT_TIMESTAMP,
-                order_status='REJECTED'
+                order_status='CANCELLED'
             WHERE order_id=%s
             """,
             (order_id,),
@@ -3275,7 +3412,7 @@ async def reject_quotation(
 
     return {
         "ok": True,
-        "status": "REJECTED",
+        "status": "CANCELLED",
     }
 
 
@@ -3653,9 +3790,19 @@ async def set_quotation(
             f"📝 <b>ملاحظات العرض:</b> "
             f"{html.escape(payload.notes or 'لا يوجد')}\n\n"
             "━━━━━━━━━━━━━━\n"
-            "✍️ <b>للقبول اكتب:</b> موافق\n"
-            "✍️ <b>للرفض اكتب:</b> ارفض\n\n"
-            "لا تحتاج إلى فتح التطبيق لاتخاذ القرار."
+            "اختر القرار من الأزرار أدناه."
+        ),
+        reply_markup=InlineKeyboardMarkup(
+            [[
+                InlineKeyboardButton(
+                    "✅ تأكيد الطلب",
+                    callback_data=f"quotation:accept:{order_id}",
+                ),
+                InlineKeyboardButton(
+                    "❌ رفض الطلب",
+                    callback_data=f"quotation:reject:{order_id}",
+                ),
+            ]]
         ),
     )
 
