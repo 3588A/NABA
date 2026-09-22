@@ -110,15 +110,6 @@ ADMIN_TELEGRAM_ID = env_int(
 ADMIN_USER_ID = ADMIN_TELEGRAM_ID
 
 # Fixed IP address(es) allowed to access the Admin Dashboard.
-# Configure ADMIN_ALLOWED_IPS in the deployment environment, for example:
-# ADMIN_ALLOWED_IPS=203.0.113.10
-# Multiple addresses may be separated by commas.
-ADMIN_ALLOWED_IPS = {
-    ip.strip()
-    for ip in env("ADMIN_ALLOWED_IPS").split(",")
-    if ip.strip()
-}
-
 MAX_ATTACHMENT_MB = env_int("MAX_ATTACHMENT_MB", 5)
 MAX_ATTACHMENT_BYTES = MAX_ATTACHMENT_MB * 1024 * 1024
 
@@ -334,13 +325,23 @@ def init_db():
             """
             CREATE TABLE IF NOT EXISTS channel_customer_messages (
                 id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-                order_id TEXT NOT NULL
+                order_id TEXT
                     REFERENCES orders(order_id)
                     ON DELETE CASCADE,
                 user_id BIGINT NOT NULL,
                 channel_message_id BIGINT NOT NULL UNIQUE,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
+            """
+        )
+
+        # Existing installations may already have this table with
+        # order_id NOT NULL. Customer messages must remain routable
+        # even when no order exists, so make that column nullable.
+        conn.execute(
+            """
+            ALTER TABLE channel_customer_messages
+            ALTER COLUMN order_id DROP NOT NULL
             """
         )
 
@@ -866,38 +867,12 @@ def init_user_from_header(request: Request) -> dict:
 def require_admin(request: Request) -> dict:
     user = init_user_from_header(request)
 
+    # The Telegram ID is the only authorization criterion for the
+    # admin dashboard. No proxy/server IP restriction is applied.
     if user["id"] != ADMIN_TELEGRAM_ID:
         raise HTTPException(
             status_code=403,
             detail="غير مصرح لك بالوصول إلى لوحة التحكم",
-        )
-
-    # Admin access requires the preconfigured Telegram admin account
-    # AND the preconfigured source IP address.
-    if not ADMIN_ALLOWED_IPS:
-        logger.error(
-            "ADMIN_ALLOWED_IPS is not configured; admin dashboard access is disabled."
-        )
-        raise HTTPException(
-            status_code=403,
-            detail="لم يتم تهيئة IP المسموح به للوحة التحكم",
-        )
-
-    client_ip = (
-        request.client.host
-        if request.client
-        else ""
-    )
-
-    if client_ip not in ADMIN_ALLOWED_IPS:
-        logger.warning(
-            "Blocked admin access from IP=%s telegram_id=%s",
-            client_ip,
-            user["id"],
-        )
-        raise HTTPException(
-            status_code=403,
-            detail="عنوان IP غير مصرح له بالوصول إلى لوحة التحكم",
         )
 
     return user
@@ -1848,7 +1823,7 @@ def get_latest_waiting_order(
         ).fetchone()
 
 
-def get_latest_active_order(
+def get_latest_customer_order(
     user_id: int,
 ):
     with db() as conn:
@@ -1857,11 +1832,6 @@ def get_latest_active_order(
             SELECT *
             FROM orders
             WHERE user_id=%s
-              AND order_status NOT IN (
-                  'COMPLETED',
-                  'CANCELLED',
-                  'REJECTED'
-              )
             ORDER BY created_at DESC
             LIMIT 1
             """,
@@ -2018,34 +1988,32 @@ async def customer_private_message_handler(
     # ---------------------------------------------
 
     order = await asyncio.to_thread(
-        get_latest_active_order,
+        get_latest_customer_order,
         user.id,
     )
 
-    if not order:
-        await notify_customer(
-            user.id,
-            (
-                "ℹ️ لا يوجد لديك طلب نشط حاليًا.\n\n"
-                "يمكنك فتح تطبيق النبع وإنشاء طلب جديد."
-            ),
-        )
-        return
-
-    order_id = order["order_id"]
+    # A customer message must be forwarded even when the customer
+    # has no currently-active order. In that case we keep the
+    # order reference empty and use the Telegram user ID for replies.
+    order_id = order["order_id"] if order else None
+    order_label = (
+        html.escape(order_id)
+        if order_id
+        else "بدون طلب مرتبط"
+    )
 
     channel_message = (
         "💬 <b>رسالة جديدة من الزبون</b>\n\n"
         f"🆔 <b>رقم الطلب:</b> "
-        f"<code>{html.escape(order_id)}</code>\n"
+        f"<code>{order_label}</code>\n"
         f"👤 <b>Telegram ID:</b> "
         f"<code>{user.id}</code>\n"
         f"👤 <b>Username:</b> "
         f"@{html.escape(user.username or 'بدون_يوزر')}\n\n"
         f"📝 <b>الرسالة:</b>\n"
         f"{html.escape(raw_text)}\n\n"
-        "💡 <b>للرد على الزبون:</b>\n"
-        f"<code>/reply {html.escape(order_id)} نص الرد</code>"
+        "💡 <b>للرد على الزبون من القناة:</b>\n"
+        "↩️ استخدم Reply على هذه الرسالة في القناة."
     )
 
     sent = await send_channel_text(
@@ -2078,13 +2046,14 @@ async def customer_private_message_handler(
                     ),
                 )
 
-                add_audit_log_conn(
-                    conn,
-                    order_id,
-                    "CUSTOMER_MESSAGE_TO_CHANNEL",
-                    f"User_{user.id}",
-                    raw_text[:2000],
-                )
+                if order_id:
+                    add_audit_log_conn(
+                        conn,
+                        order_id,
+                        "CUSTOMER_MESSAGE_TO_CHANNEL",
+                        f"User_{user.id}",
+                        raw_text[:2000],
+                    )
         except Exception:
             logger.exception(
                 "Could not store customer channel message mapping"
@@ -2283,17 +2252,18 @@ async def channel_post_handler(
         )
 
         with db() as conn:
-            add_audit_log_conn(
-                conn,
-                order["order_id"],
-                (
-                    "ADMIN_CHANNEL_REPLY_TO_CUSTOMER"
-                    if success
-                    else "ADMIN_CHANNEL_REPLY_FAILED"
-                ),
-                "Admin",
-                reply_text[:2000],
-            )
+            if order["order_id"]:
+                add_audit_log_conn(
+                    conn,
+                    order["order_id"],
+                    (
+                        "ADMIN_CHANNEL_REPLY_TO_CUSTOMER"
+                        if success
+                        else "ADMIN_CHANNEL_REPLY_FAILED"
+                    ),
+                    "Admin",
+                    reply_text[:2000],
+                )
 
         logger.info(
             "Channel reply mapped to order=%s user=%s success=%s",
