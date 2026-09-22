@@ -109,6 +109,16 @@ ADMIN_TELEGRAM_ID = env_int(
 
 ADMIN_USER_ID = ADMIN_TELEGRAM_ID
 
+# Fixed IP address(es) allowed to access the Admin Dashboard.
+# Configure ADMIN_ALLOWED_IPS in the deployment environment, for example:
+# ADMIN_ALLOWED_IPS=203.0.113.10
+# Multiple addresses may be separated by commas.
+ADMIN_ALLOWED_IPS = {
+    ip.strip()
+    for ip in env("ADMIN_ALLOWED_IPS").split(",")
+    if ip.strip()
+}
+
 MAX_ATTACHMENT_MB = env_int("MAX_ATTACHMENT_MB", 5)
 MAX_ATTACHMENT_BYTES = MAX_ATTACHMENT_MB * 1024 * 1024
 
@@ -316,6 +326,20 @@ def init_db():
                 delivery_channel_status TEXT NOT NULL DEFAULT 'PENDING',
                 channel_message_id BIGINT,
                 channel_attachment_message_id BIGINT
+            )
+            """
+        )
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS channel_customer_messages (
+                id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                order_id TEXT NOT NULL
+                    REFERENCES orders(order_id)
+                    ON DELETE CASCADE,
+                user_id BIGINT NOT NULL,
+                channel_message_id BIGINT NOT NULL UNIQUE,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
@@ -628,6 +652,14 @@ def init_db():
             ON payments(order_id)
             """,
             """
+            CREATE INDEX IF NOT EXISTS channel_customer_messages_order_id_idx
+            ON channel_customer_messages(order_id)
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS channel_customer_messages_message_id_idx
+            ON channel_customer_messages(channel_message_id)
+            """,
+            """
             CREATE INDEX IF NOT EXISTS orders_channel_message_idx
             ON orders(channel_message_id)
             """,
@@ -838,6 +870,34 @@ def require_admin(request: Request) -> dict:
         raise HTTPException(
             status_code=403,
             detail="غير مصرح لك بالوصول إلى لوحة التحكم",
+        )
+
+    # Admin access requires the preconfigured Telegram admin account
+    # AND the preconfigured source IP address.
+    if not ADMIN_ALLOWED_IPS:
+        logger.error(
+            "ADMIN_ALLOWED_IPS is not configured; admin dashboard access is disabled."
+        )
+        raise HTTPException(
+            status_code=403,
+            detail="لم يتم تهيئة IP المسموح به للوحة التحكم",
+        )
+
+    client_ip = (
+        request.client.host
+        if request.client
+        else ""
+    )
+
+    if client_ip not in ADMIN_ALLOWED_IPS:
+        logger.warning(
+            "Blocked admin access from IP=%s telegram_id=%s",
+            client_ip,
+            user["id"],
+        )
+        raise HTTPException(
+            status_code=403,
+            detail="عنوان IP غير مصرح له بالوصول إلى لوحة التحكم",
         )
 
     return user
@@ -1993,13 +2053,31 @@ async def customer_private_message_handler(
     )
 
     if sent:
-        await notify_customer(
-            user.id,
-            "✅ تم إرسال رسالتك إلى الكادر.",
-        )
-
+        # Store the exact channel message ID so that when the admin
+        # replies to this message in the channel, the reply can be
+        # routed back to the same customer's private bot chat.
         try:
             with db() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO channel_customer_messages(
+                        order_id,
+                        user_id,
+                        channel_message_id
+                    )
+                    VALUES(%s, %s, %s)
+                    ON CONFLICT (channel_message_id)
+                    DO UPDATE SET
+                        order_id=EXCLUDED.order_id,
+                        user_id=EXCLUDED.user_id
+                    """,
+                    (
+                        order_id,
+                        user.id,
+                        sent.message_id,
+                    ),
+                )
+
                 add_audit_log_conn(
                     conn,
                     order_id,
@@ -2009,8 +2087,13 @@ async def customer_private_message_handler(
                 )
         except Exception:
             logger.exception(
-                "Could not write customer message audit"
+                "Could not store customer channel message mapping"
             )
+
+        await notify_customer(
+            user.id,
+            "✅ تم إرسال رسالتك إلى الكادر.",
+        )
     else:
         await notify_customer(
             user.id,
@@ -2138,9 +2221,9 @@ async def channel_post_handler(
     # Admin reply from the channel -> customer's private chat
     #
     # The bot is an administrator in the channel and there is
-    # no linked discussion group. Therefore a channel reply can
-    # be mapped back to the customer through the original order
-    # message ID stored in orders.channel_message_id.
+    # no linked discussion group. A reply can be mapped either
+    # through a customer message previously sent to the channel
+    # or through the original order/attachment message ID.
     # -----------------------------------------------------
     replied_to = post.reply_to_message
 
@@ -2159,17 +2242,28 @@ async def channel_post_handler(
             order = conn.execute(
                 """
                 SELECT order_id, user_id
-                FROM orders
+                FROM channel_customer_messages
                 WHERE channel_message_id=%s
-                   OR channel_attachment_message_id=%s
-                ORDER BY created_at DESC
                 LIMIT 1
                 """,
-                (
-                    replied_message_id,
-                    replied_message_id,
-                ),
+                (replied_message_id,),
             ).fetchone()
+
+            if not order:
+                order = conn.execute(
+                    """
+                    SELECT order_id, user_id
+                    FROM orders
+                    WHERE channel_message_id=%s
+                       OR channel_attachment_message_id=%s
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                    """,
+                    (
+                        replied_message_id,
+                        replied_message_id,
+                    ),
+                ).fetchone()
 
         if not order:
             logger.info(
@@ -4751,14 +4845,12 @@ async def export_excel_report(
                 ),
             )
 
-        except TelegramError as exc:
-
-            raise HTTPException(
-                status_code=502,
-                detail=(
-                    "تعذر إرسال التقرير عبر "
-                    f"التليجرام: {exc}"
-                ),
+        except TelegramError:
+            # The Excel download must not fail just because the
+            # optional Telegram copy could not be sent.
+            logger.warning(
+                "Excel report was generated, but Telegram copy failed",
+                exc_info=True,
             )
 
     # Return the XLSX bytes directly. This avoids proxy/client
