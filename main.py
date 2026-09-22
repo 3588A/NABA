@@ -1527,9 +1527,18 @@ async def send_channel_text(
             text=text,
             parse_mode="HTML",
         )
-    except TelegramError:
+    except TelegramError as exc:
+        logger.error(
+            "Could not send channel text to channel %s: %s",
+            channel,
+            exc,
+            exc_info=True,
+        )
+        return None
+    except Exception:
         logger.exception(
-            "Could not send channel text"
+            "Unexpected error while sending channel text to %s",
+            channel,
         )
         return None
 
@@ -1746,11 +1755,18 @@ async def notify_customer(
             parse_mode="HTML",
         )
         return True
-    except TelegramError:
-        logger.warning(
-            "Could not notify user %s",
+    except TelegramError as exc:
+        logger.error(
+            "Could not notify user %s: %s",
             user_id,
+            exc,
             exc_info=True,
+        )
+        return False
+    except Exception:
+        logger.exception(
+            "Unexpected error while notifying user %s",
+            user_id,
         )
         return False
 
@@ -1949,13 +1965,32 @@ async def customer_private_message_handler(
     if user.id == ADMIN_TELEGRAM_ID:
         return
 
+    message = update.effective_message
+
     raw_text = (
-        update.effective_message.text
+        message.text
+        or message.caption
         or ""
     ).strip()
 
     if not raw_text:
-        return
+        if message.photo:
+            raw_text = "📷 أرسل الزبون صورة بدون نص."
+        elif message.document:
+            raw_text = (
+                "📎 أرسل الزبون ملفًا: "
+                + str(message.document.file_name or "مرفق")
+            )
+        elif message.video:
+            raw_text = "🎥 أرسل الزبون فيديو بدون نص."
+        elif message.voice:
+            raw_text = "🎙️ أرسل الزبون رسالة صوتية."
+        elif message.audio:
+            raw_text = "🎵 أرسل الزبون ملفًا صوتيًا."
+        elif message.sticker:
+            raw_text = "🙂 أرسل الزبون ملصقًا."
+        else:
+            raw_text = "📨 أرسل الزبون رسالة غير نصية."
 
     normalized = normalize_private_text(
         raw_text
@@ -2021,6 +2056,13 @@ async def customer_private_message_handler(
     )
 
     if sent:
+        logger.info(
+            "Customer message forwarded to channel: user_id=%s message_id=%s order_id=%s",
+            user.id,
+            sent.message_id,
+            order_id or "NONE",
+        )
+
         # Store the exact channel message ID so that when the admin
         # replies to this message in the channel, the reply can be
         # routed back to the same customer's private bot chat.
@@ -2059,14 +2101,27 @@ async def customer_private_message_handler(
                 "Could not store customer channel message mapping"
             )
 
-        await notify_customer(
+        confirmation_sent = await notify_customer(
             user.id,
             "✅ تم إرسال رسالتك إلى الكادر.",
         )
+
+        if not confirmation_sent:
+            logger.error(
+                "Channel delivery succeeded but customer confirmation failed: user_id=%s",
+                user.id,
+            )
+
     else:
+        logger.error(
+            "Customer message was NOT forwarded to channel: user_id=%s order_id=%s channel=%s",
+            user.id,
+            order_id or "NONE",
+            parse_channel_id(),
+        )
         await notify_customer(
             user.id,
-            "❌ تعذر إرسال رسالتك حاليًا، حاول مرة أخرى.",
+            "❌ تعذر إرسال رسالتك إلى الكادر حاليًا. حاول مرة أخرى لاحقًا.",
         )
 
 
@@ -2516,7 +2571,6 @@ telegram_app.add_handler(
 telegram_app.add_handler(
     MessageHandler(
         filters.ChatType.PRIVATE
-        & filters.TEXT
         & ~filters.COMMAND,
         customer_private_message_handler,
     )
@@ -4792,40 +4846,29 @@ def build_excel_report() -> bytes:
 )
 async def export_excel_report(
     request: Request,
-    send_telegram: bool = Query(False),
 ):
 
     require_admin(request)
 
-    excel_bytes = await asyncio.to_thread(
-        build_excel_report
-    )
+    try:
+        excel_bytes = await asyncio.to_thread(
+            build_excel_report
+        )
+    except Exception:
+        logger.exception(
+            "Excel report generation failed"
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="تعذر إنشاء ملف Excel على الخادم.",
+        )
 
-    if send_telegram:
+    if not excel_bytes:
+        raise HTTPException(
+            status_code=500,
+            detail="تم إنشاء ملف Excel فارغ.",
+        )
 
-        try:
-
-            await telegram_app.bot.send_document(
-                chat_id=ADMIN_TELEGRAM_ID,
-                document=excel_bytes,
-                filename="NABA_Orders.xlsx",
-                caption=(
-                    "📊 تقرير طلبات وسجلات "
-                    "النبع للخدمات الجامعية الشامل."
-                ),
-            )
-
-        except TelegramError:
-            # The Excel download must not fail just because the
-            # optional Telegram copy could not be sent.
-            logger.warning(
-                "Excel report was generated, but Telegram copy failed",
-                exc_info=True,
-            )
-
-    # Return the XLSX bytes directly. This avoids proxy/client
-    # issues that can occur with a streaming response for a
-    # generated in-memory Excel file.
     from fastapi.responses import Response
 
     return Response(
@@ -4838,7 +4881,8 @@ async def export_excel_report(
             "Content-Disposition":
                 'attachment; filename="NABA_Orders.xlsx"',
             "Content-Length": str(len(excel_bytes)),
-            "Cache-Control": "no-store",
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            "Pragma": "no-cache",
         },
     )
 
