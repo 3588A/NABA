@@ -12,7 +12,7 @@ import string
 import time
 from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timezone
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from pathlib import Path
 from typing import Optional, Literal
 from urllib.parse import parse_qsl, urlparse
@@ -312,199 +312,613 @@ def db():
 
 
 def init_db():
-    statements = [
-        """
-        CREATE TABLE IF NOT EXISTS orders (
-            order_id TEXT PRIMARY KEY,
+    """
+    Migration-safe database initialization.
 
-            user_id BIGINT NOT NULL,
+    IMPORTANT:
+    Existing PostgreSQL tables are NOT modified by
+    CREATE TABLE IF NOT EXISTS.
 
-            username TEXT NOT NULL DEFAULT '',
-
-            service_type TEXT NOT NULL DEFAULT '',
-
-            service_name TEXT NOT NULL DEFAULT '',
-
-            department TEXT NOT NULL DEFAULT '',
-
-            title TEXT NOT NULL DEFAULT '',
-
-            page_count TEXT NOT NULL DEFAULT '',
-
-            language TEXT NOT NULL DEFAULT '',
-
-            autocad_type TEXT NOT NULL DEFAULT '',
-
-            deadline TEXT NOT NULL DEFAULT '',
-
-            notes TEXT NOT NULL DEFAULT '',
-
-            order_status TEXT NOT NULL DEFAULT 'NEW',
-
-            payment_status TEXT NOT NULL DEFAULT 'UNPAID',
-
-            price NUMERIC(12,2) NOT NULL DEFAULT 0,
-
-            deposit NUMERIC(12,2) NOT NULL DEFAULT 0,
-
-            remaining_balance NUMERIC(12,2) NOT NULL DEFAULT 0,
-
-            created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-            service_details JSONB NOT NULL DEFAULT '{}'::jsonb,
-
-            admin_note TEXT NOT NULL DEFAULT '',
-
-            delivery_date TEXT NOT NULL DEFAULT '',
-
-            delivery_time TEXT NOT NULL DEFAULT '',
-
-            quotation_price NUMERIC(12,2) NOT NULL DEFAULT 0,
-
-            quotation_currency TEXT NOT NULL DEFAULT 'IQD',
-
-            quotation_notes TEXT NOT NULL DEFAULT '',
-
-            customer_decision TEXT NOT NULL DEFAULT 'PENDING',
-
-            customer_decision_at TIMESTAMPTZ,
-
-            idempotency_key TEXT,
-
-            idempotency_fingerprint TEXT,
-
-            delivery_channel_status TEXT NOT NULL DEFAULT 'PENDING',
-
-            channel_message_id BIGINT,
-
-            channel_attachment_message_id BIGINT
-        )
-        """,
-
-        """
-        CREATE TABLE IF NOT EXISTS payments (
-            id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-
-            order_id TEXT NOT NULL
-                REFERENCES orders(order_id)
-                ON DELETE CASCADE,
-
-            amount NUMERIC(12,2) NOT NULL,
-
-            currency TEXT NOT NULL DEFAULT 'IQD',
-
-            payment_method TEXT NOT NULL DEFAULT 'CASH',
-
-            recorded_by TEXT NOT NULL DEFAULT 'Admin',
-
-            created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-        """,
-
-        """
-        CREATE TABLE IF NOT EXISTS audit_logs (
-            id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-
-            order_id TEXT NOT NULL
-                REFERENCES orders(order_id)
-                ON DELETE CASCADE,
-
-            action TEXT NOT NULL,
-
-            performed_by TEXT NOT NULL DEFAULT 'System',
-
-            details TEXT NOT NULL DEFAULT '',
-
-            timestamp TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-        """,
-
-        """
-        CREATE TABLE IF NOT EXISTS attachments (
-            token TEXT PRIMARY KEY,
-
-            user_id BIGINT NOT NULL,
-
-            filename TEXT NOT NULL,
-
-            content_type TEXT NOT NULL,
-
-            data BYTEA NOT NULL,
-
-            created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-        """,
-
-        """
-        CREATE INDEX IF NOT EXISTS orders_user_id_idx
-        ON orders(user_id)
-        """,
-
-        """
-        CREATE INDEX IF NOT EXISTS orders_idempotency_idx
-        ON orders(idempotency_key)
-        """,
-
-        """
-        CREATE INDEX IF NOT EXISTS attachments_user_id_idx
-        ON attachments(user_id)
-        """,
-
-        """
-        CREATE INDEX IF NOT EXISTS orders_created_at_idx
-        ON orders(created_at)
-        """,
-
-        """
-        CREATE INDEX IF NOT EXISTS audit_logs_timestamp_idx
-        ON audit_logs(timestamp)
-        """,
-
-        """
-        CREATE INDEX IF NOT EXISTS payments_order_id_idx
-        ON payments(order_id)
-        """,
-
-        """
-        CREATE INDEX IF NOT EXISTS orders_channel_message_idx
-        ON orders(channel_message_id)
-        """,
-    ]
+    Therefore:
+    1. Create base tables if missing.
+    2. Add missing columns to existing installations.
+    3. Normalize old NULL values where needed.
+    4. Create indexes only AFTER all columns exist.
+    """
 
     with db() as conn:
 
-        for statement in statements:
-            conn.execute(statement)
-
-        # -------------------------------------------------
-        # Safe migrations for existing installations
-        # -------------------------------------------------
+        # =================================================
+        # 1. Base tables
+        # =================================================
 
         conn.execute(
             """
-            ALTER TABLE orders
-            ADD COLUMN IF NOT EXISTS channel_message_id BIGINT
+            CREATE TABLE IF NOT EXISTS orders (
+                order_id TEXT PRIMARY KEY,
+
+                user_id BIGINT NOT NULL,
+
+                username TEXT NOT NULL DEFAULT '',
+
+                service_type TEXT NOT NULL DEFAULT '',
+
+                service_name TEXT NOT NULL DEFAULT '',
+
+                department TEXT NOT NULL DEFAULT '',
+
+                title TEXT NOT NULL DEFAULT '',
+
+                page_count TEXT NOT NULL DEFAULT '',
+
+                language TEXT NOT NULL DEFAULT '',
+
+                autocad_type TEXT NOT NULL DEFAULT '',
+
+                deadline TEXT NOT NULL DEFAULT '',
+
+                notes TEXT NOT NULL DEFAULT '',
+
+                order_status TEXT NOT NULL DEFAULT 'NEW',
+
+                payment_status TEXT NOT NULL DEFAULT 'UNPAID',
+
+                price NUMERIC(12,2) NOT NULL DEFAULT 0,
+
+                deposit NUMERIC(12,2) NOT NULL DEFAULT 0,
+
+                remaining_balance NUMERIC(12,2) NOT NULL DEFAULT 0,
+
+                created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+                service_details JSONB NOT NULL DEFAULT '{}'::jsonb,
+
+                admin_note TEXT NOT NULL DEFAULT '',
+
+                delivery_date TEXT NOT NULL DEFAULT '',
+
+                delivery_time TEXT NOT NULL DEFAULT '',
+
+                quotation_price NUMERIC(12,2) NOT NULL DEFAULT 0,
+
+                quotation_currency TEXT NOT NULL DEFAULT 'IQD',
+
+                quotation_notes TEXT NOT NULL DEFAULT '',
+
+                customer_decision TEXT NOT NULL DEFAULT 'PENDING',
+
+                customer_decision_at TIMESTAMPTZ,
+
+                idempotency_key TEXT,
+
+                idempotency_fingerprint TEXT,
+
+                delivery_channel_status TEXT NOT NULL DEFAULT 'PENDING',
+
+                channel_message_id BIGINT,
+
+                channel_attachment_message_id BIGINT
+            )
             """
         )
 
         conn.execute(
             """
-            ALTER TABLE orders
-            ADD COLUMN IF NOT EXISTS channel_attachment_message_id BIGINT
+            CREATE TABLE IF NOT EXISTS payments (
+                id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+
+                order_id TEXT NOT NULL
+                    REFERENCES orders(order_id)
+                    ON DELETE CASCADE,
+
+                amount NUMERIC(12,2) NOT NULL,
+
+                currency TEXT NOT NULL DEFAULT 'IQD',
+
+                payment_method TEXT NOT NULL DEFAULT 'CASH',
+
+                recorded_by TEXT NOT NULL DEFAULT 'Admin',
+
+                created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
             """
         )
 
         conn.execute(
             """
-            ALTER TABLE orders
-            ADD COLUMN IF NOT EXISTS delivery_channel_status
-            TEXT NOT NULL DEFAULT 'PENDING'
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+
+                order_id TEXT NOT NULL
+                    REFERENCES orders(order_id)
+                    ON DELETE CASCADE,
+
+                action TEXT NOT NULL,
+
+                performed_by TEXT NOT NULL DEFAULT 'System',
+
+                details TEXT NOT NULL DEFAULT '',
+
+                timestamp TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
             """
         )
 
-        # -------------------------------------------------
-        # Unique idempotency protection
-        # -------------------------------------------------
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS attachments (
+                token TEXT PRIMARY KEY,
+
+                user_id BIGINT NOT NULL,
+
+                filename TEXT NOT NULL,
+
+                content_type TEXT NOT NULL,
+
+                data BYTEA NOT NULL,
+
+                created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+
+        # =================================================
+        # 2. Safe migrations for OLD orders table
+        # =================================================
+
+        order_columns = [
+            (
+                "username",
+                """
+                TEXT NOT NULL DEFAULT ''
+                """
+            ),
+            (
+                "service_type",
+                """
+                TEXT NOT NULL DEFAULT ''
+                """
+            ),
+            (
+                "service_name",
+                """
+                TEXT NOT NULL DEFAULT ''
+                """
+            ),
+            (
+                "department",
+                """
+                TEXT NOT NULL DEFAULT ''
+                """
+            ),
+            (
+                "title",
+                """
+                TEXT NOT NULL DEFAULT ''
+                """
+            ),
+            (
+                "page_count",
+                """
+                TEXT NOT NULL DEFAULT ''
+                """
+            ),
+            (
+                "language",
+                """
+                TEXT NOT NULL DEFAULT ''
+                """
+            ),
+            (
+                "autocad_type",
+                """
+                TEXT NOT NULL DEFAULT ''
+                """
+            ),
+            (
+                "deadline",
+                """
+                TEXT NOT NULL DEFAULT ''
+                """
+            ),
+            (
+                "notes",
+                """
+                TEXT NOT NULL DEFAULT ''
+                """
+            ),
+            (
+                "order_status",
+                """
+                TEXT NOT NULL DEFAULT 'NEW'
+                """
+            ),
+            (
+                "payment_status",
+                """
+                TEXT NOT NULL DEFAULT 'UNPAID'
+                """
+            ),
+            (
+                "price",
+                """
+                NUMERIC(12,2) NOT NULL DEFAULT 0
+                """
+            ),
+            (
+                "deposit",
+                """
+                NUMERIC(12,2) NOT NULL DEFAULT 0
+                """
+            ),
+            (
+                "remaining_balance",
+                """
+                NUMERIC(12,2) NOT NULL DEFAULT 0
+                """
+            ),
+            (
+                "created_at",
+                """
+                TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+                """
+            ),
+            (
+                "service_details",
+                """
+                JSONB NOT NULL DEFAULT '{}'::jsonb
+                """
+            ),
+            (
+                "admin_note",
+                """
+                TEXT NOT NULL DEFAULT ''
+                """
+            ),
+            (
+                "delivery_date",
+                """
+                TEXT NOT NULL DEFAULT ''
+                """
+            ),
+            (
+                "delivery_time",
+                """
+                TEXT NOT NULL DEFAULT ''
+                """
+            ),
+            (
+                "quotation_price",
+                """
+                NUMERIC(12,2) NOT NULL DEFAULT 0
+                """
+            ),
+            (
+                "quotation_currency",
+                """
+                TEXT NOT NULL DEFAULT 'IQD'
+                """
+            ),
+            (
+                "quotation_notes",
+                """
+                TEXT NOT NULL DEFAULT ''
+                """
+            ),
+            (
+                "customer_decision",
+                """
+                TEXT NOT NULL DEFAULT 'PENDING'
+                """
+            ),
+            (
+                "customer_decision_at",
+                """
+                TIMESTAMPTZ
+                """
+            ),
+            (
+                "idempotency_key",
+                """
+                TEXT
+                """
+            ),
+            (
+                "idempotency_fingerprint",
+                """
+                TEXT
+                """
+            ),
+            (
+                "delivery_channel_status",
+                """
+                TEXT NOT NULL DEFAULT 'PENDING'
+                """
+            ),
+            (
+                "channel_message_id",
+                """
+                BIGINT
+                """
+            ),
+            (
+                "channel_attachment_message_id",
+                """
+                BIGINT
+                """
+            ),
+        ]
+
+        for column_name, column_definition in order_columns:
+
+            conn.execute(
+                f"""
+                ALTER TABLE orders
+                ADD COLUMN IF NOT EXISTS
+                {column_name}
+                {column_definition}
+                """
+            )
+
+        # =================================================
+        # 3. Safe migrations for payments
+        # =================================================
+
+        payment_columns = [
+            (
+                "currency",
+                """
+                TEXT NOT NULL DEFAULT 'IQD'
+                """
+            ),
+            (
+                "payment_method",
+                """
+                TEXT NOT NULL DEFAULT 'CASH'
+                """
+            ),
+            (
+                "recorded_by",
+                """
+                TEXT NOT NULL DEFAULT 'Admin'
+                """
+            ),
+            (
+                "created_at",
+                """
+                TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+                """
+            ),
+        ]
+
+        for column_name, column_definition in payment_columns:
+
+            conn.execute(
+                f"""
+                ALTER TABLE payments
+                ADD COLUMN IF NOT EXISTS
+                {column_name}
+                {column_definition}
+                """
+            )
+
+        # =================================================
+        # 4. Safe migrations for audit_logs
+        # =================================================
+
+        audit_columns = [
+            (
+                "performed_by",
+                """
+                TEXT NOT NULL DEFAULT 'System'
+                """
+            ),
+            (
+                "details",
+                """
+                TEXT NOT NULL DEFAULT ''
+                """
+            ),
+            (
+                "timestamp",
+                """
+                TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+                """
+            ),
+        ]
+
+        for column_name, column_definition in audit_columns:
+
+            conn.execute(
+                f"""
+                ALTER TABLE audit_logs
+                ADD COLUMN IF NOT EXISTS
+                {column_name}
+                {column_definition}
+                """
+            )
+
+        # =================================================
+        # 5. Safe migrations for attachments
+        # =================================================
+
+        conn.execute(
+            """
+            ALTER TABLE attachments
+            ADD COLUMN IF NOT EXISTS
+            created_at
+            TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+            """
+        )
+
+        # =================================================
+        # 6. Normalize possible NULL values from legacy DB
+        # =================================================
+
+        conn.execute(
+            """
+            UPDATE orders
+            SET
+                username = COALESCE(username, ''),
+                service_type = COALESCE(service_type, ''),
+                service_name = COALESCE(service_name, ''),
+                department = COALESCE(department, ''),
+                title = COALESCE(title, ''),
+                page_count = COALESCE(page_count, ''),
+                language = COALESCE(language, ''),
+                autocad_type = COALESCE(autocad_type, ''),
+                deadline = COALESCE(deadline, ''),
+                notes = COALESCE(notes, ''),
+                order_status = COALESCE(order_status, 'NEW'),
+                payment_status = COALESCE(payment_status, 'UNPAID'),
+                price = COALESCE(price, 0),
+                deposit = COALESCE(deposit, 0),
+                remaining_balance = COALESCE(remaining_balance, 0),
+                created_at = COALESCE(
+                    created_at,
+                    CURRENT_TIMESTAMP
+                ),
+                service_details = COALESCE(
+                    service_details,
+                    '{}'::jsonb
+                ),
+                admin_note = COALESCE(admin_note, ''),
+                delivery_date = COALESCE(delivery_date, ''),
+                delivery_time = COALESCE(delivery_time, ''),
+                quotation_price = COALESCE(
+                    quotation_price,
+                    0
+                ),
+                quotation_currency = COALESCE(
+                    quotation_currency,
+                    'IQD'
+                ),
+                quotation_notes = COALESCE(
+                    quotation_notes,
+                    ''
+                ),
+                customer_decision = COALESCE(
+                    customer_decision,
+                    'PENDING'
+                ),
+                delivery_channel_status = COALESCE(
+                    delivery_channel_status,
+                    'PENDING'
+                )
+            """
+        )
+
+        conn.execute(
+            """
+            UPDATE payments
+            SET
+                currency = COALESCE(currency, 'IQD'),
+                payment_method = COALESCE(
+                    payment_method,
+                    'CASH'
+                ),
+                recorded_by = COALESCE(
+                    recorded_by,
+                    'Admin'
+                ),
+                created_at = COALESCE(
+                    created_at,
+                    CURRENT_TIMESTAMP
+                )
+            """
+        )
+
+        conn.execute(
+            """
+            UPDATE audit_logs
+            SET
+                performed_by = COALESCE(
+                    performed_by,
+                    'System'
+                ),
+                details = COALESCE(details, ''),
+                timestamp = COALESCE(
+                    timestamp,
+                    CURRENT_TIMESTAMP
+                )
+            """
+        )
+
+        conn.execute(
+            """
+            UPDATE attachments
+            SET created_at = COALESCE(
+                created_at,
+                CURRENT_TIMESTAMP
+            )
+            """
+        )
+
+        # =================================================
+        # 7. Create indexes ONLY AFTER migrations
+        # =================================================
+
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS
+            orders_user_id_idx
+            ON orders(user_id)
+            """
+        )
+
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS
+            orders_idempotency_idx
+            ON orders(idempotency_key)
+            """
+        )
+
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS
+            attachments_user_id_idx
+            ON attachments(user_id)
+            """
+        )
+
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS
+            orders_created_at_idx
+            ON orders(created_at)
+            """
+        )
+
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS
+            audit_logs_timestamp_idx
+            ON audit_logs(timestamp)
+            """
+        )
+
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS
+            payments_order_id_idx
+            ON payments(order_id)
+            """
+        )
+
+        # This was the source of the startup error before.
+        # It is now created AFTER channel_message_id migration.
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS
+            orders_channel_message_idx
+            ON orders(channel_message_id)
+            """
+        )
+
+        # =================================================
+        # 8. Unique idempotency protection
+        # =================================================
 
         conn.execute(
             """
@@ -580,11 +994,6 @@ def add_audit_log_conn(
     performed_by: str = "System",
     details: str = "",
 ):
-    """
-    Adds an audit entry using the SAME database transaction.
-    This avoids order/audit inconsistency.
-    """
-
     conn.execute(
         """
         INSERT INTO audit_logs(
@@ -845,7 +1254,6 @@ class OrderIn(BaseModel):
                 "صيغة الموعد غير صحيحة"
             )
 
-        # Reject clearly invalid past deadlines.
         if parsed.tzinfo is not None:
             now = datetime.now(parsed.tzinfo)
         else:
@@ -1037,10 +1445,6 @@ def create_order(
         data,
     )
 
-    # -----------------------------------------------------
-    # Normalize idempotency key
-    # -----------------------------------------------------
-
     if idempotency_key:
         idempotency_key = idempotency_key.strip()
 
@@ -1049,10 +1453,6 @@ def create_order(
                 status_code=400,
                 detail="Idempotency-Key طويل جدًا",
             )
-
-    # -----------------------------------------------------
-    # Check existing request
-    # -----------------------------------------------------
 
     with db() as conn:
 
@@ -1104,10 +1504,6 @@ def create_order(
                 None,
                 True,
             )
-
-    # -----------------------------------------------------
-    # Create new order
-    # -----------------------------------------------------
 
     for _ in range(10):
 
@@ -1228,14 +1624,6 @@ def create_order(
             )
 
         except psycopg.errors.UniqueViolation:
-
-            # A unique conflict can mean either:
-            # - generated order ID collision
-            # - idempotency race
-            # - idempotency unique index conflict
-            #
-            # Check whether the client's idempotency key
-            # already produced an order.
 
             if idempotency_key:
 
@@ -1464,8 +1852,6 @@ def build_order_message(
         or "لا توجد ملاحظات"
     )
 
-    # Telegram HTML message limit is 4096.
-    # Keep a safe margin.
     remaining_chars = max(
         100,
         3900 - len(text),
@@ -1576,10 +1962,6 @@ async def deliver_order(
 
         return False
 
-    # -----------------------------------------------------
-    # Do not duplicate already-delivered orders
-    # -----------------------------------------------------
-
     try:
 
         with db() as conn:
@@ -1617,10 +1999,6 @@ async def deliver_order(
             order_id,
         )
 
-    # -----------------------------------------------------
-    # Mark as sending
-    # -----------------------------------------------------
-
     try:
 
         with db() as conn:
@@ -1640,10 +2018,6 @@ async def deliver_order(
             "Could not mark order %s as SENDING",
             order_id,
         )
-
-    # -----------------------------------------------------
-    # Send to channel
-    # -----------------------------------------------------
 
     try:
 
@@ -1886,15 +2260,6 @@ async def channel_post_handler(
 
     if str(post.chat.id) != str(channel):
         return
-
-    # We intentionally do not treat an ordinary new
-    # channel post as a customer reply.
-    #
-    # Telegram channels without a linked discussion group
-    # do not expose an admin "reply to customer" message
-    # as a private message update to the bot.
-    #
-    # We log the event for diagnostics only.
 
     logger.info(
         "Channel post received: chat=%s message_id=%s",
@@ -2187,11 +2552,6 @@ async def lifespan(_: FastAPI):
         await telegram_app.bot.set_webhook(
             url=WEBHOOK_URL,
             secret_token=WEBHOOK_SECRET,
-
-            # Important:
-            # message = private/admin messages
-            # channel_post = posts made in channel
-            # edited_channel_post = edited channel posts
             allowed_updates=[
                 "message",
                 "channel_post",
@@ -2560,10 +2920,6 @@ async def submit_order(
         )
     )
 
-    # -----------------------------------------------------
-    # Existing order
-    # -----------------------------------------------------
-
     if is_duplicate:
 
         delivery_status = (
@@ -2573,7 +2929,6 @@ async def submit_order(
             or "PENDING"
         )
 
-        # Already delivered.
         if (
             delivery_status == "DELIVERED"
             and order.get("channel_message_id")
@@ -2586,8 +2941,6 @@ async def submit_order(
                 "duplicate": True,
             }
 
-        # Failed/PENDING/SENDING:
-        # attempt recovery.
         existing_user = {
             "id": order["user_id"],
             "username": order["username"],
@@ -2608,18 +2961,12 @@ async def submit_order(
             "duplicate": True,
         }
 
-    # -----------------------------------------------------
-    # First delivery
-    # -----------------------------------------------------
-
     delivered = await deliver_order(
         order,
         user,
         attachment,
     )
 
-    # Delete temporary attachment only after
-    # successful or attempted order creation.
     if payload.attachment_token:
 
         try:
@@ -2636,10 +2983,6 @@ async def submit_order(
                 "Could not delete attachment %s",
                 payload.attachment_token,
             )
-
-    # -----------------------------------------------------
-    # Customer notification
-    # -----------------------------------------------------
 
     notification_ok = await notify_customer(
         user["id"],
@@ -3161,10 +3504,6 @@ async def set_quotation(
                 detail="الطلب غير موجود",
             )
 
-        # -------------------------------------------------
-        # Prevent quotation on closed orders
-        # -------------------------------------------------
-
         if order["order_status"] in {
             "COMPLETED",
             "CANCELLED",
@@ -3178,10 +3517,6 @@ async def set_quotation(
                     "لطلب مغلق أو مكتمل."
                 ),
             )
-
-        # -------------------------------------------------
-        # Currency consistency
-        # -------------------------------------------------
 
         currency = (
             payload.currency
@@ -3409,10 +3744,6 @@ async def update_order_status(
                 ),
             )
 
-        # -------------------------------------------------
-        # Keep customer decision logically consistent
-        # -------------------------------------------------
-
         customer_decision_sql = ""
 
         if new_status == "ACCEPTED":
@@ -3537,10 +3868,6 @@ def record_payment(
             .upper()
             .strip()
         )
-
-        # -------------------------------------------------
-        # Never mix currencies
-        # -------------------------------------------------
 
         if payment_currency != quotation_currency:
 
@@ -4090,9 +4417,9 @@ def build_excel_report() -> bytes:
             """
         ).fetchall()
 
-    # -----------------------------------------------------
+    # =====================================================
     # Orders
-    # -----------------------------------------------------
+    # =====================================================
 
     ws1 = wb.active
 
@@ -4139,12 +4466,8 @@ def build_excel_report() -> bytes:
                     order["remaining_balance"] or 0
                 ),
                 order["customer_decision"],
-                order[
-                    "delivery_channel_status"
-                ],
-                order[
-                    "channel_message_id"
-                ],
+                order["delivery_channel_status"],
+                order["channel_message_id"],
                 (
                     f"{order['delivery_date']} "
                     f"{order['delivery_time']}"
@@ -4162,9 +4485,9 @@ def build_excel_report() -> bytes:
 
     style_table(ws1)
 
-    # -----------------------------------------------------
+    # =====================================================
     # Payments
-    # -----------------------------------------------------
+    # =====================================================
 
     ws2 = wb.create_sheet(
         "Payments"
@@ -4207,9 +4530,9 @@ def build_excel_report() -> bytes:
 
     style_table(ws2)
 
-    # -----------------------------------------------------
+    # =====================================================
     # Activity
-    # -----------------------------------------------------
+    # =====================================================
 
     ws3 = wb.create_sheet(
         "Activity"
@@ -4248,9 +4571,9 @@ def build_excel_report() -> bytes:
 
     style_table(ws3)
 
-    # -----------------------------------------------------
+    # =====================================================
     # Summary
-    # -----------------------------------------------------
+    # =====================================================
 
     ws4 = wb.create_sheet(
         "Summary"
@@ -4378,11 +4701,6 @@ async def export_excel_report(
                     f"التليجرام: {exc}"
                 ),
             )
-
-    # IMPORTANT:
-    # FileResponse requires an actual file path.
-    # The report is already in memory, therefore
-    # StreamingResponse is the correct response type.
 
     return StreamingResponse(
         io.BytesIO(excel_bytes),
