@@ -12,6 +12,8 @@ import string
 import time
 from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation
+import tempfile
 from pathlib import Path
 from typing import Literal
 from urllib.parse import parse_qsl, urlparse
@@ -28,6 +30,7 @@ from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Update,
+    CallbackQuery,
     WebAppInfo,
 )
 from telegram.error import TelegramError
@@ -36,6 +39,7 @@ from telegram.ext import (
     CommandHandler,
     ContextTypes,
     MessageHandler,
+    CallbackQueryHandler,
     filters,
 )
 
@@ -52,6 +56,18 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger("NABA")
+
+
+def money_decimal(value) -> Decimal:
+    try:
+        return Decimal(str(value or 0)).quantize(Decimal("0.01"))
+    except (InvalidOperation, ValueError, TypeError):
+        return Decimal("0.00")
+
+
+def money_float(value) -> float:
+    return float(money_decimal(value))
+
 
 
 # =========================================================
@@ -368,6 +384,51 @@ def init_db():
 
         for statement in statements:
             conn.execute(statement)
+
+        # =================================================
+        # Safe workflow / payment schema extensions
+        # =================================================
+        workflow_columns = [
+            ("customer_decision", "TEXT NOT NULL DEFAULT 'WAITING'"),
+            ("delivery_at", "TEXT NOT NULL DEFAULT ''"),
+            ("admin_note", "TEXT NOT NULL DEFAULT ''"),
+            ("quote_sent_at", "TIMESTAMPTZ"),
+            ("customer_decided_at", "TIMESTAMPTZ"),
+            ("cancelled_at", "TIMESTAMPTZ"),
+            ("cancelled_by", "TEXT NOT NULL DEFAULT ''"),
+            ("cancellation_reason", "TEXT NOT NULL DEFAULT ''"),
+            ("updated_at", "TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP"),
+            ("idempotency_key", "TEXT"),
+            ("idempotency_fingerprint", "TEXT"),
+            ("channel_delivery_status", "TEXT NOT NULL DEFAULT 'PENDING'"),
+        ]
+        for column, definition in workflow_columns:
+            conn.execute(f"ALTER TABLE orders ADD COLUMN IF NOT EXISTS {column} {definition}")
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS payments (
+                payment_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                order_id TEXT NOT NULL REFERENCES orders(order_id) ON DELETE RESTRICT,
+                amount NUMERIC(12,2) NOT NULL,
+                currency TEXT NOT NULL DEFAULT 'IQD',
+                payment_method TEXT NOT NULL DEFAULT 'MANUAL',
+                note TEXT NOT NULL DEFAULT '',
+                performed_by TEXT NOT NULL DEFAULT 'System',
+                request_key TEXT,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.execute("ALTER TABLE payments ADD COLUMN IF NOT EXISTS request_key TEXT")
+        conn.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS payments_order_request_key_uniq
+            ON payments(order_id, request_key)
+            WHERE request_key IS NOT NULL
+        """)
+        conn.execute("ALTER TABLE attachments ADD COLUMN IF NOT EXISTS order_id TEXT REFERENCES orders(order_id) ON DELETE SET NULL")
+        conn.execute("ALTER TABLE attachments ADD COLUMN IF NOT EXISTS attached_at TIMESTAMPTZ")
+        conn.execute("CREATE INDEX IF NOT EXISTS orders_status_idx ON orders(order_status)")
+        conn.execute("CREATE INDEX IF NOT EXISTS orders_customer_decision_idx ON orders(customer_decision)")
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS orders_user_id_idempotency_key_uniq ON orders(user_id, idempotency_key) WHERE idempotency_key IS NOT NULL")
 
         # =================================================
         # Phase 1 migration
@@ -2269,6 +2330,32 @@ async def camera_command(
     )
 
 
+async def quotation_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if not query or not query.from_user:
+        return
+    await query.answer()
+    data = query.data or ""
+    match = re.fullmatch(r"naba:(accept|reject):([A-Za-z0-9._:-]+)", data)
+    if not match:
+        return
+    action, order_id = match.groups()
+    user_id = query.from_user.id
+    try:
+        result = await asyncio.to_thread(process_customer_decision, order_id, user_id, action)
+        if action == "accept":
+            text = "✅ تم تأكيد طلبك.\nسيتم البدء بالعمل."
+        else:
+            text = "❌ تم إلغاء الطلب بناءً على رفض العرض."
+        await query.edit_message_reply_markup(reply_markup=None)
+        await query.message.reply_text(text)
+    except HTTPException as exc:
+        await query.message.reply_text(f"❌ {exc.detail}")
+    except Exception:
+        logger.exception("Customer callback failed")
+        await query.message.reply_text("❌ تعذر تنفيذ العملية. حاول مرة أخرى.")
+
+
 # =========================================================
 # Telegram application
 # =========================================================
@@ -2279,6 +2366,10 @@ telegram_app = (
     .build()
 )
 
+
+telegram_app.add_handler(
+    CallbackQueryHandler(quotation_callback, pattern=r"^naba:(accept|reject):"),
+)
 
 telegram_app.add_handler(
     CommandHandler(
@@ -2330,7 +2421,8 @@ async def lifespan(
             url=WEBHOOK_URL,
             secret_token=WEBHOOK_SECRET,
             allowed_updates=[
-                "message"
+                "message",
+                "callback_query",
             ],
         )
 
@@ -3334,6 +3426,398 @@ def admin_dashboard(
             activities,
     }
 
+
+
+# =========================================================
+# Admin workflow / quotation / payments / search / Excel
+# =========================================================
+
+class PriceIn(BaseModel):
+    price: Decimal = Field(ge=Decimal("0"), max_digits=12, decimal_places=2)
+
+
+class DeadlineIn(BaseModel):
+    delivery_at: str = Field(min_length=1, max_length=80)
+
+
+class QuoteIn(BaseModel):
+    price: Decimal = Field(ge=Decimal("0"), max_digits=12, decimal_places=2)
+    delivery_at: str = Field(min_length=1, max_length=80)
+    admin_note: str = Field(default="", max_length=2000)
+
+
+class PaymentIn(BaseModel):
+    amount: Decimal = Field(gt=Decimal("0"), max_digits=12, decimal_places=2)
+    currency: str = Field(default="IQD", max_length=10)
+    payment_method: str = Field(default="MANUAL", max_length=40)
+    note: str = Field(default="", max_length=1000)
+    request_key: str = Field(default="", max_length=200)
+
+
+class StatusIn(BaseModel):
+    status: str = Field(min_length=1, max_length=40)
+    note: str = Field(default="", max_length=1000)
+
+
+class NoteIn(BaseModel):
+    note: str = Field(min_length=1, max_length=2000)
+
+
+def fetch_order(conn, order_id: str, for_update: bool = False):
+    suffix = " FOR UPDATE" if for_update else ""
+    return conn.execute(f"""
+        SELECT * FROM orders WHERE order_id=%s{suffix}
+    """, (order_id,)).fetchone()
+
+
+def serialize_order(conn, order: dict, include_activity: bool = True) -> dict:
+    totals = payment_totals(conn, order["order_id"])
+    paid = money_decimal(totals["paid"]) - money_decimal(totals["refunded"])
+    price = money_decimal(order.get("price"))
+    remaining = max(price - paid, Decimal("0.00"))
+    attachment = conn.execute("""
+        SELECT token, filename, content_type, created_at, attached_at
+        FROM attachments WHERE order_id=%s ORDER BY created_at DESC
+    """, (order["order_id"],)).fetchall()
+    activity = []
+    if include_activity:
+        rows = conn.execute("""
+            SELECT id, order_id, action, performed_by, timestamp
+            FROM audit_logs WHERE order_id=%s ORDER BY timestamp DESC LIMIT 100
+        """, (order["order_id"],)).fetchall()
+        activity = [dict(r) for r in rows]
+        for r in activity:
+            if r.get("timestamp"):
+                r["timestamp"] = r["timestamp"].isoformat()
+    result = dict(order)
+    for k in ("created_at", "updated_at", "quote_sent_at", "customer_decided_at", "cancelled_at"):
+        if result.get(k): result[k] = result[k].isoformat()
+    result["price"] = money_float(price)
+    result["paid"] = money_float(paid)
+    result["deposit"] = money_float(paid)
+    result["remaining_balance"] = money_float(remaining)
+    result["attachments"] = [dict(a) for a in attachment]
+    for a in result["attachments"]:
+        for k in ("created_at", "attached_at"):
+            if a.get(k): a[k] = a[k].isoformat()
+    result["activity"] = activity
+    return result
+
+
+def set_price(order_id: str, price: Decimal, admin: dict):
+    with db() as conn:
+        order = fetch_order(conn, order_id, True)
+        if not order: raise HTTPException(404, "الطلب غير موجود")
+        old = money_decimal(order["price"])
+        conn.execute("UPDATE orders SET price=%s, updated_at=CURRENT_TIMESTAMP WHERE order_id=%s", (price, order_id))
+        refresh_payment_summary(conn, order_id)
+        log_audit_safely(conn, order_id, "PRICE_SET" if old == 0 else "PRICE_UPDATED", f"Admin_{admin['id']}")
+        return fetch_order(conn, order_id)
+
+
+def set_delivery_at(order_id: str, delivery_at: str, admin: dict):
+    with db() as conn:
+        order = fetch_order(conn, order_id, True)
+        if not order: raise HTTPException(404, "الطلب غير موجود")
+        conn.execute("UPDATE orders SET delivery_at=%s, updated_at=CURRENT_TIMESTAMP WHERE order_id=%s", (delivery_at, order_id))
+        log_audit_safely(conn, order_id, "DELIVERY_TIME_UPDATED", f"Admin_{admin['id']}")
+        return fetch_order(conn, order_id)
+
+
+def process_customer_decision(order_id: str, user_id: int, action: str):
+    if action not in {"accept", "reject"}: raise HTTPException(400, "عملية غير صالحة")
+    with db() as conn:
+        order = fetch_order(conn, order_id, True)
+        if not order: raise HTTPException(404, "الطلب غير موجود")
+        if int(order["user_id"]) != int(user_id): raise HTTPException(403, "هذا الطلب لا يخص حسابك")
+        if order["order_status"] != "WAITING_CUSTOMER" or order.get("customer_decision") != "WAITING":
+            raise HTTPException(409, "لا يمكن تنفيذ القرار على هذا الطلب")
+        if action == "accept":
+            conn.execute("""
+                UPDATE orders SET customer_decision='ACCEPTED', customer_decided_at=CURRENT_TIMESTAMP,
+                order_status='READY_TO_START', updated_at=CURRENT_TIMESTAMP WHERE order_id=%s
+            """, (order_id,))
+            log_audit_safely(conn, order_id, "CUSTOMER_ACCEPTED_ORDER", f"User_{user_id}")
+            return {"ok": True, "status": "READY_TO_START"}
+        conn.execute("""
+            UPDATE orders SET customer_decision='REJECTED', customer_decided_at=CURRENT_TIMESTAMP,
+            order_status='CANCELLED', cancelled_at=CURRENT_TIMESTAMP, cancelled_by=%s,
+            cancellation_reason='رفض العرض من الزبون', updated_at=CURRENT_TIMESTAMP WHERE order_id=%s
+        """, (f"User_{user_id}", order_id))
+        log_audit_safely(conn, order_id, "CUSTOMER_REJECTED_ORDER", f"User_{user_id}")
+        return {"ok": True, "status": "CANCELLED"}
+
+
+async def send_quotation(order_id: str, admin: dict, quote: QuoteIn):
+    result = await asyncio.to_thread(_prepare_quote, order_id, admin, quote)
+    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("✅ تأكيد الطلب", callback_data=f"naba:accept:{order_id}"), InlineKeyboardButton("❌ رفض الطلب", callback_data=f"naba:reject:{order_id}")]])
+    text = (
+        "📋 <b>تفاصيل طلبك</b>\n\n"
+        f"🆔 رقم الطلب: <code>{html.escape(order_id)}</code>\n"
+        f"🛠 الخدمة: {html.escape(result['service_name'])}\n"
+        f"💰 السعر: {money_float(quote.price):,.2f} IQD\n"
+        f"⏰ موعد التسليم: {html.escape(quote.delivery_at)}\n"
+        f"📝 ملاحظات: {html.escape(quote.admin_note or 'لا توجد')}\n\n"
+        "يرجى اختيار أحد الخيارين أدناه."
+    )
+    try:
+        await telegram_app.bot.send_message(chat_id=result["user_id"], text=text, parse_mode="HTML", reply_markup=keyboard)
+    except TelegramError:
+        await asyncio.to_thread(_revert_quote_after_send_failure, order_id)
+        raise HTTPException(502, "تعذر إرسال العرض للزبون")
+    return {"ok": True, "message": "تم إرسال العرض للزبون", "order_id": order_id}
+
+
+def _prepare_quote(order_id: str, admin: dict, quote: QuoteIn):
+    with db() as conn:
+        order = fetch_order(conn, order_id, True)
+        if not order: raise HTTPException(404, "الطلب غير موجود")
+        if order["order_status"] not in {"NEW", "UNDER_REVIEW"}:
+            raise HTTPException(409, "لا يمكن إرسال العرض في الحالة الحالية")
+        conn.execute("""
+            UPDATE orders SET price=%s, delivery_at=%s, admin_note=%s,
+            order_status='WAITING_CUSTOMER', customer_decision='WAITING',
+            quote_sent_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP
+            WHERE order_id=%s
+        """, (quote.price, quote.delivery_at, quote.admin_note, order_id))
+        refresh_payment_summary(conn, order_id)
+        log_audit_safely(conn, order_id, "QUOTE_SENT_TO_CUSTOMER", f"Admin_{admin['id']}")
+        return {"user_id": order["user_id"], "service_name": order["service_name"]}
+
+
+def _revert_quote_after_send_failure(order_id: str):
+    try:
+        with db() as conn:
+            conn.execute("""
+                UPDATE orders SET order_status='UNDER_REVIEW', quote_sent_at=NULL, updated_at=CURRENT_TIMESTAMP
+                WHERE order_id=%s AND order_status='WAITING_CUSTOMER'
+            """, (order_id,))
+            log_audit_safely(conn, order_id, "QUOTE_SEND_FAILED", "Telegram_Bot")
+    except Exception:
+        logger.exception("Could not revert failed quote %s", order_id)
+
+
+def record_payment(order_id: str, payment: PaymentIn, admin: dict):
+    with db() as conn:
+        order = fetch_order(conn, order_id, True)
+        if not order: raise HTTPException(404, "الطلب غير موجود")
+        key = payment.request_key.strip() or None
+        if key:
+            existing = conn.execute("SELECT payment_id FROM payments WHERE order_id=%s AND request_key=%s", (order_id, key)).fetchone()
+            if existing: return {"ok": True, "duplicate": True, "payment_id": int(existing["payment_id"])}
+        totals = payment_totals(conn, order_id)
+        paid = money_decimal(totals["paid"]) - money_decimal(totals["refunded"])
+        price = money_decimal(order["price"])
+        if payment.amount > max(price - paid, Decimal("0.00")) and price > 0:
+            raise HTTPException(400, "مبلغ الدفعة أكبر من المتبقي")
+        try:
+            row = conn.execute("""
+                INSERT INTO payments(order_id, amount, currency, payment_method, note, performed_by, request_key)
+                VALUES(%s,%s,%s,%s,%s,%s,%s) RETURNING payment_id
+            """, (order_id, payment.amount, payment.currency.upper(), payment.payment_method.upper(), payment.note, f"Admin_{admin['id']}", key)).fetchone()
+        except psycopg.errors.UniqueViolation:
+            existing = conn.execute("SELECT payment_id FROM payments WHERE order_id=%s AND request_key=%s", (order_id, key)).fetchone()
+            return {"ok": True, "duplicate": True, "payment_id": int(existing["payment_id"])}
+        summary = refresh_payment_summary(conn, order_id)
+        log_audit_safely(conn, order_id, "PAYMENT_RECORDED", f"Admin_{admin['id']}")
+        return {"ok": True, "payment_id": int(row["payment_id"]), **{k: money_float(v) if k in {"paid", "remaining"} else v for k,v in summary.items()}}
+
+
+def change_order_status(order_id: str, status: str, note: str, admin: dict):
+    status = status.strip().upper()
+    with db() as conn:
+        order = fetch_order(conn, order_id, True)
+        if not order: raise HTTPException(404, "الطلب غير موجود")
+        validate_order_transition(order["order_status"], status)
+        if status == "CANCELLED":
+            conn.execute("""UPDATE orders SET order_status=%s, cancelled_at=CURRENT_TIMESTAMP, cancelled_by=%s,
+                         cancellation_reason=%s, admin_note=%s, updated_at=CURRENT_TIMESTAMP WHERE order_id=%s""",
+                         (status, f"Admin_{admin['id']}", note, note, order_id))
+            action = "ORDER_CANCELLED"
+        else:
+            conn.execute("UPDATE orders SET order_status=%s, admin_note=%s, updated_at=CURRENT_TIMESTAMP WHERE order_id=%s", (status, note, order_id))
+            action = "ORDER_COMPLETED" if status == "COMPLETED" else "ORDER_STATUS_CHANGED"
+        log_audit_safely(conn, order_id, action, f"Admin_{admin['id']}")
+        return fetch_order(conn, order_id)
+
+
+def add_admin_note(order_id: str, note: str, admin: dict):
+    with db() as conn:
+        if not fetch_order(conn, order_id): raise HTTPException(404, "الطلب غير موجود")
+        conn.execute("UPDATE orders SET admin_note=%s, updated_at=CURRENT_TIMESTAMP WHERE order_id=%s", (note, order_id))
+        log_audit_safely(conn, order_id, "ADMIN_NOTE_ADDED", f"Admin_{admin['id']}")
+        return {"ok": True}
+
+
+@app.get("/api/admin/orders/{order_id}")
+def admin_order_details(order_id: str, request: Request):
+    admin = require_admin(request)
+    with db() as conn:
+        order = fetch_order(conn, order_id)
+        if not order: raise HTTPException(404, "الطلب غير موجود")
+        return serialize_order(conn, order)
+
+
+@app.post("/api/admin/orders/{order_id}/price")
+def admin_set_price(order_id: str, payload: PriceIn, request: Request):
+    admin = require_admin(request)
+    order = set_price(order_id, payload.price, admin)
+    return {"ok": True, "order_id": order_id, "price": money_float(order["price"])}
+
+
+@app.post("/api/admin/orders/{order_id}/deadline")
+def admin_set_deadline(order_id: str, payload: DeadlineIn, request: Request):
+    admin = require_admin(request)
+    set_delivery_at(order_id, payload.delivery_at, admin)
+    return {"ok": True, "order_id": order_id, "delivery_at": payload.delivery_at}
+
+
+@app.post("/api/admin/orders/{order_id}/quote")
+async def admin_send_quote(order_id: str, payload: QuoteIn, request: Request):
+    admin = require_admin(request)
+    return await send_quotation(order_id, admin, payload)
+
+
+@app.post("/api/orders/{order_id}/accept")
+def customer_accept(order_id: str, request: Request):
+    user = init_user_from_header(request)
+    return process_customer_decision(order_id, user["id"], "accept")
+
+
+@app.post("/api/orders/{order_id}/reject")
+def customer_reject(order_id: str, request: Request):
+    user = init_user_from_header(request)
+    return process_customer_decision(order_id, user["id"], "reject")
+
+
+@app.post("/api/admin/orders/{order_id}/payment")
+def admin_payment(order_id: str, payload: PaymentIn, request: Request):
+    admin = require_admin(request)
+    return record_payment(order_id, payload, admin)
+
+
+@app.post("/api/admin/orders/{order_id}/status")
+def admin_status(order_id: str, payload: StatusIn, request: Request):
+    admin = require_admin(request)
+    order = change_order_status(order_id, payload.status, payload.note, admin)
+    return {"ok": True, "order_id": order_id, "status": order["order_status"]}
+
+
+@app.post("/api/admin/orders/{order_id}/note")
+def admin_note(order_id: str, payload: NoteIn, request: Request):
+    admin = require_admin(request)
+    return add_admin_note(order_id, payload.note, admin)
+
+
+@app.get("/api/admin/orders/{order_id}/activity")
+def admin_activity(order_id: str, request: Request):
+    require_admin(request)
+    with db() as conn:
+        if not fetch_order(conn, order_id): raise HTTPException(404, "الطلب غير موجود")
+        rows = conn.execute("SELECT id, order_id, action, performed_by, timestamp FROM audit_logs WHERE order_id=%s ORDER BY timestamp DESC LIMIT 200", (order_id,)).fetchall()
+        return {"ok": True, "items": [{**dict(r), "timestamp": r["timestamp"].isoformat() if r["timestamp"] else None} for r in rows]}
+
+
+@app.get("/api/admin/orders")
+def admin_orders(request: Request, status: str = "", q: str = "", limit: int = 100):
+    require_admin(request)
+    limit = max(1, min(limit, 500))
+    with db() as conn:
+        where = []
+        params = []
+        if status:
+            where.append("order_status=%s"); params.append(status.upper())
+        if q.strip():
+            where.append("(order_id ILIKE %s OR username ILIKE %s OR title ILIKE %s OR service_name ILIKE %s)")
+            term = f"%{q.strip()}%"; params.extend([term, term, term, term])
+        sql = "SELECT order_id,user_id,username,service_type,service_name,department,title,order_status,customer_decision,payment_status,price,deposit,remaining_balance,deadline,delivery_at,quote_sent_at,created_at,updated_at FROM orders"
+        if where: sql += " WHERE " + " AND ".join(where)
+        sql += " ORDER BY created_at DESC LIMIT %s"; params.append(limit)
+        rows = conn.execute(sql, params).fetchall()
+        return {"ok": True, "items": [{**dict(r), **{k: (r[k].isoformat() if hasattr(r[k], 'isoformat') else r[k]) for k in ("quote_sent_at","created_at","updated_at") if r.get(k)}} for r in rows]}
+
+
+@app.get("/api/admin/export/excel")
+async def admin_export_excel(request: Request):
+    admin = require_admin(request)
+    path = None
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, Alignment
+        with db() as conn:
+            orders = conn.execute("""
+                SELECT order_id,user_id,username,service_name,department,title,order_status,customer_decision,payment_status,
+                       price,deposit,remaining_balance,deadline,created_at,updated_at,notes
+                FROM orders ORDER BY created_at DESC
+            """).fetchall()
+            payments = conn.execute("""
+                SELECT payment_id,order_id,amount,currency,payment_method,note,performed_by,created_at
+                FROM payments ORDER BY created_at DESC
+            """).fetchall()
+            activities = conn.execute("""
+                SELECT id,order_id,action,performed_by,timestamp FROM audit_logs ORDER BY timestamp DESC
+            """).fetchall()
+        wb = Workbook()
+        ws = wb.active; ws.title = "Orders"
+        ws.append(["Order ID","Customer","Telegram ID","Service","Department","Title","Order Status","Customer Decision","Payment Status","Price","Paid","Remaining","Deadline","Created At","Updated At","Notes"])
+        for c in ws[1]: c.font = Font(bold=True)
+        for r in orders:
+            ws.append([r["order_id"],r["username"],r["user_id"],r["service_name"],r["department"],r["title"],r["order_status"],r["customer_decision"],r["payment_status"],money_float(r["price"]),money_float(r["deposit"]),money_float(r["remaining_balance"]),r["deadline"],r["created_at"],r["updated_at"],r["notes"]])
+        ws2 = wb.create_sheet("Payments"); ws2.append(["Payment ID","Order ID","Amount","Currency","Payment Method","Note","Performed By","Created At"])
+        for c in ws2[1]: c.font = Font(bold=True)
+        for r in payments: ws2.append([r["payment_id"],r["order_id"],money_float(r["amount"]),r["currency"],r["payment_method"],r["note"],r["performed_by"],r["created_at"]])
+        ws3 = wb.create_sheet("Activity"); ws3.append(["Activity ID","Order ID","Action","Performed By","Timestamp"])
+        for c in ws3[1]: c.font = Font(bold=True)
+        for r in activities: ws3.append([r["id"],r["order_id"],r["action"],r["performed_by"],r["timestamp"]])
+        ws4 = wb.create_sheet("Summary")
+        total_orders = len(orders); today = datetime.now(timezone.utc).date()
+        total_sales = sum((money_decimal(r["price"]) for r in orders), Decimal("0")); total_paid = sum((money_decimal(r["deposit"]) for r in orders), Decimal("0")); total_remaining = sum((money_decimal(r["remaining_balance"]) for r in orders), Decimal("0"))
+        counts = {}
+        for r in orders: counts[r["order_status"]] = counts.get(r["order_status"], 0) + 1
+        summary = [["Metric","Value"],["Total Orders",total_orders],["Today's Orders",sum(1 for r in orders if r["created_at"] and r["created_at"].date()==today)], ["Pending Orders",counts.get("WAITING_CUSTOMER",0)],["Active Work",sum(counts.get(x,0) for x in ("READY_TO_START","IN_PROGRESS","QUALITY_REVIEW","READY_FOR_DELIVERY"))],["Completed Orders",counts.get("COMPLETED",0)],["Cancelled Orders",counts.get("CANCELLED",0)],["Total Sales",money_float(total_sales)],["Total Paid",money_float(total_paid)],["Total Remaining",money_float(total_remaining)]]
+        for row in summary: ws4.append(row)
+        for sheet in wb.worksheets:
+            for col in sheet.columns:
+                letter = col[0].column_letter
+                sheet.column_dimensions[letter].width = min(max(max(len(str(c.value or "")) for c in col)+2, 10), 40)
+            for row in sheet.iter_rows():
+                for c in row: c.alignment = Alignment(vertical="top", wrap_text=True)
+        fd, path = tempfile.mkstemp(prefix="NABA_Orders_", suffix=".xlsx"); os.close(fd)
+        wb.save(path)
+        caption = "📊 تقرير طلبات NABA\n\nتم إنشاء التقرير من قاعدة البيانات الحالية."
+        with open(path, "rb") as f:
+            await telegram_app.bot.send_document(chat_id=admin["id"], document=f, filename="NABA_Orders.xlsx", caption=caption)
+        return {"ok": True, "message": "تم إنشاء وإرسال ملف Excel إلى Telegram"}
+    except ImportError:
+        raise HTTPException(500, "مكتبة openpyxl غير مثبتة. أضف openpyxl إلى requirements.txt")
+    except TelegramError:
+        raise HTTPException(502, "تم إنشاء التقرير لكن تعذر إرساله إلى Telegram")
+    except Exception:
+        logger.exception("Excel export failed")
+        raise HTTPException(500, "تعذر إنشاء ملف Excel. يرجى المحاولة مرة أخرى.")
+    finally:
+        if path:
+            try: os.unlink(path)
+            except OSError: pass
+
+
+@app.get("/api/admin/dashboard/sections")
+def admin_dashboard_sections(request: Request):
+    require_admin(request)
+    sections = ["NEW","WAITING_CUSTOMER","READY_TO_START","IN_PROGRESS","QUALITY_REVIEW","READY_FOR_DELIVERY","COMPLETED","CANCELLED"]
+    with db() as conn:
+        result = {}
+        for status in sections:
+            rows = conn.execute("""
+                SELECT order_id,username,service_name,price,delivery_at,quote_sent_at,created_at,updated_at,customer_decision,payment_status
+                FROM orders WHERE order_status=%s ORDER BY created_at DESC
+            """, (status,)).fetchall()
+            result[status] = [dict(r) for r in rows]
+            for item in result[status]:
+                for k in ("quote_sent_at","created_at","updated_at"):
+                    if item.get(k): item[k]=item[k].isoformat()
+                item["price"]=money_float(item["price"])
+        return {"ok": True, "sections": result}
 
 # =========================================================
 # Order status
