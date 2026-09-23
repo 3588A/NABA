@@ -41,7 +41,6 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppI
 from telegram.error import TelegramError
 from telegram.ext import (
     ApplicationBuilder,
-    CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
     MessageHandler,
@@ -109,6 +108,16 @@ ADMIN_TELEGRAM_ID = env_int(
 )
 
 ADMIN_USER_ID = ADMIN_TELEGRAM_ID
+
+# Optional: restrict the Admin Dashboard to a fixed IP address (or list).
+# Set ADMIN_ALLOWED_IPS in the environment as a comma-separated list,
+# e.g. ADMIN_ALLOWED_IPS=1.2.3.4,5.6.7.8
+# Leave empty (default) to rely on the Telegram ID check only.
+ADMIN_ALLOWED_IPS = {
+    ip.strip()
+    for ip in env("ADMIN_ALLOWED_IPS").split(",")
+    if ip.strip()
+}
 
 MAX_ATTACHMENT_MB = env_int("MAX_ATTACHMENT_MB", 5)
 MAX_ATTACHMENT_BYTES = MAX_ATTACHMENT_MB * 1024 * 1024
@@ -366,22 +375,6 @@ def init_db():
             """
         )
 
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS channel_message_links (
-                channel_id BIGINT NOT NULL,
-                channel_message_id BIGINT NOT NULL,
-                order_id TEXT NOT NULL
-                    REFERENCES orders(order_id)
-                    ON DELETE CASCADE,
-                user_id BIGINT NOT NULL,
-                message_kind TEXT NOT NULL DEFAULT 'CUSTOMER',
-                created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (channel_id, channel_message_id)
-            )
-            """
-        )
-
         # -----------------------------
         # Orders migrations
         # -----------------------------
@@ -615,6 +608,20 @@ def init_db():
             """
         )
 
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS channel_customer_messages (
+                id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                order_id TEXT
+                    REFERENCES orders(order_id)
+                    ON DELETE CASCADE,
+                user_id BIGINT NOT NULL,
+                channel_message_id BIGINT NOT NULL UNIQUE,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+
         # -----------------------------
         # Indexes AFTER migrations
         # -----------------------------
@@ -653,8 +660,12 @@ def init_db():
             ON attachments(order_id)
             """,
             """
-            CREATE INDEX IF NOT EXISTS channel_message_links_order_idx
-            ON channel_message_links(order_id)
+            CREATE INDEX IF NOT EXISTS channel_customer_messages_order_id_idx
+            ON channel_customer_messages(order_id)
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS channel_customer_messages_message_id_idx
+            ON channel_customer_messages(channel_message_id)
             """,
         ]
 
@@ -852,6 +863,15 @@ def init_user_from_header(request: Request) -> dict:
     )
 
 
+def get_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("X-Forwarded-For", "")
+
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+
+    return request.client.host if request.client else ""
+
+
 def require_admin(request: Request) -> dict:
     user = init_user_from_header(request)
 
@@ -860,6 +880,21 @@ def require_admin(request: Request) -> dict:
             status_code=403,
             detail="غير مصرح لك بالوصول إلى لوحة التحكم",
         )
+
+    if ADMIN_ALLOWED_IPS:
+        client_ip = get_client_ip(request)
+
+        if client_ip not in ADMIN_ALLOWED_IPS:
+            logger.warning(
+                "Admin dashboard access blocked for IP=%s (user_id=%s)",
+                client_ip,
+                user["id"],
+            )
+
+            raise HTTPException(
+                status_code=403,
+                detail="غير مصرح لك بالوصول إلى لوحة التحكم من هذا العنوان.",
+            )
 
     return user
 
@@ -1520,43 +1555,6 @@ async def send_channel_text(
         return None
 
 
-def save_channel_message_link(
-    channel_message_id: int,
-    order_id: str,
-    user_id: int,
-    message_kind: str = "CUSTOMER",
-):
-    channel = parse_channel_id()
-    if channel is None:
-        return
-
-    with db() as conn:
-        conn.execute(
-            """
-            INSERT INTO channel_message_links(
-                channel_id,
-                channel_message_id,
-                order_id,
-                user_id,
-                message_kind
-            )
-            VALUES(%s, %s, %s, %s, %s)
-            ON CONFLICT (channel_id, channel_message_id)
-            DO UPDATE SET
-                order_id=EXCLUDED.order_id,
-                user_id=EXCLUDED.user_id,
-                message_kind=EXCLUDED.message_kind
-            """,
-            (
-                channel,
-                channel_message_id,
-                order_id,
-                user_id,
-                message_kind,
-            ),
-        )
-
-
 async def send_to_chat(
     chat_id,
     text: str,
@@ -1761,14 +1759,12 @@ async def deliver_order(
 async def notify_customer(
     user_id: int,
     text: str,
-    reply_markup=None,
 ):
     try:
         await telegram_app.bot.send_message(
             chat_id=user_id,
             text=text,
             parse_mode="HTML",
-            reply_markup=reply_markup,
         )
         return True
     except TelegramError:
@@ -1872,8 +1868,6 @@ def get_latest_active_order(
 async def handle_customer_quotation_decision(
     user_id: int,
     accepted: bool,
-    order_id: Optional[str] = None,
-    notify: bool = True,
 ):
     with db() as conn:
 
@@ -1882,14 +1876,13 @@ async def handle_customer_quotation_decision(
             SELECT *
             FROM orders
             WHERE user_id=%s
-              AND (%s IS NULL OR order_id=%s)
               AND order_status='WAITING_CUSTOMER'
               AND customer_decision='PENDING'
             ORDER BY created_at DESC
             LIMIT 1
             FOR UPDATE
             """,
-            (user_id, order_id, order_id),
+            (user_id,),
         ).fetchone()
 
         if not order:
@@ -1903,7 +1896,7 @@ async def handle_customer_quotation_decision(
             else "REJECTED"
         )
 
-        new_status = "ACCEPTED" if accepted else "CANCELLED"
+        new_status = decision
 
         conn.execute(
             """
@@ -1952,98 +1945,19 @@ async def handle_customer_quotation_decision(
         f"👤 Telegram ID: <code>{user_id}</code>"
     )
 
-    channel_result = await send_channel_text(channel_text)
+    await send_channel_text(channel_text)
 
-    confirmation_sent = True
-    if notify:
-        confirmation_sent = await notify_customer(
-            user_id,
-            (
-                "✅ <b>تم تحديث حالة طلبك</b>\n\n"
-                f"🆔 رقم الطلب: <code>{html.escape(order_id)}</code>\n"
-                "📌 الحالة: <b>تمت الموافقة</b>\n"
-                "سيبدأ الكادر بالعمل على طلبك."
-                if accepted
-                else
-                "❌ <b>تم تحديث حالة طلبك</b>\n\n"
-                f"🆔 رقم الطلب: <code>{html.escape(order_id)}</code>\n"
-                "📌 الحالة: <b>تم الرفض وإلغاء الطلب</b>\n"
-                "يمكنك إنشاء طلب جديد عند الحاجة."
-            ),
+    await notify_customer(
+        user_id,
+        (
+            "✅ تم تسجيل موافقتك على عرض السعر."
+            if accepted
+            else
+            "❌ تم تسجيل رفضك لعرض السعر."
         )
-
-    if not channel_result:
-        logger.warning(
-            "Customer decision saved but channel notification failed: order=%s",
-            order_id,
-        )
-
-    if not confirmation_sent:
-        logger.error(
-            "Customer decision saved but private confirmation failed: user=%s order=%s",
-            user_id,
-            order_id,
-        )
+    )
 
     return True
-
-
-async def quotation_callback_handler(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-):
-    query = update.callback_query
-    if not query or not query.from_user:
-        return
-
-    parts = (query.data or "").split(":", 2)
-    if len(parts) != 3 or parts[0] != "quotation":
-        return
-    if parts[1] not in {"accept", "reject"}:
-        return
-
-    # أجب فورًا حتى لا يبقى زر Telegram في حالة تحميل أثناء انتظار قاعدة البيانات.
-    try:
-        await query.answer("جارٍ تحديث حالة الطلب...")
-    except TelegramError:
-        logger.info("Could not acknowledge quotation callback", exc_info=True)
-
-    handled = await handle_customer_quotation_decision(
-        query.from_user.id,
-        parts[1] == "accept",
-        parts[2],
-        notify=False,
-    )
-    if not handled:
-        try:
-            await query.message.reply_text(
-                "⚠️ هذا العرض غير متاح أو تم اتخاذ القرار بشأنه مسبقًا."
-            )
-        except TelegramError:
-            logger.info("Could not report stale quotation", exc_info=True)
-        return
-
-    if handled:
-        try:
-            status_message = (
-                "✅ <b>تم تحديث حالة طلبك</b>\n\n"
-                f"🆔 رقم الطلب: <code>{html.escape(parts[2])}</code>\n"
-                "📌 الحالة: <b>تمت الموافقة</b>\n"
-                "سيبدأ الكادر بالعمل على طلبك."
-                if parts[1] == "accept"
-                else
-                "❌ <b>تم تحديث حالة طلبك</b>\n\n"
-                f"🆔 رقم الطلب: <code>{html.escape(parts[2])}</code>\n"
-                "📌 الحالة: <b>تم الرفض وإلغاء الطلب</b>\n"
-                "يمكنك إنشاء طلب جديد عند الحاجة."
-            )
-            await query.message.reply_text(
-                status_message,
-                parse_mode="HTML",
-            )
-            await query.edit_message_reply_markup(reply_markup=None)
-        except TelegramError:
-            logger.exception("Could not send quotation status confirmation")
 
 
 async def customer_private_message_handler(
@@ -2061,30 +1975,17 @@ async def customer_private_message_handler(
     if user.id == ADMIN_TELEGRAM_ID:
         return
 
-    message = update.effective_message
     raw_text = (
-        message.text
-        or message.caption
+        update.effective_message.text
         or ""
     ).strip()
 
-    has_media = any(
-        getattr(message, attribute, None)
-        for attribute in (
-            "photo",
-            "document",
-            "video",
-            "audio",
-            "voice",
-            "animation",
-            "sticker",
-        )
-    )
-
-    if not raw_text and not has_media:
+    if not raw_text:
         return
 
-    normalized = normalize_private_text(raw_text) if raw_text else ""
+    normalized = normalize_private_text(
+        raw_text
+    )
 
     # ---------------------------------------------
     # 1. Quotation decision
@@ -2118,23 +2019,13 @@ async def customer_private_message_handler(
     )
 
     if not order:
-        general_message = (
-            "💬 <b>رسالة عامة من الزبون</b>\n\n"
-            f"👤 <b>Telegram ID:</b> <code>{user.id}</code>\n"
-            f"👤 <b>Username:</b> @{html.escape(user.username or 'بدون_يوزر')}\n\n"
-            f"📝 <b>الرسالة:</b>\n{html.escape(raw_text or 'مرفق بدون نص')}"
+        await notify_customer(
+            user.id,
+            (
+                "ℹ️ لا يوجد لديك طلب نشط حاليًا.\n\n"
+                "يمكنك فتح تطبيق النبع وإنشاء طلب جديد."
+            ),
         )
-        sent_general = await send_channel_text(general_message)
-        if sent_general:
-            await notify_customer(
-                user.id,
-                "✅ تم إرسال رسالتك إلى الكادر.",
-            )
-        else:
-            await notify_customer(
-                user.id,
-                "❌ تعذر تحويل رسالتك إلى الكادر حاليًا. حاول مرة أخرى.",
-            )
         return
 
     order_id = order["order_id"]
@@ -2148,43 +2039,16 @@ async def customer_private_message_handler(
         f"👤 <b>Username:</b> "
         f"@{html.escape(user.username or 'بدون_يوزر')}\n\n"
         f"📝 <b>الرسالة:</b>\n"
-        f"{html.escape(raw_text or 'مرفق بدون نص')}\n\n"
+        f"{html.escape(raw_text)}\n\n"
         "💡 <b>للرد على الزبون:</b>\n"
         f"<code>/reply {html.escape(order_id)} نص الرد</code>"
     )
 
-    channel_messages = []
-    sent = await send_channel_text(channel_message)
+    sent = await send_channel_text(
+        channel_message
+    )
+
     if sent:
-        channel_messages.append(sent.message_id)
-
-    forwarded = None
-    if has_media:
-        channel = parse_channel_id()
-        if channel:
-            try:
-                forwarded = await telegram_app.bot.forward_message(
-                    chat_id=channel,
-                    from_chat_id=user.id,
-                    message_id=message.message_id,
-                )
-                channel_messages.append(forwarded.message_id)
-            except TelegramError:
-                logger.exception(
-                    "Could not forward customer media to channel: order=%s",
-                    order_id,
-                )
-
-    delivery_ok = bool(sent) and (not has_media or forwarded is not None)
-    if delivery_ok:
-        for channel_message_id in channel_messages:
-            await asyncio.to_thread(
-                save_channel_message_link,
-                channel_message_id,
-                order_id,
-                user.id,
-                "CUSTOMER_MESSAGE",
-            )
         await notify_customer(
             user.id,
             "✅ تم إرسال رسالتك إلى الكادر.",
@@ -2192,12 +2056,32 @@ async def customer_private_message_handler(
 
         try:
             with db() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO channel_customer_messages(
+                        order_id,
+                        user_id,
+                        channel_message_id
+                    )
+                    VALUES(%s, %s, %s)
+                    ON CONFLICT (channel_message_id)
+                    DO UPDATE SET
+                        order_id=EXCLUDED.order_id,
+                        user_id=EXCLUDED.user_id
+                    """,
+                    (
+                        order_id,
+                        user.id,
+                        sent.message_id,
+                    ),
+                )
+
                 add_audit_log_conn(
                     conn,
                     order_id,
                     "CUSTOMER_MESSAGE_TO_CHANNEL",
                     f"User_{user.id}",
-                    (raw_text or "مرفق")[:2000],
+                    raw_text[:2000],
                 )
         except Exception:
             logger.exception(
@@ -2206,8 +2090,7 @@ async def customer_private_message_handler(
     else:
         await notify_customer(
             user.id,
-            "❌ تعذر تحويل رسالتك إلى الكادر حاليًا. "
-            "تأكد من إعداد القناة وحاول مرة أخرى.",
+            "❌ تعذر إرسال رسالتك حاليًا، حاول مرة أخرى.",
         )
 
 
@@ -2322,26 +2205,18 @@ async def channel_post_handler(
     منشور القناة وليس هوية الأدمن البشري.
     """
 
-    message = update.channel_post or update.message
+    message = update.channel_post
 
     if not message:
         return
-
-    # رسائل مجموعة النقاش تصل كـ message، ولا نعتمد فيها إلا على حساب المدير.
-    if update.message:
-        if (
-            not update.effective_user
-            or update.effective_user.id != ADMIN_TELEGRAM_ID
-        ):
-            return
 
     channel = parse_channel_id()
 
     if channel is None or not message.chat:
         return
 
-    # المنشور المباشر يجب أن يكون من القناة المحددة.
-    if update.channel_post and int(message.chat.id) != int(channel):
+    # يجب أن يكون الرد صادرًا من القناة المحددة فقط.
+    if int(message.chat.id) != int(channel):
         return
 
     # يجب أن يكون المنشور Reply على رسالة سابقة.
@@ -2417,29 +2292,29 @@ async def channel_post_handler(
                 SELECT
                     order_id,
                     user_id
-                FROM orders
-                WHERE channel_message_id = ANY(%s)
-                   OR channel_attachment_message_id = ANY(%s)
-                ORDER BY created_at DESC
+                FROM channel_customer_messages
+                WHERE channel_message_id = ANY(%s::bigint[])
                 LIMIT 1
                 """,
-                (
-                    list(candidate_message_ids),
-                    list(candidate_message_ids),
-                ),
+                (list(candidate_message_ids),),
             ).fetchone()
 
             if not order:
                 order = conn.execute(
                     """
-                    SELECT order_id, user_id
-                    FROM channel_message_links
-                    WHERE channel_id=%s
-                      AND channel_message_id = ANY(%s)
+                    SELECT
+                        order_id,
+                        user_id
+                    FROM orders
+                    WHERE channel_message_id = ANY(%s::bigint[])
+                       OR channel_attachment_message_id = ANY(%s::bigint[])
                     ORDER BY created_at DESC
                     LIMIT 1
                     """,
-                    (channel, list(candidate_message_ids)),
+                    (
+                        list(candidate_message_ids),
+                        list(candidate_message_ids),
+                    ),
                 ).fetchone()
 
         if not order:
@@ -2799,13 +2674,6 @@ telegram_app.add_handler(
 )
 
 telegram_app.add_handler(
-    CallbackQueryHandler(
-        quotation_callback_handler,
-        pattern=r"^quotation:(accept|reject):",
-    )
-)
-
-telegram_app.add_handler(
     MessageHandler(
         filters.ChatType.CHANNEL,
         channel_post_handler,
@@ -2826,7 +2694,9 @@ telegram_app.add_handler(
 # Ordinary private customer messages MUST NOT call start_command.
 telegram_app.add_handler(
     MessageHandler(
-        filters.ChatType.PRIVATE & ~filters.COMMAND,
+        filters.ChatType.PRIVATE
+        & filters.TEXT
+        & ~filters.COMMAND,
         customer_private_message_handler,
     )
 )
@@ -2851,7 +2721,6 @@ async def lifespan(_: FastAPI):
                 "message",
                 "channel_post",
                 "edited_channel_post",
-                "callback_query",
             ],
         )
 
@@ -3273,16 +3142,9 @@ async def submit_order(
             )
 
     # IMPORTANT:
-    confirmation = (
-        "✅ <b>تم استلام طلبك</b>\n\n"
-        f"🆔 <b>رقم الطلب:</b> <code>{html.escape(order['order_id'])}</code>\n"
-        "سيتم التواصل معك من قبل الكادر."
-    )
-    if not delivered:
-        confirmation += (
-            "\n\n⚠️ تم حفظ الطلب، وسيعيد النظام محاولة إرساله للكادر."
-        )
-    await notify_customer(user["id"], confirmation)
+    # No automatic customer notification here.
+    # Customer receives notification ONLY for quotation
+    # and final delivery.
 
     if not delivered:
         try:
@@ -3478,7 +3340,7 @@ async def reject_quotation(
             SET
                 customer_decision='REJECTED',
                 customer_decision_at=CURRENT_TIMESTAMP,
-                order_status='CANCELLED'
+                order_status='REJECTED'
             WHERE order_id=%s
             """,
             (order_id,),
@@ -3502,7 +3364,7 @@ async def reject_quotation(
 
     return {
         "ok": True,
-        "status": "CANCELLED",
+        "status": "REJECTED",
     }
 
 
@@ -3880,19 +3742,9 @@ async def set_quotation(
             f"📝 <b>ملاحظات العرض:</b> "
             f"{html.escape(payload.notes or 'لا يوجد')}\n\n"
             "━━━━━━━━━━━━━━\n"
-            "اختر القرار من الأزرار أدناه."
-        ),
-        reply_markup=InlineKeyboardMarkup(
-            [[
-                InlineKeyboardButton(
-                    "✅ تأكيد الطلب",
-                    callback_data=f"quotation:accept:{order_id}",
-                ),
-                InlineKeyboardButton(
-                    "❌ رفض الطلب",
-                    callback_data=f"quotation:reject:{order_id}",
-                ),
-            ]]
+            "✍️ <b>للقبول اكتب:</b> موافق\n"
+            "✍️ <b>للرفض اكتب:</b> ارفض\n\n"
+            "لا تحتاج إلى فتح التطبيق لاتخاذ القرار."
         ),
     )
 
@@ -5117,9 +4969,6 @@ def build_excel_report() -> bytes:
 @app.get(
     "/api/admin/export/excel"
 )
-@app.get(
-    "/api/admin/export/excel/download"
-)
 async def export_excel_report(
     request: Request,
     send_telegram: bool = Query(False),
@@ -5127,9 +4976,24 @@ async def export_excel_report(
 
     require_admin(request)
 
-    excel_bytes = await asyncio.to_thread(
-        build_excel_report
-    )
+    try:
+        excel_bytes = await asyncio.to_thread(
+            build_excel_report
+        )
+    except Exception:
+        logger.exception(
+            "Excel report generation failed"
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="تعذر إنشاء ملف Excel على الخادم.",
+        )
+
+    if not excel_bytes:
+        raise HTTPException(
+            status_code=500,
+            detail="تم إنشاء ملف Excel فارغ.",
+        )
 
     if send_telegram:
 
@@ -5145,8 +5009,9 @@ async def export_excel_report(
                 ),
             )
 
-        except TelegramError:
+        except Exception:
             # فشل إرسال نسخة التليجرام لا يمنع تنزيل ملف Excel.
+            # The generated XLSX must still be returned to the browser.
             logger.exception(
                 "Could not send Excel report to admin via Telegram"
             )
@@ -5165,7 +5030,6 @@ async def export_excel_report(
         headers={
             "Content-Disposition":
                 'attachment; filename="NABA_Orders.xlsx"',
-            "X-Content-Type-Options": "nosniff",
             "Content-Length": str(len(excel_bytes)),
             "Cache-Control": "no-store",
         },
