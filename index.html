@@ -2685,27 +2685,18 @@
           API_BASE + url,
           {
             method: "GET",
-            mode: "cors",
-            cache: "no-store",
 
             headers: {
-              "Accept":
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/json",
               "X-Telegram-Init-Data":
                 initData
             }
           }
         );
 
-    } catch (error) {
-
-      console.error(
-        "NABA download request failed:",
-        error
-      );
+    } catch {
 
       throw new Error(
-        "تعذر الاتصال بالخادم. تحقق من اتصال التطبيق بالخادم ثم أعد المحاولة."
+        "تعذر الاتصال بالخادم."
       );
 
     }
@@ -2787,61 +2778,33 @@
     }
 
 
-    /*
-     * Security/UI rule:
-     * The admin button and panel remain hidden until the
-     * backend explicitly confirms ADMIN_TELEGRAM_ID.
-     */
+    adminAccessChecked =
+      true;
+
+
     const button =
       document.getElementById(
         "adminButton"
       );
-
-    const panel =
-      document.getElementById(
-        "adminPanel"
-      );
-
-
-    if (button) {
-      button.classList.remove(
-        "visible"
-      );
-    }
-
-    if (panel) {
-      panel.classList.remove(
-        "visible"
-      );
-    }
-
-
-    adminIsAuthorized =
-      false;
-
-    adminAccessChecked =
-      true;
 
 
     try {
 
       const data =
         await apiRequest(
-          "/api/admin/access",
-          {
-            cache: "no-store"
-          }
+          "/api/admin/access"
         );
 
 
       adminIsAuthorized =
         Boolean(
-          data?.ok === true &&
-          data?.is_admin === true &&
-          Number(data?.telegram_id) ===
-            Number(
-              tg?.initDataUnsafe?.user?.id
-            )
+
+          data?.ok === true ||
+
+          data?.authorized === true ||
+
+          data?.is_admin === true
+
         );
 
 
@@ -2861,13 +2824,6 @@
 
     } catch (error) {
 
-      /*
-       * Allow a fresh authorization attempt after a
-       * temporary network/backend failure.
-       */
-      adminAccessChecked =
-        false;
-
       adminIsAuthorized =
         false;
 
@@ -2875,14 +2831,6 @@
       if (button) {
 
         button.classList.remove(
-          "visible"
-        );
-
-      }
-
-      if (panel) {
-
-        panel.classList.remove(
           "visible"
         );
 
@@ -6884,16 +6832,7 @@
 
   async function exportExcel() {
 
-    /*
-     * Never rely on a stale frontend flag for a protected
-     * operation. Re-check the backend authorization first.
-     */
-    const authorized =
-      isAdmin() ||
-      await initializeAdmin();
-
-
-    if (!authorized) {
+    if (!isAdmin()) {
 
       showToast(
         "ليس لديك صلاحية."
@@ -6913,29 +6852,8 @@
 
       const response =
         await apiDownload(
-          "/api/admin/export/excel?send_telegram=true"
+          "/api/admin/export/excel?send_telegram=false"
         );
-
-
-      const contentType =
-        (
-          response.headers.get(
-            "content-type"
-          ) || ""
-        ).toLowerCase();
-
-
-      if (
-        !contentType.includes(
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-      ) {
-
-        throw new Error(
-          "الخادم لم يُرجع ملف Excel صالحًا."
-        );
-
-      }
 
 
       const blob =
@@ -6948,7 +6866,7 @@
       ) {
 
         throw new Error(
-          "تم استلام ملف Excel فارغ."
+          "تم استلام ملف فارغ."
         );
 
       }
@@ -6969,18 +6887,18 @@
       anchor.href =
         url;
 
+
       anchor.download =
         "NABA_Orders.xlsx";
-
-      anchor.style.display =
-        "none";
 
 
       document.body.appendChild(
         anchor
       );
 
+
       anchor.click();
+
 
       anchor.remove();
 
@@ -7003,11 +6921,6 @@
 
 
     } catch (error) {
-
-      console.error(
-        "NABA Excel export error:",
-        error
-      );
 
       showToast(
         error?.message ||
