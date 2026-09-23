@@ -1873,6 +1873,7 @@ async def handle_customer_quotation_decision(
     user_id: int,
     accepted: bool,
     order_id: Optional[str] = None,
+    notify: bool = True,
 ):
     with db() as conn:
 
@@ -1953,21 +1954,23 @@ async def handle_customer_quotation_decision(
 
     channel_result = await send_channel_text(channel_text)
 
-    confirmation_sent = await notify_customer(
-        user_id,
-        (
-            "✅ <b>تم تحديث حالة طلبك</b>\n\n"
-            f"🆔 رقم الطلب: <code>{html.escape(order_id)}</code>\n"
-            "📌 الحالة: <b>تمت الموافقة</b>\n"
-            "سيبدأ الكادر بالعمل على طلبك."
-            if accepted
-            else
-            "❌ <b>تم تحديث حالة طلبك</b>\n\n"
-            f"🆔 رقم الطلب: <code>{html.escape(order_id)}</code>\n"
-            "📌 الحالة: <b>تم الرفض وإلغاء الطلب</b>\n"
-            "يمكنك إنشاء طلب جديد عند الحاجة."
-        ),
-    )
+    confirmation_sent = True
+    if notify:
+        confirmation_sent = await notify_customer(
+            user_id,
+            (
+                "✅ <b>تم تحديث حالة طلبك</b>\n\n"
+                f"🆔 رقم الطلب: <code>{html.escape(order_id)}</code>\n"
+                "📌 الحالة: <b>تمت الموافقة</b>\n"
+                "سيبدأ الكادر بالعمل على طلبك."
+                if accepted
+                else
+                "❌ <b>تم تحديث حالة طلبك</b>\n\n"
+                f"🆔 رقم الطلب: <code>{html.escape(order_id)}</code>\n"
+                "📌 الحالة: <b>تم الرفض وإلغاء الطلب</b>\n"
+                "يمكنك إنشاء طلب جديد عند الحاجة."
+            ),
+        )
 
     if not channel_result:
         logger.warning(
@@ -2009,6 +2012,7 @@ async def quotation_callback_handler(
         query.from_user.id,
         parts[1] == "accept",
         parts[2],
+        notify=False,
     )
     if not handled:
         try:
@@ -2021,9 +2025,25 @@ async def quotation_callback_handler(
 
     if handled:
         try:
+            status_message = (
+                "✅ <b>تم تحديث حالة طلبك</b>\n\n"
+                f"🆔 رقم الطلب: <code>{html.escape(parts[2])}</code>\n"
+                "📌 الحالة: <b>تمت الموافقة</b>\n"
+                "سيبدأ الكادر بالعمل على طلبك."
+                if parts[1] == "accept"
+                else
+                "❌ <b>تم تحديث حالة طلبك</b>\n\n"
+                f"🆔 رقم الطلب: <code>{html.escape(parts[2])}</code>\n"
+                "📌 الحالة: <b>تم الرفض وإلغاء الطلب</b>\n"
+                "يمكنك إنشاء طلب جديد عند الحاجة."
+            )
+            await query.message.reply_text(
+                status_message,
+                parse_mode="HTML",
+            )
             await query.edit_message_reply_markup(reply_markup=None)
         except TelegramError:
-            logger.info("Could not remove quotation buttons", exc_info=True)
+            logger.exception("Could not send quotation status confirmation")
 
 
 async def customer_private_message_handler(
@@ -2098,13 +2118,23 @@ async def customer_private_message_handler(
     )
 
     if not order:
-        await notify_customer(
-            user.id,
-            (
-                "ℹ️ لا يوجد لديك طلب نشط حاليًا.\n\n"
-                "يمكنك فتح تطبيق النبع وإنشاء طلب جديد."
-            ),
+        general_message = (
+            "💬 <b>رسالة عامة من الزبون</b>\n\n"
+            f"👤 <b>Telegram ID:</b> <code>{user.id}</code>\n"
+            f"👤 <b>Username:</b> @{html.escape(user.username or 'بدون_يوزر')}\n\n"
+            f"📝 <b>الرسالة:</b>\n{html.escape(raw_text or 'مرفق بدون نص')}"
         )
+        sent_general = await send_channel_text(general_message)
+        if sent_general:
+            await notify_customer(
+                user.id,
+                "✅ تم إرسال رسالتك إلى الكادر.",
+            )
+        else:
+            await notify_customer(
+                user.id,
+                "❌ تعذر تحويل رسالتك إلى الكادر حاليًا. حاول مرة أخرى.",
+            )
         return
 
     order_id = order["order_id"]
@@ -5087,6 +5117,9 @@ def build_excel_report() -> bytes:
 @app.get(
     "/api/admin/export/excel"
 )
+@app.get(
+    "/api/admin/export/excel/download"
+)
 async def export_excel_report(
     request: Request,
     send_telegram: bool = Query(False),
@@ -5132,6 +5165,7 @@ async def export_excel_report(
         headers={
             "Content-Disposition":
                 'attachment; filename="NABA_Orders.xlsx"',
+            "X-Content-Type-Options": "nosniff",
             "Content-Length": str(len(excel_bytes)),
             "Cache-Control": "no-store",
         },
