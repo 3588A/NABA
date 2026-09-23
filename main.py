@@ -1951,17 +1951,36 @@ async def handle_customer_quotation_decision(
         f"👤 Telegram ID: <code>{user_id}</code>"
     )
 
-    await send_channel_text(channel_text)
+    channel_result = await send_channel_text(channel_text)
 
-    await notify_customer(
+    confirmation_sent = await notify_customer(
         user_id,
         (
-            "✅ تم تسجيل موافقتك على عرض السعر."
+            "✅ <b>تم تحديث حالة طلبك</b>\n\n"
+            f"🆔 رقم الطلب: <code>{html.escape(order_id)}</code>\n"
+            "📌 الحالة: <b>تمت الموافقة</b>\n"
+            "سيبدأ الكادر بالعمل على طلبك."
             if accepted
             else
-            "❌ تم تسجيل رفضك لعرض السعر."
-        )
+            "❌ <b>تم تحديث حالة طلبك</b>\n\n"
+            f"🆔 رقم الطلب: <code>{html.escape(order_id)}</code>\n"
+            "📌 الحالة: <b>تم الرفض وإلغاء الطلب</b>\n"
+            "يمكنك إنشاء طلب جديد عند الحاجة."
+        ),
     )
+
+    if not channel_result:
+        logger.warning(
+            "Customer decision saved but channel notification failed: order=%s",
+            order_id,
+        )
+
+    if not confirmation_sent:
+        logger.error(
+            "Customer decision saved but private confirmation failed: user=%s order=%s",
+            user_id,
+            order_id,
+        )
 
     return True
 
@@ -1980,17 +1999,26 @@ async def quotation_callback_handler(
     if parts[1] not in {"accept", "reject"}:
         return
 
+    # أجب فورًا حتى لا يبقى زر Telegram في حالة تحميل أثناء انتظار قاعدة البيانات.
+    try:
+        await query.answer("جارٍ تحديث حالة الطلب...")
+    except TelegramError:
+        logger.info("Could not acknowledge quotation callback", exc_info=True)
+
     handled = await handle_customer_quotation_decision(
         query.from_user.id,
         parts[1] == "accept",
         parts[2],
     )
-    await query.answer(
-        "تم تسجيل القرار"
-        if handled
-        else "العرض غير متاح أو تم اتخاذ القرار مسبقًا",
-        show_alert=True,
-    )
+    if not handled:
+        try:
+            await query.message.reply_text(
+                "⚠️ هذا العرض غير متاح أو تم اتخاذ القرار بشأنه مسبقًا."
+            )
+        except TelegramError:
+            logger.info("Could not report stale quotation", exc_info=True)
+        return
+
     if handled:
         try:
             await query.edit_message_reply_markup(reply_markup=None)
@@ -2013,17 +2041,30 @@ async def customer_private_message_handler(
     if user.id == ADMIN_TELEGRAM_ID:
         return
 
+    message = update.effective_message
     raw_text = (
-        update.effective_message.text
+        message.text
+        or message.caption
         or ""
     ).strip()
 
-    if not raw_text:
+    has_media = any(
+        getattr(message, attribute, None)
+        for attribute in (
+            "photo",
+            "document",
+            "video",
+            "audio",
+            "voice",
+            "animation",
+            "sticker",
+        )
+    )
+
+    if not raw_text and not has_media:
         return
 
-    normalized = normalize_private_text(
-        raw_text
-    )
+    normalized = normalize_private_text(raw_text) if raw_text else ""
 
     # ---------------------------------------------
     # 1. Quotation decision
@@ -2077,23 +2118,43 @@ async def customer_private_message_handler(
         f"👤 <b>Username:</b> "
         f"@{html.escape(user.username or 'بدون_يوزر')}\n\n"
         f"📝 <b>الرسالة:</b>\n"
-        f"{html.escape(raw_text)}\n\n"
+        f"{html.escape(raw_text or 'مرفق بدون نص')}\n\n"
         "💡 <b>للرد على الزبون:</b>\n"
         f"<code>/reply {html.escape(order_id)} نص الرد</code>"
     )
 
-    sent = await send_channel_text(
-        channel_message
-    )
-
+    channel_messages = []
+    sent = await send_channel_text(channel_message)
     if sent:
-        await asyncio.to_thread(
-            save_channel_message_link,
-            sent.message_id,
-            order_id,
-            user.id,
-            "CUSTOMER_MESSAGE",
-        )
+        channel_messages.append(sent.message_id)
+
+    forwarded = None
+    if has_media:
+        channel = parse_channel_id()
+        if channel:
+            try:
+                forwarded = await telegram_app.bot.forward_message(
+                    chat_id=channel,
+                    from_chat_id=user.id,
+                    message_id=message.message_id,
+                )
+                channel_messages.append(forwarded.message_id)
+            except TelegramError:
+                logger.exception(
+                    "Could not forward customer media to channel: order=%s",
+                    order_id,
+                )
+
+    delivery_ok = bool(sent) and (not has_media or forwarded is not None)
+    if delivery_ok:
+        for channel_message_id in channel_messages:
+            await asyncio.to_thread(
+                save_channel_message_link,
+                channel_message_id,
+                order_id,
+                user.id,
+                "CUSTOMER_MESSAGE",
+            )
         await notify_customer(
             user.id,
             "✅ تم إرسال رسالتك إلى الكادر.",
@@ -2106,7 +2167,7 @@ async def customer_private_message_handler(
                     order_id,
                     "CUSTOMER_MESSAGE_TO_CHANNEL",
                     f"User_{user.id}",
-                    raw_text[:2000],
+                    (raw_text or "مرفق")[:2000],
                 )
         except Exception:
             logger.exception(
@@ -2115,7 +2176,8 @@ async def customer_private_message_handler(
     else:
         await notify_customer(
             user.id,
-            "❌ تعذر إرسال رسالتك حاليًا، حاول مرة أخرى.",
+            "❌ تعذر تحويل رسالتك إلى الكادر حاليًا. "
+            "تأكد من إعداد القناة وحاول مرة أخرى.",
         )
 
 
@@ -2734,9 +2796,7 @@ telegram_app.add_handler(
 # Ordinary private customer messages MUST NOT call start_command.
 telegram_app.add_handler(
     MessageHandler(
-        filters.ChatType.PRIVATE
-        & filters.TEXT
-        & ~filters.COMMAND,
+        filters.ChatType.PRIVATE & ~filters.COMMAND,
         customer_private_message_handler,
     )
 )
