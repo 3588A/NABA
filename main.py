@@ -371,7 +371,7 @@ def init_db():
             CREATE TABLE IF NOT EXISTS channel_message_links (
                 channel_id BIGINT NOT NULL,
                 channel_message_id BIGINT NOT NULL,
-                order_id TEXT
+                order_id TEXT NOT NULL
                     REFERENCES orders(order_id)
                     ON DELETE CASCADE,
                 user_id BIGINT NOT NULL,
@@ -379,16 +379,6 @@ def init_db():
                 created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (channel_id, channel_message_id)
             )
-            """
-        )
-
-        # Existing installations may already have this table with
-        # order_id NOT NULL. General (order-less) customer messages
-        # must remain routable, so make that column nullable.
-        conn.execute(
-            """
-            ALTER TABLE channel_message_links
-            ALTER COLUMN order_id DROP NOT NULL
             """
         )
 
@@ -1995,7 +1985,9 @@ async def handle_customer_quotation_decision(
             order_id,
         )
 
-    return True
+    # إرجاع رقم الطلب الفعلي بعد التحقق من قاعدة البيانات، وليس فقط True.
+    # هذا يمنع إرسال رقم مختلف في رسالة الزبون أو إشعار القناة.
+    return order_id
 
 
 async def quotation_callback_handler(
@@ -2035,15 +2027,16 @@ async def quotation_callback_handler(
 
     if handled:
         try:
+            confirmed_order_id = str(handled)
             status_message = (
                 "✅ <b>تم تحديث حالة طلبك</b>\n\n"
-                f"🆔 رقم الطلب: <code>{html.escape(parts[2])}</code>\n"
+                f"🆔 رقم الطلب: <code>{html.escape(confirmed_order_id)}</code>\n"
                 "📌 الحالة: <b>تمت الموافقة</b>\n"
                 "سيبدأ الكادر بالعمل على طلبك."
                 if parts[1] == "accept"
                 else
                 "❌ <b>تم تحديث حالة طلبك</b>\n\n"
-                f"🆔 رقم الطلب: <code>{html.escape(parts[2])}</code>\n"
+                f"🆔 رقم الطلب: <code>{html.escape(confirmed_order_id)}</code>\n"
                 "📌 الحالة: <b>تم الرفض وإلغاء الطلب</b>\n"
                 "يمكنك إنشاء طلب جديد عند الحاجة."
             )
@@ -2136,13 +2129,6 @@ async def customer_private_message_handler(
         )
         sent_general = await send_channel_text(general_message)
         if sent_general:
-            await asyncio.to_thread(
-                save_channel_message_link,
-                sent_general.message_id,
-                None,
-                user.id,
-                "CUSTOMER_GENERAL_MESSAGE",
-            )
             await notify_customer(
                 user.id,
                 "✅ تم إرسال رسالتك إلى الكادر.",
@@ -2470,17 +2456,12 @@ async def channel_post_handler(
             return
 
         user_id = int(order["user_id"])
-        order_id = order["order_id"]
-        order_label = (
-            html.escape(str(order_id))
-            if order_id
-            else "بدون طلب مرتبط"
-        )
+        order_id = str(order["order_id"])
 
         prefix = (
             "👨‍💼 <b>رسالة من إدارة النبع</b>\n\n"
             f"🆔 <b>رقم الطلب:</b> "
-            f"<code>{order_label}</code>\n\n"
+            f"<code>{html.escape(order_id)}</code>\n\n"
         )
 
         # النص
@@ -2562,18 +2543,17 @@ async def channel_post_handler(
             )
             return
 
-        if order_id:
-            with db() as conn:
-                add_audit_log_conn(
-                    conn,
-                    order_id,
-                    "ADMIN_CHANNEL_REPLY_TO_CUSTOMER",
-                    "Admin",
-                    (
-                        "تم إرسال رد الأدمن من القناة إلى الزبون "
-                        f"| channel_message_id={message.message_id}"
-                    ),
-                )
+        with db() as conn:
+            add_audit_log_conn(
+                conn,
+                order_id,
+                "ADMIN_CHANNEL_REPLY_TO_CUSTOMER",
+                "Admin",
+                (
+                    "تم إرسال رد الأدمن من القناة إلى الزبون "
+                    f"| channel_message_id={message.message_id}"
+                ),
+            )
 
         logger.info(
             "Channel reply delivered to customer: "
@@ -3264,21 +3244,6 @@ async def submit_order(
                         recovered_attachment["token"],
                     ),
                 )
-
-        retry_confirmation = (
-            "✅ <b>تم استلام طلبك</b>\n\n"
-            f"🆔 <b>رقم الطلب:</b> "
-            f"<code>{html.escape(order['order_id'])}</code>\n"
-            "سيتم التواصل معك من قبل الكادر."
-        )
-        if not delivered:
-            retry_confirmation += (
-                "\n\n⚠️ تم حفظ الطلب، وسيعيد النظام محاولة إرساله للكادر."
-            )
-        await notify_customer(
-            order["user_id"],
-            retry_confirmation,
-        )
 
         return {
             "ok": True,
@@ -4836,20 +4801,6 @@ def admin_dashboard(
 
 def build_excel_report() -> bytes:
 
-    from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
-
-    def safe(value):
-        """
-        يمنع انهيار توليد ملف Excel بسبب أحرف تحكم غير
-        مسموحة داخل خانة (قد تصل ضمن رسائل الزبائن الحرة
-        أو أي حقل نصي آخر).
-        """
-        if value is None:
-            return ""
-        if isinstance(value, str):
-            return ILLEGAL_CHARACTERS_RE.sub("", value)
-        return value
-
     wb = openpyxl.Workbook()
 
     header_fill = PatternFill(
@@ -4988,10 +4939,10 @@ def build_excel_report() -> bytes:
             [
                 order["order_id"],
                 order["user_id"],
-                safe(order["username"]),
-                safe(order["service_name"]),
-                safe(order["department"]),
-                safe(order["title"]),
+                order["username"],
+                order["service_name"],
+                order["department"],
+                order["title"],
                 order["order_status"],
                 float(order["price"] or 0),
                 float(order["deposit"] or 0),
@@ -5001,7 +4952,7 @@ def build_excel_report() -> bytes:
                 order["customer_decision"],
                 order["delivery_channel_status"],
                 order["channel_message_id"],
-                safe(
+                (
                     f"{order['delivery_date']} "
                     f"{order['delivery_time']}"
                 ),
@@ -5038,9 +4989,9 @@ def build_excel_report() -> bytes:
                 payment["id"],
                 payment["order_id"],
                 float(payment["amount"] or 0),
-                safe(payment["currency"]),
-                safe(payment["payment_method"]),
-                safe(payment["recorded_by"]),
+                payment["currency"],
+                payment["payment_method"],
+                payment["recorded_by"],
                 (
                     payment["created_at"].strftime(
                         "%Y-%m-%d %H:%M"
@@ -5072,9 +5023,9 @@ def build_excel_report() -> bytes:
             [
                 activity["id"],
                 activity["order_id"],
-                safe(activity["action"]),
-                safe(activity["performed_by"]),
-                safe(activity["details"]),
+                activity["action"],
+                activity["performed_by"],
+                activity["details"],
                 (
                     activity["timestamp"].strftime(
                         "%Y-%m-%d %H:%M"
@@ -5179,24 +5130,9 @@ async def export_excel_report(
 
     require_admin(request)
 
-    try:
-        excel_bytes = await asyncio.to_thread(
-            build_excel_report
-        )
-    except Exception:
-        logger.exception(
-            "Excel report generation failed"
-        )
-        raise HTTPException(
-            status_code=500,
-            detail="تعذر إنشاء ملف Excel على الخادم.",
-        )
-
-    if not excel_bytes:
-        raise HTTPException(
-            status_code=500,
-            detail="تم إنشاء ملف Excel فارغ.",
-        )
+    excel_bytes = await asyncio.to_thread(
+        build_excel_report
+    )
 
     if send_telegram:
 
